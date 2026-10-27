@@ -135,3 +135,23 @@ python3 scripts/stage3_run_monza.py --ai AI-01
 ~~~
 
 다른 터미널에서 공식 v10.8 방식의 5등 전체 점등은 \`python3 scripts/stage3_lights.py on\`, 순차 점등 후 전체 소등은 \`python3 scripts/stage3_lights.py sequence\`로 실행합니다. 카메라 ROI는 실제 화면 확인 후에만 교정합니다.
+
+## 4단계 — AI-01 검정 차량 RGB 카메라 주행
+
+- 차량 SDF의 차체·바퀴·너클·센서 장착물은 검정색/어두운 재질로 명시.
+- AI-01 주행용 RGB 픽셀에서 도로 중심을 추정해 실제 전륜(FWD) 모터·Ackermann 조향 명령 계산.
+- 3단계 카메라 소등 안전 허가 없이 움직이지 않으며, 영상 끊김/도로 감지 실패 시 목표 속도 0.
+- 전체 Python 단위 시험 63개 PASS. 실제 ROS2 카메라 AI 자율주행과 3바퀴 완주는 아직 별도 검증이 필요.
+- 현재 RGB 도로 인식은 색상 기반 기준선이며 CNN 학습 모델은 미구현.
+
+기존 다운로드 폴더에서 변경분만 적용:
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+python3 scripts/stage3_prepare_monza.py --ai AI-01
+python3 scripts/stage4_bridge.py --contacts generated/stage3/AI-01/contacts.json --output generated/stage4/ai01_bridge.yaml
+~~~
+
+[4단계 Ubuntu 실제 실행법](docs/STAGE4_GUIDE.md) · [4단계 한국어 검증 보고서](reports/STAGE_4.md) · [GitHub Actions](https://github.com/nahee2345/urrc_2_f1/actions)
