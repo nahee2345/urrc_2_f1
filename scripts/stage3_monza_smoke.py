@@ -32,6 +32,8 @@ def main():
     result={"test":"stage3_original_monza_infra","ai":a.ai,
             "status":"NOT_RUN","source":"read-only upstream Monza world"}
     env=dict(os.environ)
+    # server/gz GUI/원본 신호등 명령의 Gazebo Transport 격리 파티션 일치 필수.
+    env.setdefault("GZ_PARTITION",f"urrc_stage3_{os.getuid()}")
     models=ROOT/"generated/stage3/resources/urrc_track_gazebo/models"
     if not (models/"urrc_monza/meshes/road_textured.obj").is_file():
         raise SystemExit("v10.8 향상된 에셋이 없음: stage3_prepare_monza.py 실행 필요")
