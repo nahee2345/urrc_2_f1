@@ -68,11 +68,32 @@ GitHub Actions 독립 시험 월드의 Ogre2 렌더링에서 다음 차량은 **
 
 토픽명, 실제 데이터 수신 여부, 전송 데이터 크기를 포함한 결과는 reports/stage2_ci_5cases_20261027.json에 저장했습니다.
 
-10대 전체 실측으로 확대하는 자동화도 추가했습니다.
+## 5-1. 10대 전 차량 실제 센서 검증 최종 완료
 
-- 실행: https://github.com/nahee2345/urrc_2_f1/actions/runs/40449401194
-- 정적 시험: 25개 PASS.
-- 동적 센서 시험: 해당 실행이 최종 완료된 이후 로그로 판단. 실행 중 상태를 PASS라고 기록하지 않음.
+**2026년 10월 27일 GitHub Actions 실행 #40455462925: 전체 성공**
+
+- 최종 결과: https://github.com/nahee2345/urrc_2_f1/actions/runs/40455462925
+- 정적 검사: Python 단위 테스트 **25개 PASS**, 10개 차량 생성 및 SDF 파싱 PASS
+- 실제 물리·센서 검사: AI-01~AI-05와 AI-06~AI-10 두 그룹 모두 GitHub Actions **success**
+- 로그별 확인: 모든 AI에서 시작용 카메라와 해당 주행용 센서가 실제 Gazebo Harmonic Ogre2에서 메시지를 발행했으며 **`PASS_SENSOR_STREAMS`**를 기록함
+- 확인된 사례에는 RGB·Depth·스테레오 이미지, 2D·3D LiDAR LaserScan 및 3D PointCloudPacked가 포함됨
+
+| 차량 | 실제 Gazebo 센서 수신 | 결과 |
+|---|---|---|
+| AI-01 | 출발 카메라 + RGB | PASS_SENSOR_STREAMS |
+| AI-02 | 출발 카메라 + 3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+| AI-03 | 출발 카메라 + 스테레오 좌·우 | PASS_SENSOR_STREAMS |
+| AI-04 | 출발 카메라 + Depth | PASS_SENSOR_STREAMS |
+| AI-05 | 출발 카메라 + RGB + 3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+| AI-06 | 출발 카메라 + Depth + 3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+| AI-07 | 출발 카메라 + RGB + Depth | PASS_SENSOR_STREAMS |
+| AI-08 | 출발 카메라 + RGB + 2D·3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+| AI-09 | 출발 카메라 + 스테레오 좌·우 + 3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+| AI-10 | 출발 카메라 + RGB + Depth + 3D LiDAR·점군 | PASS_SENSOR_STREAMS |
+
+실제 시험 데이터는 GitHub Actions의 `stage2-actual-sensor-AI-01~AI-05` 및 `stage2-actual-sensor-AI-06~AI-10` 아티팩트에 보관했습니다. 10개 SDF 모델은 `stage2-sensor-vehicle-models` 아티팩트로 내려받을 수 있습니다.
+
+**주의:** Node.js 20 지원 중단 경고는 workflow의 `actions/checkout@v4`, `setup-python@v5`, `upload-artifact@v4`에서 발생한 호환성 알림으로, 이번 실행 실패가 아닙니다. 차후 액션 버전 업그레이드를 권장합니다. 이 시험은 아직 실제 ROS2 브리지, 원본 몬자 주행, 빨간 신호등 인식 또는 3바퀴 완주까지 검증하지 않았습니다.
 
 ## 6. 아직 검증되지 않은 사항
 
@@ -89,6 +110,6 @@ GitHub Actions 독립 시험 월드의 Ogre2 렌더링에서 다음 차량은 **
 - 10대 모델 생성: python3 scripts/build_sensors.py --ai all
 - 실제 개별 센서 시험: python3 scripts/stage2_sensor_smoke.py --run --ai AI-05
 
-**현재 확정:** 2단계 센서 장착 구현, 10대 SDF 구조 검증, 5대 대표 센서 조합 실제 수신 PASS.
+**현재 확정:** 2단계 10대 차량 SDF 및 정적 검사 PASS, Gazebo Harmonic 실제 센서 수신 10대 모두 PASS.
 
-**별도 검증 필요:** 나머지 차량의 실제 렌더링 데이터 및 ROS 브리지·원본 경기장 통합. 이 항목을 완료한 것으로 표시하지 않습니다.
+**별도 검증 필요:** 실제 ROS 2 브리지, 원본 경기장 센서 성능 및 자율주행·신호등 인식·3바퀴 완주. 이 항목은 완료한 것으로 표시하지 않습니다.
