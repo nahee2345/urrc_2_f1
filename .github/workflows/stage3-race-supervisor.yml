@@ -42,7 +42,13 @@ jobs:
         if: always()
         with:
           name: stage3-monza-instrumented-worlds
-          path: generated/stage3/
+          path: |
+            generated/stage3/AI-01/*.sdf
+            generated/stage3/AI-01/*.json
+            generated/stage3/AI-01/*.yaml
+            generated/stage3/AI-10/*.sdf
+            generated/stage3/AI-10/*.json
+            generated/stage3/resources/urrc_track_gazebo/stage3_source_lock.json
           if-no-files-found: warn
 
   monza_gazebo:
@@ -71,8 +77,11 @@ jobs:
       - name: "몬자 임시 월드 생성과 SDF 검사"
         run: |
           python3 scripts/stage3_prepare_monza.py --ai AI-01
-          export GZ_SIM_RESOURCE_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models:$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/worlds:${GZ_SIM_RESOURCE_PATH:-}"
-          export SDF_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models:${SDF_PATH:-}"
+          export GZ_SIM_RESOURCE_PATH="$PWD/generated/stage3/resources/urrc_track_gazebo/models:${GZ_SIM_RESOURCE_PATH:-}"
+          export SDF_PATH="$PWD/generated/stage3/resources/urrc_track_gazebo/models:${SDF_PATH:-}"
+          test -f generated/stage3/resources/urrc_track_gazebo/worlds/monza_signal_active.sdf
+          grep -q urrc_v10_spectator generated/stage3/AI-01/monza_experiment.sdf
+          grep -q road_textured.obj generated/stage3/resources/urrc_track_gazebo/models/urrc_monza/model.sdf
           gz sdf -p generated/stage3/AI-01/monza_experiment.sdf >/dev/null
       - name: "실제 몬자 카메라 및 운영자 위치 데이터 수신"
         env:
