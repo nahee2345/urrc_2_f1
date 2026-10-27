@@ -48,7 +48,14 @@ def main():
                 result.update(status="FAIL_SDF",reason=sd.stderr[-2000:])
                 return 1
             with log.open("wb") as simlog:
-                server=subprocess.Popen(["gz","sim","-s","-r","--headless-rendering","-v","3",str(world)],
+                command=(["python3",str(ROOT/"scripts/stage3_run_monza.py"),
+                           "--ai",a.ai] if a.verify_lights else
+                           ["gz","sim","-s","-r","--headless-rendering","-v","3",str(world)])
+                # 원본의 5등 emissive 설정에는 Gazebo GUI visual_config 서비스가 필요하다.
+                # --verify-lights 시험은 Xvfb 가상 화면에서 공식 GUI 시점으로 실행한다.
+                if a.verify_lights and env.get("QT_QPA_PLATFORM")=="offscreen":
+                    env["QT_QPA_PLATFORM"]="xcb"
+                server=subprocess.Popen(command,
                     stdout=simlog,stderr=subprocess.STDOUT,env=env)
                 time.sleep(a.startup_seconds)
                 if server.poll() is not None:
