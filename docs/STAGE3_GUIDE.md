@@ -113,7 +113,9 @@ python3 upstream/urrc_f1_ws/race/scripts/lights.py sequence --track monza --hold
 
 - Python 모의 영상·위치 단위 시험: 44개 PASS.
 - 원본 모델의 읽기 전용 복사 월드 생성: PASS.
-- 실제 몬자 Gazebo 카메라 및 운영자 포즈 수신: GitHub Actions 결과 별도 확인.
+- 실제 몬자 Gazebo 카메라 및 운영자 포즈 수신: PASS_MONZA_INFRA_ONLY (실행 #40458697552).
+- 정적 테스트 44개 PASS, 실제 몬자 이미지·포즈 수신 PASS.
+- 실제 5개 LED 점등/소등 이미지 판정과 3바퀴 완주 PASS는 미검증.
 - 진짜 신호등 5개 영상 판정 및 ROS2 통합·3바퀴 무충돌: 미검증.
 - 모든 실제 접촉 센서 연결이 증명되지 않으면 무충돌 PASS를 내지 않습니다.
 
