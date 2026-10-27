@@ -43,7 +43,8 @@ def instrument_model(sdf:str,car_name:str):
 
 def make_monza_copy(upstream:Path,car_sdf:str,car_name:str):
     upstream=Path(upstream)
-    worldfile=upstream/"src/urrc_track_gazebo/worlds/monza_race.sdf"
+    package=(upstream/"src/urrc_track_gazebo" if (upstream/"src/urrc_track_gazebo").is_dir() else upstream)
+    worldfile=package/"worlds/monza_race.sdf"
     root=ET.fromstring(worldfile.read_text())
     world=root.find("world")
     if world is None or world.attrib["name"]!="monza":
@@ -51,7 +52,7 @@ def make_monza_copy(upstream:Path,car_sdf:str,car_name:str):
     if world.find("plugin[@name='gz::sim::systems::Contact']") is None:
         sub(world,"plugin",name="gz::sim::systems::Contact",
             filename="gz-sim-contact-system")
-    data=json.loads((upstream/"src/urrc_track_gazebo/tracks/processed/monza.json").read_text())
+    data=json.loads((package/"tracks/processed/monza.json").read_text())
     slot=data["grid"][0]
     inserted=ET.fromstring(car_sdf).find("model")
     sub(inserted,"pose",fmt(slot["x"],slot["y"],slot["road_z"]+0.04,0,0,slot["yaw"]))
