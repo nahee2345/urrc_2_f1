@@ -60,14 +60,20 @@ jobs:
           for model in generated/stage2/AI-*/model.sdf; do
             gz sdf -p "$model" >/dev/null
           done
-      - name: Actual headless sensor payload test
+      - name: Actual headless RGB stereo depth and LiDAR payload tests
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           QT_QPA_PLATFORM: offscreen
-        run: python3 scripts/stage2_sensor_smoke.py --run --ai AI-05 --startup-seconds 18 --capture-seconds 13
+        run: |
+          for ai in AI-03 AI-04 AI-05 AI-08 AI-10; do
+            python3 scripts/stage2_sensor_smoke.py --run --ai "$ai" \
+              --out "generated/stage2_${ai}_world.sdf" \
+              --report "generated/stage2_${ai}_result.json" \
+              --startup-seconds 15 --capture-seconds 9
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: stage2-actual-sensor-validation
-          path: generated/stage2_sensor_result.json
+          path: generated/stage2_AI-*_result.json
           if-no-files-found: warn
