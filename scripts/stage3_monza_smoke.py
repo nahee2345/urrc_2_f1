@@ -31,7 +31,9 @@ def main():
     result={"test":"stage3_original_monza_infra","ai":a.ai,
             "status":"NOT_RUN","source":"read-only upstream Monza world"}
     env=dict(os.environ)
-    models=ROOT/"upstream/urrc_f1_ws/src/urrc_track_gazebo/models"
+    models=ROOT/"generated/stage3/resources/urrc_track_gazebo/models"
+    if not (models/"urrc_monza/meshes/road_textured.obj").is_file():
+        raise SystemExit("v10.8 향상된 에셋이 없음: stage3_prepare_monza.py 실행 필요")
     env["GZ_SIM_RESOURCE_PATH"]=f"{models}:{models.parent/'worlds'}:"+env.get("GZ_SIM_RESOURCE_PATH","")
     env["SDF_PATH"]=str(models)+":"+env.get("SDF_PATH","")
     env.setdefault("LIBGL_ALWAYS_SOFTWARE","1")
