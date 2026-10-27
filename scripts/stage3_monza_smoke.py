@@ -18,6 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--ai",default="AI-01")
+    p.add_argument("--verify-lights",action="store_true",help="원본 5등 순차점등 후 단일 모델 소등 검증")
     p.add_argument("--startup-seconds",type=float,default=20.)
     p.add_argument("--capture-seconds",type=float,default=8.)
     p.add_argument("--report",type=Path,default=ROOT/"generated/stage3/monza_smoke_result.json")
@@ -76,7 +77,23 @@ def main():
                        and re.search(r"\bheight:\s*120\b",camera) and "data:" in camera)
             result["pose_received"]=bool("pose {" in poses or 'name: "' in poses)
             if all(result[k] for k in ("camera_advertised","pose_advertised","image_received","pose_received")):
-                result.update(status="PASS_MONZA_INFRA_ONLY",reason="실제 몬자 카메라와 운영자 위치 계측 메시지 수신; 출발 인식·3랩 검증 아님")
+                if a.verify_lights:
+                    light=subprocess.run(["python3",str(ROOT/"scripts/stage3_lights.py"),
+                                          "sequence","--skip-camera-check"],
+                                         capture_output=True,text=True,timeout=75,env=env)
+                    result["five_light_command_exit"]=light.returncode
+                    result["five_light_output"]=light.stdout[-2500:]
+                    result["five_light_errors"]=light.stderr[-1000:]
+                    result["five_light_sequence_applied"]=(light.returncode==0
+                        and all(f"RED {n}/5" in light.stdout for n in range(1,6))
+                        and "LIGHTS OUT" in light.stdout
+                        and "model_remove=single_request" in light.stdout)
+                    if not result["five_light_sequence_applied"]:
+                        result.update(status="FAIL_LIGHT_SEQUENCE",reason="원본 5등 점등 및 동시 소등 서비스 검사 실패")
+                        return 1
+                result.update(status="PASS_MONZA_INFRA_AND_SIGNAL_COMMANDS" if a.verify_lights
+                    else "PASS_MONZA_INFRA_ONLY",
+                    reason="실제 카메라/포즈 및 원본 5등 점등/동시 소등 서비스 동작 확인; 카메라 RGB 분류·실주행 3랩 검증 아님")
                 return 0
             result.update(status="FAIL_TOPIC",reason="실제 카메라/운영자 포즈 중 누락")
             return 1
