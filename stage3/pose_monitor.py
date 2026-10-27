@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import sys
 from .lap import LapSupervisor,gates_from_upstream
+from .contact import ContactEvent,classify
 
 
 def load_official_world_pose(root):
@@ -37,6 +38,7 @@ def main():
     from rclpy.node import Node
     from tf2_msgs.msg import TFMessage
     from std_msgs.msg import Bool
+    from ros_gz_interfaces.msg import Contacts
 
     args.output.parent.mkdir(parents=True,exist_ok=True)
     audit=args.output.open("w",encoding="utf-8",buffering=1)
@@ -44,8 +46,24 @@ def main():
         def __init__(self):
             super().__init__("urrc_stage3_official_geometry_observer")
             self.armed=False
+            self.contact_subs=[]
+            for ident in ("body","front_left","front_right","rear_left","rear_right"):
+                topic=f"/model/{args.vehicle}/contacts/{ident}"
+                sub=self.create_subscription(Contacts,topic,self.on_contacts,10)
+                self.contact_subs.append(sub)
             self.create_subscription(TFMessage,f"/model/{args.vehicle}/urrc_timing",self.on_pose,200)
             self.create_subscription(Bool,f"/urrc_2_f1/{args.vehicle}/start_allowed",self.on_start,10)
+        def on_contacts(self,msg):
+            stamp=self.get_clock().now().nanoseconds/1e9
+            for c in msg.contacts:
+                item=ContactEvent(c.collision1.name,c.collision2.name,stamp)
+                kind=classify(item,args.vehicle)
+                if kind in ("wall","vehicle","unknown_collision"):
+                    lap.contact(kind,stamp)
+                    audit.write(json.dumps({"type":"contact","classification":kind,
+                        "collision1":item.collision1,"collision2":item.collision2,
+                        "time":stamp},ensure_ascii=False)+"\n")
+
         def on_start(self,msg):
             if bool(msg.data) and not self.armed:
                 if lap.previous is not None:
@@ -66,6 +84,8 @@ def main():
                     audit.write(json.dumps(event,ensure_ascii=False)+"\n")
                     self.get_logger().info(str(event))
                 if lap.finished:
+                    # 5개 접촉 센서가 모두 실제 ROS 브리지에 연결돼야 무충돌 PASS 가능.
+                    lap.contact_monitor_ready=all(sub.get_publisher_count()>0 for sub in self.contact_subs)
                     audit.write(json.dumps({"type":"result",**lap.status()},ensure_ascii=False)+"\n")
             except Exception as exc:
                 lap.active=False

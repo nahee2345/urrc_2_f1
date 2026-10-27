@@ -63,7 +63,7 @@ class LapSupervisor:
         self.first_crossing=None;self.last_finish=None
         self.raw_finish_crossings=0;self.laps=0;self.lap_seconds=[]
         self.next_checkpoint=0;self.rejected=0;self.invalid_reasons=[]
-        self.collision_count=0;self.finished=False
+        self.collision_count=0;self.finished=False;self.contact_monitor_ready=False
 
     def arm(self,at):
         if self.previous is None or at<self.previous[0] or at-self.previous[0]>self.max_gap:
@@ -74,7 +74,7 @@ class LapSupervisor:
 
     def contact(self,kind,stamp_s):
         """노면·바퀴 접촉은 정상. 장벽/차량 접촉은 실패 기록."""
-        if kind in ("wall","vehicle","obstacle") and self.active:
+        if kind in ("wall","vehicle","obstacle","unknown_collision") and self.active:
             self.collision_count+=1;self.invalid_reasons.append(f"충돌:{kind}@{stamp_s:.3f}")
             self.active=False
 
@@ -123,7 +123,7 @@ class LapSupervisor:
         return events
 
     def status(self):
-        return {"status":"PASS_THREE_LAPS" if self.finished and self.collision_count==0 and self.rejected==0 else "NOT_PASSED",
+        return {"status":"PASS_THREE_LAPS" if self.finished and self.collision_count==0 and self.rejected==0 and self.contact_monitor_ready else ("PASS_LAPS_ONLY" if self.finished and self.collision_count==0 and self.rejected==0 else "NOT_PASSED"),
                 "target_laps":self.target,"laps":self.laps,
                 "finish_crossings":self.raw_finish_crossings,
                 "first_crossing_at":self.first_crossing,

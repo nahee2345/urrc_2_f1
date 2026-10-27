@@ -137,6 +137,8 @@ class LapTests(unittest.TestCase):
         lap=self.do(self.timer())
         self.assertTrue(lap.finished)
         self.assertEqual(lap.raw_finish_crossings,4)
+        self.assertEqual(lap.status()["status"],"PASS_LAPS_ONLY")
+        lap.contact_monitor_ready=True
         self.assertEqual(lap.status()["status"],"PASS_THREE_LAPS")
         self.assertEqual(len(lap.lap_seconds),3)
 
