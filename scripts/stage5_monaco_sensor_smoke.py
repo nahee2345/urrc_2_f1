@@ -124,8 +124,8 @@ def main():
                     if not result["five_light_sequence_applied"]:
                         result.update(status="FAIL_LIGHT_SEQUENCE",reason="원본 5등 점등 및 동시 소등 서비스 검사 실패")
                         return 1
-                result.update(status="PASS_MONZA_INFRA_AND_SIGNAL_COMMANDS" if a.verify_lights
-                    else "PASS_MONZA_INFRA_ONLY",
+                result.update(status="PASS_MONACO_INFRA_AND_SIGNAL_COMMANDS" if a.verify_lights
+                    else "PASS_MONACO_INFRA_ONLY",
                     reason="실제 카메라/포즈 및 원본 5등 점등/동시 소등 서비스 동작 확인; 카메라 RGB 분류·실주행 3랩 검증 아님")
                 return 0
             result.update(status="FAIL_TOPIC",reason="실제 카메라/운영자 포즈 중 누락")
