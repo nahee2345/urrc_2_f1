@@ -38,3 +38,14 @@
 ## 사용자 실행
 
 docs/STAGE3_LOCAL_INTEGRATION.md 를 확인하고 기존 저장소에서 git pull --ff-only만 실행하면 됩니다.
+
+
+## 재시험 상세 결과 (실행 로그 기준)
+
+- [#40488516918](https://github.com/nahee2345/urrc_2_f1/actions/runs/40488516918): **단위 시험 47개 및 원본 지형 무결성 PASS**. 실제 카메라와 포즈 데이터를 받았으나 서버 전용 모드에서 visual_config 서비스가 없어 신호등 서비스 시험 실패.
+- [#40489243499](https://github.com/nahee2345/urrc_2_f1/actions/runs/40489243499): GUI 결합 시 서버와 센서 동시 실행 문제 확인. GUI와 센서 서버 분리 조치.
+- [#40489881558](https://github.com/nahee2345/urrc_2_f1/actions/runs/40489881558): 원본 지형 무결성 PASS, 실제 카메라 이미지·위치 데이터 수신 PASS, **GUI visual_config 서비스 생성 확인**. 다만 별도 원본 신호등 실행 프로세스가 서로 다른 GZ_PARTITION으로 시작되어 서비스 접근 실패.
+- 최신 수정: 센서 서버·GUI·신호등의 GZ_PARTITION 일치시키고 원본 신호등의 첫 점등→전체 소등 실제 시간 3~6초 조건 검증 추가.
+- 재시험: [#40490818135](https://github.com/nahee2345/urrc_2_f1/actions/runs/40490818135) — **최종 로그 완료 전이므로 실제 5등 PASS 판정 보류**.
+
+검증한 사실과 검증하지 못한 사실을 분리합니다. 원본 충돌 메시와 고저차가 보존된 것은 확정이며, 5개 실제 빨간 렌즈가 3~6초 사이에 모두 소등되는지와 ROS2 카메라 인식까지는 별도 확인이 필요합니다.
