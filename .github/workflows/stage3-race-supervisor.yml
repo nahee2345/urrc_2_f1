@@ -71,6 +71,8 @@ jobs:
       - name: "몬자 임시 월드 생성과 SDF 검사"
         run: |
           python3 scripts/stage3_prepare_monza.py --ai AI-01
+          export GZ_SIM_RESOURCE_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models:$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/worlds:${GZ_SIM_RESOURCE_PATH:-}"
+          export SDF_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models:${SDF_PATH:-}"
           gz sdf -p generated/stage3/AI-01/monza_experiment.sdf >/dev/null
       - name: "실제 몬자 카메라 및 운영자 위치 데이터 수신"
         env:
