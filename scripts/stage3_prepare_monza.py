@@ -12,6 +12,7 @@ from vehicle_generator.model import Vehicle
 from vehicle_generator.sensors import build,load_presets
 from stage3.instrument import instrument_model,make_monza_copy
 from stage3.assets import prepare_monza_assets
+from stage3.terrain import check_fidelity
 from stage3.lap import gates_from_upstream
 
 
@@ -34,6 +35,8 @@ def main():
     d=args.outdir/args.ai;d.mkdir(parents=True,exist_ok=True)
     (d/"model_instrumented.sdf").write_text(prepared,encoding="utf-8")
     (d/"monza_experiment.sdf").write_text(world,encoding="utf-8")
+    terrain=check_fidelity(args.upstream,official,d/"monza_experiment.sdf")
+    (d/"terrain_fidelity.json").write_text(json.dumps(terrain,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     contact={"vehicle":v.name,"topics":topics}
     (d/"contacts.json").write_text(json.dumps(contact,ensure_ascii=False,indent=2)+"\n")
     (d/"gates_summary.json").write_text(json.dumps(
@@ -46,6 +49,7 @@ def main():
     print(json.dumps({"ai":args.ai,"vehicle":v.name,"world":str(d/"monza_experiment.sdf"),
       "sensor_count":meta["sensor_count"],"contact_topics":len(topics),
       "enhanced_assets":str(official),"original_collision_preserved":True,
+      "terrain_status":terrain["status"],"source_elevation_m":terrain["elevation_range_report_m"],
       "checkpoints":len(cps),"note":"원본 복사 생성 완료; 실제 몬자 주행 PASS 아님"},
       ensure_ascii=False,indent=2))
 
