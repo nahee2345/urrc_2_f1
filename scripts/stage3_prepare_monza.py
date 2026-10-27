@@ -11,6 +11,7 @@ sys.path.insert(0,str(ROOT))
 from vehicle_generator.model import Vehicle
 from vehicle_generator.sensors import build,load_presets
 from stage3.instrument import instrument_model,make_monza_copy
+from stage3.assets import prepare_monza_assets
 from stage3.lap import gates_from_upstream
 
 
@@ -27,7 +28,8 @@ def main():
               drive=presets[args.ai]["drive"])
     model,meta=build(v,presets[args.ai]["driving"])
     prepared,topics=instrument_model(model,v.name)
-    world=make_monza_copy(args.upstream,prepared,v.name)
+    official,asset_lock=prepare_monza_assets(args.upstream,args.outdir)
+    world=make_monza_copy(official,prepared,v.name)
     finish,cps=gates_from_upstream(args.upstream,"monza")
     d=args.outdir/args.ai;d.mkdir(parents=True,exist_ok=True)
     (d/"model_instrumented.sdf").write_text(prepared,encoding="utf-8")
@@ -37,9 +39,13 @@ def main():
     (d/"gates_summary.json").write_text(json.dumps(
         {"track":"monza","finish":finish,"checkpoints":len(cps),
          "source":"upstream/urrc_f1_ws (읽기 전용)",
-         "not_vehicle_driver_input":True},ensure_ascii=False,indent=2)+"\n")
+         "not_vehicle_driver_input":True,"enhanced_resources":str(official),
+         "source_sha256":asset_lock["source_sha256"],
+         "road_collision_source_identical":asset_lock["road_collision_source_identical"],
+         "centerline_source_identical":asset_lock["centerline_source_identical"]},ensure_ascii=False,indent=2)+"\n")
     print(json.dumps({"ai":args.ai,"vehicle":v.name,"world":str(d/"monza_experiment.sdf"),
       "sensor_count":meta["sensor_count"],"contact_topics":len(topics),
+      "enhanced_assets":str(official),"original_collision_preserved":True,
       "checkpoints":len(cps),"note":"원본 복사 생성 완료; 실제 몬자 주행 PASS 아님"},
       ensure_ascii=False,indent=2))
 
