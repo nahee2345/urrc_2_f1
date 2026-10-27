@@ -4,7 +4,7 @@
 
 - **Stage 0:** pin and verify the `urrc_f1_ws` v10.8 source using an immutable Git submodule.
 - **Stage 1:** create an SDF 1.9 dynamic four-wheel vehicle with FWD/RWD/AWD configurations, individual front steering joints, force-limited motors, collision and inertial parameters.
-- **Status:** Stage 1 has 12 passing Python tests. A real Gazebo Harmonic headless flat-world test has confirmed wheel-driven translation; braking and steering checks are implemented in the latest CI run. Official Monza racing and three-lap completion are **not yet verified**. See `reports/STAGE_1_HARDENING.md` and GitHub Actions.
+- **Status:** Stage 1 has 12 passing Python tests. GitHub Actions (Ubuntu 24.04 + Gazebo Harmonic) has **PASS_FLAT_PHYSICS** for forward motion, stopping response and left steering. The measured CI result is in `reports/stage1_flat_physics_ci_20261027.json`. Official Monza racing and three-lap completion are **not yet verified**. See `reports/STAGE_1_HARDENING.md` and GitHub Actions.
 
 ## Download
 
