@@ -33,6 +33,7 @@ def main():
     env=dict(os.environ)
     models=ROOT/"upstream/urrc_f1_ws/src/urrc_track_gazebo/models"
     env["GZ_SIM_RESOURCE_PATH"]=f"{models}:{models.parent/'worlds'}:"+env.get("GZ_SIM_RESOURCE_PATH","")
+    env["SDF_PATH"]=str(models)+":"+env.get("SDF_PATH","")
     env.setdefault("LIBGL_ALWAYS_SOFTWARE","1")
     env.setdefault("QT_QPA_PLATFORM","offscreen")
     server=None;observers=[]
