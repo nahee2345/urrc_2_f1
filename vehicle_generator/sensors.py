@@ -191,8 +191,8 @@ def build(v:Vehicle,driving):
     report={
         "vehicle":v.name,"drive":v.drive,"driving_sensors":list(driving),
         "start_only_sensor":"start_camera",
-        "sensor_count":len(names),"total_mass_kg":round(total_mass,6),
-        "sensor_mass_kg":round(total_mass-v.body_mass-4*v.wheel_mass-2*v.knuckle_mass,6) if False else round(sum(SENSOR_SPECS[n]["mass"] for n in names),6),
+        "sensor_count":len(names),"total_mass_kg":round(total_mass + 4*v.wheel_mass + 2*v.knuckle_mass,6),
+        "sensor_mass_kg":round(sum(SENSOR_SPECS[n]["mass"] for n in names),6),
         "chassis_com_in_link_m":[round(c,8) for c in com],
         "envelope_m":dict(zip(("length","width","height"),[round(x,8) for x in size])),
         "topics":topics,
