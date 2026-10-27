@@ -39,7 +39,7 @@ def main():
     env["SDF_PATH"]=str(models)+":"+env.get("SDF_PATH","")
     env.setdefault("LIBGL_ALWAYS_SOFTWARE","1")
     env.setdefault("QT_QPA_PLATFORM","offscreen")
-    server=None;observers=[]
+    server=None;observers=[];gui=None;gui_log=None
     with tempfile.TemporaryDirectory(prefix="urrc_stage3_") as temp:
         log=Path(temp)/"sim.log"
         try:
@@ -48,14 +48,10 @@ def main():
                 result.update(status="FAIL_SDF",reason=sd.stderr[-2000:])
                 return 1
             with log.open("wb") as simlog:
-                command=(["python3",str(ROOT/"scripts/stage3_run_monza.py"),
-                           "--ai",a.ai] if a.verify_lights else
-                           ["gz","sim","-s","-r","--headless-rendering","-v","3",str(world)])
-                # 원본의 5등 emissive 설정에는 Gazebo GUI visual_config 서비스가 필요하다.
-                # --verify-lights 시험은 Xvfb 가상 화면에서 공식 GUI 시점으로 실행한다.
-                if a.verify_lights and env.get("QT_QPA_PLATFORM")=="offscreen":
-                    env["QT_QPA_PLATFORM"]="xcb"
-                server=subprocess.Popen(command,
+                # 카메라 센서와 물리 계측은 성공한 서버 전용 실행 방식 유지.
+                # 신호등 visual_config 검증 때만 별도 Xvfb GUI를 접속한다.
+                server=subprocess.Popen(
+                    ["gz","sim","-s","-r","--headless-rendering","-v","3",str(world)],
                     stdout=simlog,stderr=subprocess.STDOUT,env=env)
                 time.sleep(a.startup_seconds)
                 if server.poll() is not None:
@@ -85,6 +81,27 @@ def main():
             result["pose_received"]=bool("pose {" in poses or 'name: "' in poses)
             if all(result[k] for k in ("camera_advertised","pose_advertised","image_received","pose_received")):
                 if a.verify_lights:
+                    # 실제 Gazebo GUI가 visual_config 엔드포인트를 제공할 때만
+                    # 렌즈 emissive 제어를 수행한다. 가상 서버 신호 시험과 혼동 금지.
+                    package=ROOT/"generated/stage3/resources/urrc_track_gazebo"
+                    gui_log=Path(temp)/"gui.log"
+                    gui_handle=gui_log.open("wb")
+                    gui=subprocess.Popen(
+                        ["gz","sim","-g","-v","3","--gui-config",
+                         str(package/"worlds/monza_grid.gui.config")],
+                        stdout=gui_handle,stderr=subprocess.STDOUT,env=env)
+                    gui_handle.close()
+                    time.sleep(12)
+                    services=subprocess.run(["gz","service","-l"],capture_output=True,
+                                            text=True,timeout=20,env=env)
+                    wanted="/world/monza/visual_config"
+                    result["visual_config_service_available"]=(wanted in
+                        services.stdout.splitlines())
+                    if not result["visual_config_service_available"]:
+                        result.update(status="FAIL_LIGHT_GUI_SERVICE",
+                            reason="Xvfb GUI 접속 후에도 원본 visual_config 서비스 없음",
+                            gui_log_tail=gui_log.read_text(errors="replace")[-1800:])
+                        return 1
                     light=subprocess.run(["python3",str(ROOT/"scripts/stage3_lights.py"),
                                           "sequence","--skip-camera-check"],
                                          capture_output=True,text=True,timeout=75,env=env)
@@ -108,6 +125,12 @@ def main():
             result.update(status="ERROR",reason=str(exc))
             return 1
         finally:
+            if gui is not None and gui.poll() is None:
+                gui.terminate()
+                try:gui.wait(timeout=5)
+                except subprocess.TimeoutExpired:gui.kill();gui.wait()
+            if gui_log is not None and gui_log.exists():
+                result.setdefault("gui_log_tail",gui_log.read_text(errors="replace")[-1800:])
             for proc,out,_ in observers:
                 if proc.poll() is None:
                     proc.terminate()
