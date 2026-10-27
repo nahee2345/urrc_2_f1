@@ -1,4 +1,4 @@
-name: Stage 2 - diverse Gazebo sensor kit
+name: "2단계 - 10대 차량 센서 실제 시험"
 on:
   push:
     branches: [main]
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   sensor_static:
-    name: Validate ten sensor-equipped physical vehicles
+    name: "정적 검사 - 차량 10대 생성 및 단위 테스트"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -27,9 +27,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python3 -m unittest discover -s tests -v
-      - run: python3 scripts/build_sensors.py --ai all
-      - run: python3 scripts/stage2_sensor_smoke.py --prepare --ai AI-05
+      - name: "Python 단위 테스트"
+        run: python3 -m unittest discover -s tests -v
+      - name: "10대 SDF 생성"
+        run: python3 scripts/build_sensors.py --ai all
+      - name: "센서 시험 월드 준비"
+        run: python3 scripts/stage2_sensor_smoke.py --prepare --ai AI-05
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -38,42 +41,56 @@ jobs:
           if-no-files-found: warn
 
   sensor_gazebo:
-    name: Gazebo Harmonic actual RGB and 3D lidar messages
+    name: "Gazebo 실제 센서 - ${{ matrix.group }}"
     runs-on: ubuntu-24.04
-    timeout-minutes: 22
+    timeout-minutes: 40
     needs: sensor_static
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - group: "AI-01~AI-05"
+            cars: "AI-01 AI-02 AI-03 AI-04 AI-05"
+          - group: "AI-06~AI-10"
+            cars: "AI-06 AI-07 AI-08 AI-09 AI-10"
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Install Gazebo Harmonic and software OpenGL drivers
+      - name: "Gazebo 저장소 등록 및 의존성 설치"
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri mesa-utils
-          sudo curl -fsSL https://packages.osrfoundation.org/gazebo.gpg -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list
-          sudo apt-get update
-          sudo apt-get install -y gz-harmonic
-      - name: Verify SDF generated sensor models via Gazebo
+          set -euo pipefail
+          # 앞선 시험이 설치 단계에서 장시간 지연되어 APT 네트워크 제한 및 재시도 적용
+          timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
+          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri mesa-utils
+          curl --fail --silent --show-error --max-time 45 --retry 2             https://packages.osrfoundation.org/gazebo.gpg | sudo tee             /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg >/dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main"             | sudo tee /etc/apt/sources.list.d/gazebo-stable.list
+          timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
+          timeout 420 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 install -y gz-harmonic
+          gz sim --versions
+      - name: "Gazebo SDF 유효성 검사"
         run: |
-          python3 scripts/build_sensors.py
-          for model in generated/stage2/AI-*/model.sdf; do
-            gz sdf -p "$model" >/dev/null
+          python3 scripts/build_sensors.py --ai all
+          for ai in ${{ matrix.cars }}; do
+            gz sdf -p "generated/stage2/$ai/model.sdf" >/dev/null
           done
-      - name: Actual headless RGB stereo depth and LiDAR payload tests
+      - name: "10대 차량 실제 센서 송수신 (각 그룹)"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           QT_QPA_PLATFORM: offscreen
         run: |
-          for ai in AI-01 AI-02 AI-03 AI-04 AI-05 AI-06 AI-07 AI-08 AI-09 AI-10; do
-            python3 scripts/stage2_sensor_smoke.py --run --ai "$ai" \
-              --out "generated/stage2_${ai}_world.sdf" \
-              --report "generated/stage2_${ai}_result.json" \
-              --startup-seconds 15 --capture-seconds 9
+          set -euo pipefail
+          for ai in ${{ matrix.cars }}; do
+            echo "::group::$ai 실제 Gazebo 센서 시험"
+            python3 scripts/stage2_sensor_smoke.py --run --ai "$ai"               --out "generated/stage2_${ai}_world.sdf"               --report "generated/stage2_${ai}_result.json"               --startup-seconds 15 --capture-seconds 9
+            echo "::endgroup::"
           done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: stage2-actual-sensor-validation
+          name: "stage2-actual-sensor-${{ matrix.group }}"
           path: generated/stage2_AI-*_result.json
           if-no-files-found: warn
