@@ -1,0 +1,85 @@
+name: "3단계 - 카메라 출발 및 몬자 랩 계측 검증"
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'stage3/**'
+      - 'scripts/stage3_*.py'
+      - 'tests/test_stage3_*.py'
+      - 'config/stage3_*'
+      - '.github/workflows/stage3-race-supervisor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage3_static:
+    name: "출발 차단·정방향 랩·접촉 및 원본 규정 단위 검사"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: "전체 Python 단위 테스트"
+        run: python3 -m unittest discover -s tests -v
+      - name: "Python 구문 검사"
+        run: python3 -m compileall -q stage3 vehicle_generator scripts tests
+      - name: "기준 원본 무결성 확인"
+        run: python3 scripts/check_upstream.py
+      - name: "실제 몬자 복사 월드·접촉 센서 생성"
+        run: |
+          python3 scripts/stage3_prepare_monza.py --ai AI-01
+          python3 scripts/stage3_prepare_monza.py --ai AI-10
+          python3 scripts/stage3_bridge.py \
+            --contacts generated/stage3/AI-01/contacts.json \
+            --output generated/stage3/AI-01/bridge.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage3-monza-instrumented-worlds
+          path: generated/stage3/
+          if-no-files-found: warn
+
+  monza_gazebo:
+    name: "원본 몬자 실제 카메라·포즈 센서 연결 시험"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    needs: stage3_static
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: "Gazebo Harmonic 설치"
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
+          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri
+          curl --fail --silent --show-error --max-time 45 --retry 2 \
+            https://packages.osrfoundation.org/gazebo.gpg | sudo tee \
+            /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg >/dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+            | sudo tee /etc/apt/sources.list.d/gazebo-stable.list
+          timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
+          timeout 420 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 install -y gz-harmonic
+      - name: "몬자 임시 월드 생성과 SDF 검사"
+        run: |
+          python3 scripts/stage3_prepare_monza.py --ai AI-01
+          gz sdf -p generated/stage3/AI-01/monza_experiment.sdf >/dev/null
+      - name: "실제 몬자 카메라 및 운영자 위치 데이터 수신"
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+        run: python3 scripts/stage3_monza_smoke.py --ai AI-01 --startup-seconds 18 --capture-seconds 9
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage3-monza-gazebo-smoke-result
+          path: generated/stage3/monza_smoke_result.json
+          if-no-files-found: warn
