@@ -1,0 +1,299 @@
+{
+  "test": "stage2_sensor_streams_multi_vehicle",
+  "source_run": 40449012977,
+  "source_url": "https://github.com/nahee2345/urrc_2_f1/actions/runs/40449012977",
+  "verified_from": "GitHub Actions Ubuntu 24.04 Gazebo Harmonic Ogre2 job logs",
+  "cases": [
+    {
+      "status": "PASS_SENSOR_STREAMS",
+      "ai": "AI-03",
+      "topics": {
+        "start_camera": {
+          "topic": "/model/urrc_ai_03/sensors/start_camera",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 27442673
+        },
+        "stereo_left": {
+          "topic": "/model/urrc_ai_03/sensors/stereo_left",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 23659782
+        },
+        "stereo_right": {
+          "topic": "/model/urrc_ai_03/sensors/stereo_right",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 23661329
+        }
+      },
+      "test": "stage2_gazebo_streams",
+      "reason": "Real Ogre2 sensor messages received for every selected camera/lidar topic; ROS bridge and Monza not tested.",
+      "driver": "Gazebo Harmonic Sensors Ogre2",
+      "advertised_topics": [
+        "/clock",
+        "/gazebo/resource_paths",
+        "/model/urrc_ai_03/sensors/camera_info",
+        "/model/urrc_ai_03/sensors/start_camera",
+        "/model/urrc_ai_03/sensors/stereo_left",
+        "/model/urrc_ai_03/sensors/stereo_right",
+        "/sensors/marker",
+        "/stats",
+        "/world/urrc_stage1_smoke/clock",
+        "/world/urrc_stage1_smoke/dynamic_pose/info",
+        "/world/urrc_stage1_smoke/model/urrc_ai_03/joint_state",
+        "/world/urrc_stage1_smoke/pose/info",
+        "/world/urrc_stage1_smoke/scene/deletion",
+        "/world/urrc_stage1_smoke/scene/info",
+        "/world/urrc_stage1_smoke/state",
+        "/world/urrc_stage1_smoke/stats",
+        "/model/urrc_ai_03/drive/front_left",
+        "/model/urrc_ai_03/drive/front_right",
+        "/model/urrc_ai_03/drive/rear_left",
+        "/model/urrc_ai_03/drive/rear_right",
+        "/model/urrc_ai_03/steer/left",
+        "/model/urrc_ai_03/steer/right",
+        "/world/urrc_stage1_smoke/light_config",
+        "/world/urrc_stage1_smoke/material_color"
+      ]
+    },
+    {
+      "status": "PASS_SENSOR_STREAMS",
+      "ai": "AI-04",
+      "topics": {
+        "start_camera": {
+          "topic": "/model/urrc_ai_04/sensors/start_camera",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 29056939
+        },
+        "depth": {
+          "topic": "/model/urrc_ai_04/sensors/depth",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 21135655
+        }
+      },
+      "test": "stage2_gazebo_streams",
+      "reason": "Real Ogre2 sensor messages received for every selected camera/lidar topic; ROS bridge and Monza not tested.",
+      "driver": "Gazebo Harmonic Sensors Ogre2",
+      "advertised_topics": [
+        "/clock",
+        "/gazebo/resource_paths",
+        "/model/urrc_ai_04/sensors/camera_info",
+        "/model/urrc_ai_04/sensors/depth",
+        "/model/urrc_ai_04/sensors/depth/points",
+        "/model/urrc_ai_04/sensors/start_camera",
+        "/sensors/marker",
+        "/stats",
+        "/world/urrc_stage1_smoke/clock",
+        "/world/urrc_stage1_smoke/dynamic_pose/info",
+        "/world/urrc_stage1_smoke/model/urrc_ai_04/joint_state",
+        "/world/urrc_stage1_smoke/pose/info",
+        "/world/urrc_stage1_smoke/scene/deletion",
+        "/world/urrc_stage1_smoke/scene/info",
+        "/world/urrc_stage1_smoke/state",
+        "/world/urrc_stage1_smoke/stats",
+        "/model/urrc_ai_04/drive/front_left",
+        "/model/urrc_ai_04/drive/front_right",
+        "/model/urrc_ai_04/steer/left",
+        "/model/urrc_ai_04/steer/right",
+        "/world/urrc_stage1_smoke/light_config",
+        "/world/urrc_stage1_smoke/material_color"
+      ]
+    },
+    {
+      "status": "PASS_SENSOR_STREAMS",
+      "ai": "AI-05",
+      "topics": {
+        "start_camera": {
+          "topic": "/model/urrc_ai_05/sensors/start_camera",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 28595714
+        },
+        "rgb": {
+          "topic": "/model/urrc_ai_05/sensors/rgb",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 24653258
+        },
+        "lidar3d": {
+          "topic": "/model/urrc_ai_05/sensors/lidar3d",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 16659608
+        },
+        "lidar3d_points": {
+          "topic": "/model/urrc_ai_05/sensors/lidar3d/points",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 58018923
+        }
+      },
+      "test": "stage2_gazebo_streams",
+      "reason": "Real Ogre2 sensor messages received for every selected camera/lidar topic; ROS bridge and Monza not tested.",
+      "driver": "Gazebo Harmonic Sensors Ogre2",
+      "advertised_topics": [
+        "/clock",
+        "/gazebo/resource_paths",
+        "/model/urrc_ai_05/sensors/camera_info",
+        "/model/urrc_ai_05/sensors/lidar3d",
+        "/model/urrc_ai_05/sensors/lidar3d/points",
+        "/model/urrc_ai_05/sensors/rgb",
+        "/model/urrc_ai_05/sensors/start_camera",
+        "/sensors/marker",
+        "/stats",
+        "/world/urrc_stage1_smoke/clock",
+        "/world/urrc_stage1_smoke/dynamic_pose/info",
+        "/world/urrc_stage1_smoke/model/urrc_ai_05/joint_state",
+        "/world/urrc_stage1_smoke/pose/info",
+        "/world/urrc_stage1_smoke/scene/deletion",
+        "/world/urrc_stage1_smoke/scene/info",
+        "/world/urrc_stage1_smoke/state",
+        "/world/urrc_stage1_smoke/stats",
+        "/model/urrc_ai_05/drive/rear_left",
+        "/model/urrc_ai_05/drive/rear_right",
+        "/model/urrc_ai_05/steer/left",
+        "/model/urrc_ai_05/steer/right",
+        "/world/urrc_stage1_smoke/light_config",
+        "/world/urrc_stage1_smoke/material_color"
+      ]
+    },
+    {
+      "status": "PASS_SENSOR_STREAMS",
+      "ai": "AI-08",
+      "topics": {
+        "start_camera": {
+          "topic": "/model/urrc_ai_08/sensors/start_camera",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 28595714
+        },
+        "rgb": {
+          "topic": "/model/urrc_ai_08/sensors/rgb",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 24653258
+        },
+        "lidar2d": {
+          "topic": "/model/urrc_ai_08/sensors/lidar2d",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 862927
+        },
+        "lidar3d": {
+          "topic": "/model/urrc_ai_08/sensors/lidar3d",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 16662513
+        },
+        "lidar3d_points": {
+          "topic": "/model/urrc_ai_08/sensors/lidar3d/points",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 58011619
+        }
+      },
+      "test": "stage2_gazebo_streams",
+      "reason": "Real Ogre2 sensor messages received for every selected camera/lidar topic; ROS bridge and Monza not tested.",
+      "driver": "Gazebo Harmonic Sensors Ogre2",
+      "advertised_topics": [
+        "/clock",
+        "/gazebo/resource_paths",
+        "/model/urrc_ai_08/sensors/camera_info",
+        "/model/urrc_ai_08/sensors/lidar2d",
+        "/model/urrc_ai_08/sensors/lidar2d/points",
+        "/model/urrc_ai_08/sensors/lidar3d",
+        "/model/urrc_ai_08/sensors/lidar3d/points",
+        "/model/urrc_ai_08/sensors/rgb",
+        "/model/urrc_ai_08/sensors/start_camera",
+        "/sensors/marker",
+        "/stats",
+        "/world/urrc_stage1_smoke/clock",
+        "/world/urrc_stage1_smoke/dynamic_pose/info",
+        "/world/urrc_stage1_smoke/model/urrc_ai_08/joint_state",
+        "/world/urrc_stage1_smoke/pose/info",
+        "/world/urrc_stage1_smoke/scene/deletion",
+        "/world/urrc_stage1_smoke/scene/info",
+        "/world/urrc_stage1_smoke/state",
+        "/world/urrc_stage1_smoke/stats",
+        "/model/urrc_ai_08/drive/rear_left",
+        "/model/urrc_ai_08/drive/rear_right",
+        "/model/urrc_ai_08/steer/left",
+        "/model/urrc_ai_08/steer/right",
+        "/world/urrc_stage1_smoke/light_config",
+        "/world/urrc_stage1_smoke/material_color"
+      ]
+    },
+    {
+      "status": "PASS_SENSOR_STREAMS",
+      "ai": "AI-10",
+      "topics": {
+        "start_camera": {
+          "topic": "/model/urrc_ai_10/sensors/start_camera",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 29979391
+        },
+        "rgb": {
+          "topic": "/model/urrc_ai_10/sensors/rgb",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 25846171
+        },
+        "depth": {
+          "topic": "/model/urrc_ai_10/sensors/depth",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 21632969
+        },
+        "lidar3d": {
+          "topic": "/model/urrc_ai_10/sensors/lidar3d",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 17463536
+        },
+        "lidar3d_points": {
+          "topic": "/model/urrc_ai_10/sensors/lidar3d/points",
+          "advertised": true,
+          "received_payload": true,
+          "bytes": 60812678
+        }
+      },
+      "test": "stage2_gazebo_streams",
+      "reason": "Real Ogre2 sensor messages received for every selected camera/lidar topic; ROS bridge and Monza not tested.",
+      "driver": "Gazebo Harmonic Sensors Ogre2",
+      "advertised_topics": [
+        "/clock",
+        "/gazebo/resource_paths",
+        "/model/urrc_ai_10/sensors/camera_info",
+        "/model/urrc_ai_10/sensors/depth",
+        "/model/urrc_ai_10/sensors/depth/points",
+        "/model/urrc_ai_10/sensors/lidar3d",
+        "/model/urrc_ai_10/sensors/lidar3d/points",
+        "/model/urrc_ai_10/sensors/rgb",
+        "/model/urrc_ai_10/sensors/start_camera",
+        "/sensors/marker",
+        "/stats",
+        "/world/urrc_stage1_smoke/clock",
+        "/world/urrc_stage1_smoke/dynamic_pose/info",
+        "/world/urrc_stage1_smoke/model/urrc_ai_10/joint_state",
+        "/world/urrc_stage1_smoke/pose/info",
+        "/world/urrc_stage1_smoke/scene/deletion",
+        "/world/urrc_stage1_smoke/scene/info",
+        "/world/urrc_stage1_smoke/state",
+        "/world/urrc_stage1_smoke/stats",
+        "/model/urrc_ai_10/drive/front_left",
+        "/model/urrc_ai_10/drive/front_right",
+        "/model/urrc_ai_10/drive/rear_left",
+        "/model/urrc_ai_10/drive/rear_right",
+        "/model/urrc_ai_10/steer/left",
+        "/model/urrc_ai_10/steer/right",
+        "/world/urrc_stage1_smoke/light_config",
+        "/world/urrc_stage1_smoke/material_color"
+      ]
+    }
+  ],
+  "limitations": "10 SDF static validated; 5 real sensor setups validated. ROS bridge, camera light-out recognition and Monza race not covered."
+}
