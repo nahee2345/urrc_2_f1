@@ -126,7 +126,9 @@ def main():
                         return 1
                 result.update(status="PASS_MONACO_INFRA_AND_SIGNAL_COMMANDS" if a.verify_lights
                     else "PASS_MONACO_INFRA_ONLY",
-                    reason="실제 카메라/포즈 및 원본 5등 점등/동시 소등 서비스 동작 확인; 카메라 RGB 분류·실주행 3랩 검증 아님")
+                    reason=("실제 카메라/포즈 데이터 및 공식 5등 서비스 확인; 실제 RGB 판별·3랩 검증 아님"
+                        if a.verify_lights else
+                        "실제 Monaco 카메라 이미지와 운영자 포즈 데이터만 수신; 5등 신호등 점등/소등 및 RGB 출발 판정·3랩은 검증하지 않음"))
                 return 0
             result.update(status="FAIL_TOPIC",reason="실제 카메라/운영자 포즈 중 누락")
             return 1
