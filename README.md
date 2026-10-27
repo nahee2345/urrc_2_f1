@@ -8,7 +8,7 @@
 
 물리 엔진 기반 4륜 차량 10대에 서로 다른 센서·알고리즘을 적용하고, URRC 몬자 맵에서 무충돌 3바퀴 완주를 연구합니다. 연구 목적의 RGB·Depth·스테레오·2D/3D LiDAR 주행 센서는 공식 원본 대회 규정과 구분하여 허용합니다.
 
-차량별 공통 출발 카메라는 빨간불 5개가 차례대로 켜진 후 모두 꺼지는 것을 확인하도록 계획했습니다. 출발 판단 알고리즘 및 3바퀴 주행은 아직 구현되지 않았습니다.
+차량별 공통 출발 카메라는 빨간불 5개가 차례대로 켜진 후 모두 꺼지는 것을 확인하도록 계획했습니다. 출발 신호 카메라 판정 로직은 3단계에 구현했습니다. 실제 신호등 인식과 3바퀴 완주 검증은 아직 별도 진행입니다.
 
 ## 단계별 진행
 
@@ -18,7 +18,8 @@
 | 1단계 | 4륜 동적 차량, 질량·관성, 조향 및 구동 | Python 및 Gazebo 평면 전진·제동·좌회전 PASS |
 | 2단계 | 10개 차량별 RGB·Depth·스테레오·LiDAR 센서 장착 | 정적 테스트 25개 PASS, 10대 실제 Gazebo 센서 수신 PASS |
 | 2단계 확대 검증 | AI-01~AI-10 센서 실제 수신 일괄 검증 | 10대 모두 실제 센서 메시지 수신 PASS (실행 #40455462925) |
-| 후속 단계 | 신호등 출발·랩 계측·자율주행 알고리즘 | 미구현·미검증 |
+| 3단계 | 원본 v10.8 텍스처·고저차·관전 카메라·5등 신호등 자산 격리 복원 및 출발·랩·충돌 감시 | Python 47개 PASS, 고저차·충돌 메시 동일성 PASS; 실제 신호등 시뮬레이션 결과는 Actions에서 확인 |
+| 후속 단계 | 실제 신호등 RGB 인식·ROS2 통합·AI-01 자율주행 3바퀴 | 미검증 |
 
 ## 내려받기
 
@@ -90,7 +91,7 @@ ROS 2의 실제 메시지 수신 및 PointCloud2 변환은 별도 실험이 필�
 
 실제 RGB 시작 카메라에 5개 빨간불이 모두 켜졌다 꺼지는 것을 확인하고 운영자 Bool이 허가일 때만 출발을 허용하는 안전 상태기계를 추가했습니다. 원본 몬자 흰색 출발선으로 랩을 세고 체크포인트 및 모든 접촉 센서로 유효성을 검사합니다.
 
-Python 단위 검사 44개 PASS 및 원본 몬자 실제 카메라 영상·운영자 포즈 수신 PASS_MONZA_INFRA_ONLY(https://github.com/nahee2345/urrc_2_f1/actions/runs/40458697552). 실제 5등 신호등 인식·ROS2 연동·원본 몬자 3바퀴 주행은 아직 PASS가 아닙니다.
+Python 단위 검사 47개 PASS, 원본 몬자 도로 OBJ 높이 범위·충돌 메시 동일성 PASS, 원본 v10.8 관전 카메라·텍스처·5등 모델 생성 PASS. 이전 카메라·운영자 위치 센서 통합 결과: PASS_MONZA_INFRA_ONLY(https://github.com/nahee2345/urrc_2_f1/actions/runs/40458697552). 실제 5등 신호등 인식·ROS2 연동·원본 몬자 3바퀴 주행은 아직 PASS가 아닙니다.
 
 ~~~bash
 cd ~/urrc_2_f1
@@ -118,3 +119,19 @@ git submodule update --init --recursive
 **[실제 출발 시험을 위한 사용자 Ubuntu 실행 안내](docs/STAGE3_LOCAL_INTEGRATION.md)**
 
 현재는 자동 주행 제어기가 연결되지 않아 무충돌 3바퀴 완주를 검증할 수 없습니다.
+
+
+### 3단계 변경: 공식 몬자 맵과 동일하게 보기
+
+이전 단계에서 원본 run_world.py의 enhance_track 과정을 빠뜨려 텍스처·관전 카메라·지면 재질과 신호등이 원본 실행 화면과 달랐습니다. 3단계부터는 **원본 GitHub를 수정하지 않고** generated/stage3/resources에 공식 향상 리소스를 재현합니다. 원본 도로 고저차는 약 2.563m입니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+python3 scripts/stage3_prepare_monza.py --ai AI-01
+cat generated/stage3/AI-01/terrain_fidelity.json
+python3 scripts/stage3_run_monza.py --ai AI-01
+~~~
+
+다른 터미널에서 공식 v10.8 방식의 5등 전체 점등은 \`python3 scripts/stage3_lights.py on\`, 순차 점등 후 전체 소등은 \`python3 scripts/stage3_lights.py sequence\`로 실행합니다. 카메라 ROI는 실제 화면 확인 후에만 교정합니다.
