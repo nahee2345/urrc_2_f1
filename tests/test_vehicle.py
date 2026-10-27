@@ -19,7 +19,7 @@ class Stage1Tests(unittest.TestCase):
                 self.assertEqual(root.attrib["version"],"1.9")
                 m=root.find("model")
                 self.assertEqual(m.findtext("static"),"false")
-                self.assertEqual(m.findtext("canonical_link"),"base_link")
+                self.assertEqual(m.attrib["canonical_link"],"base_link")
                 self.assertEqual(len(m.findall("link")),7)
                 self.assertEqual(len(m.findall("joint")),6)
                 self.assertEqual(len(m.findall(".//link/collision")),5)
