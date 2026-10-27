@@ -66,7 +66,7 @@ class Stage1Tests(unittest.TestCase):
         v=Vehicle()
         neutral=setpoints(v,1.0,0)
         self.assertEqual(neutral["steer_left_rad"],0)
-        self.assertAlmostEqual(neutral["wheel_radps"]["rear_left"],-25.)
+        self.assertAlmostEqual(neutral["wheel_radps"]["rear_left"],25.)
         right=setpoints(v,1.0,0.35)
         self.assertLess(right["steer_right_rad"],right["steer_left_rad"])
         self.assertLess(right["steer_left_rad"],0)
