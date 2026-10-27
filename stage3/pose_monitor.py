@@ -29,11 +29,17 @@ def main():
     p.add_argument("--root",type=Path,default=Path(__file__).resolve().parents[1]/"upstream/urrc_f1_ws")
     p.add_argument("--output",type=Path,default=Path("generated/stage3_lap_events.jsonl"))
     p.add_argument("--target-laps",type=int,default=3)
+    p.add_argument("--contacts-manifest",type=Path,
+                   help="3단계 생성 명령으로 출력한 contacts.json, 누락 시 무충돌 PASS 차단")
     p.add_argument("--auto-arm",action="store_true",help="안전 출발 Bool 없이 계측 시운전할 때만")
     args=p.parse_args()
     finish,cps=gates_from_upstream(args.root,args.track)
     lap=LapSupervisor(finish,cps,target=args.target_laps)
     decode=load_official_world_pose(args.root)
+    contacts=(json.loads(args.contacts_manifest.read_text())["topics"]
+              if args.contacts_manifest and args.contacts_manifest.is_file() else [])
+    if any(not t.startswith(f"/model/{args.vehicle}/contacts/") for t in contacts):
+        raise ValueError("다른 차량 또는 잘못된 접촉 센서 주소")
     import rclpy
     from rclpy.node import Node
     from tf2_msgs.msg import TFMessage
@@ -47,8 +53,7 @@ def main():
             super().__init__("urrc_stage3_official_geometry_observer")
             self.armed=False
             self.contact_subs=[]
-            for ident in ("body","front_left","front_right","rear_left","rear_right"):
-                topic=f"/model/{args.vehicle}/contacts/{ident}"
+            for topic in contacts:
                 sub=self.create_subscription(Contacts,topic,self.on_contacts,10)
                 self.contact_subs.append(sub)
             self.create_subscription(TFMessage,f"/model/{args.vehicle}/urrc_timing",self.on_pose,200)
@@ -85,7 +90,8 @@ def main():
                     self.get_logger().info(str(event))
                 if lap.finished:
                     # 5개 접촉 센서가 모두 실제 ROS 브리지에 연결돼야 무충돌 PASS 가능.
-                    lap.contact_monitor_ready=all(sub.get_publisher_count()>0 for sub in self.contact_subs)
+                    lap.contact_monitor_ready=(bool(self.contact_subs) and
+                        all(sub.get_publisher_count()>0 for sub in self.contact_subs))
                     audit.write(json.dumps({"type":"result",**lap.status()},ensure_ascii=False)+"\n")
             except Exception as exc:
                 lap.active=False
