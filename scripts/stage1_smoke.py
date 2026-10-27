@@ -127,7 +127,7 @@ def main():
                 for side in ("rear_left","rear_right"):
                     topic = f"/model/{car.name}/drive/{side}"
                     r = subprocess.run(["gz","topic","-t",topic,"-m","gz.msgs.Double",
-                                        "-p","data: -4.0"],capture_output=True,text=True,timeout=15)
+                                        "-p","data: 4.0"],capture_output=True,text=True,timeout=15)
                     if r.returncode:
                         result.update(status="FAIL_COMMAND",reason=f"{topic}: {r.stderr[-400:]}")
                         return 1
@@ -144,8 +144,8 @@ def main():
             displacement = math.dist(start[:2],end[:2])
             result.update(samples=len(positions),start_xyz=start,end_xyz=end,
                           displacement_m=round(displacement,6))
-            if displacement < 0.01:
-                result.update(status="FAIL_MOTION",reason="No physical translation >= 0.01 m")
+            if end[0] - start[0] < 0.01:
+                result.update(status="FAIL_DIRECTION",reason="Commanded forward, but measured vehicle did not advance along +X")
                 return 1
             if abs(end[2] - car.wheel_radius) > 0.035:
                 result.update(status="FAIL_CONTACT",reason="Vehicle height inconsistent with wheel support")
