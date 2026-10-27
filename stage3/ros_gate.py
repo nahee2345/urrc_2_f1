@@ -26,7 +26,7 @@ def main():
     ap.add_argument("--entry-id",required=True)
     ap.add_argument("--calibration",type=Path,required=True)
     ap.add_argument("--camera-topic")
-    args=ap.parse_args()
+    args,ros_args=ap.parse_known_args()
     gate=load_calibration(args.calibration)
     import rclpy
     from rclpy.node import Node
@@ -77,7 +77,7 @@ def main():
                     state.data=bool(self.allowed and gate.state=="RELEASED")
             self.pub.publish(state)
 
-    rclpy.init()
+    rclpy.init(args=ros_args)
     node=StartNode()
     try:rclpy.spin(node)
     finally:
