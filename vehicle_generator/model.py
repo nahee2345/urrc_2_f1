@@ -198,7 +198,11 @@ def generate(v: Vehicle):
             sub(kn,"pose",fmt(x,y,0,0,0,0))
             dims=(0.022,0.020,0.018)
             inertial(kn,v.knuckle_mass,*box_inertia(v.knuckle_mass,*dims))
-            box_geometry(sub(kn,"visual",name=f"{wheel}_knuckle_visual"),dims)
+            knuckle_visual=sub(kn,"visual",name=f"{wheel}_knuckle_visual")
+            box_geometry(knuckle_visual,dims)
+            dark=sub(knuckle_visual,"material")
+            sub(dark,"ambient","0.012 0.012 0.014 1")
+            sub(dark,"diffuse","0.024 0.024 0.027 1")
             # No extra collision on the overlapped steering hub; the outer wheel has collision.
             steer=f"{wheel}_steer_joint"
             angle=math.radians(v.max_steer_deg)
@@ -214,6 +218,10 @@ def generate(v: Vehicle):
         for kind in ("visual","collision"):
             node=sub(wl,kind,name=f"{wheel}_{kind}")
             wheel_geometry(node,v.wheel_radius,v.wheel_width)
+            if kind=="visual":
+                tire=sub(node,"material")
+                sub(tire,"ambient","0.008 0.008 0.009 1")
+                sub(tire,"diffuse","0.018 0.018 0.020 1")
             if kind=="collision":
                 friction=sub(sub(sub(node,"surface"),"friction"),"ode")
                 sub(friction,"mu",fmt(v.wheel_friction))

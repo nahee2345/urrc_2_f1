@@ -92,6 +92,10 @@ def add_box(link, kind, name, center, size, body_z):
     elem=sub(link,kind,name=name)
     sub(elem,"pose",fmt(center[0],center[1],center[2]-body_z,0,0,0))
     sub(sub(sub(elem,"geometry"),"box"),"size",fmt(*size))
+    if kind=="visual":
+        mat=sub(elem,"material")
+        sub(mat,"ambient","0.013 0.013 0.015 1")
+        sub(mat,"diffuse","0.027 0.027 0.031 1")
 
 
 def _set_composite_inertia(link,v:Vehicle,names):
