@@ -101,3 +101,20 @@ python3 scripts/stage3_prepare_monza.py --ai AI-01
 ~~~
 
 [3단계 실행 안내](docs/STAGE3_GUIDE.md) · [3단계 검증 보고서](reports/STAGE_3.md)
+
+
+## GitHub 변경분 업데이트 및 실제 출발 시험
+
+이미 clone한 Ubuntu에서는 전체 ZIP이나 별도 파일을 다시 다운로드하지 않습니다. 저장소에서 변경된 커밋만 갱신합니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+~~~
+
+실제 몬자 화면에서 신호등 5개가 출발 카메라에 보이는지 먼저 확인해야 합니다. 해당 확인 결과에 따라 카메라 교정과 실제 5등 소등 후 출발 허가를 검증합니다.
+
+**[실제 출발 시험을 위한 사용자 Ubuntu 실행 안내](docs/STAGE3_LOCAL_INTEGRATION.md)**
+
+현재는 자동 주행 제어기가 연결되지 않아 무충돌 3바퀴 완주를 검증할 수 없습니다.
