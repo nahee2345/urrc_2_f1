@@ -68,6 +68,10 @@ def has_sample(path,kind):
     if kind=="gpu_lidar":
         return bool(re.search(r"\branges:\s*[-+0-9.infINFnanNAN]",prefix)
                     and re.search(r"\bcount:\s*360\b",prefix))
+    if kind=="pointcloud":
+        return bool(re.search(r"\bwidth:\s*[1-9]\d*\b",prefix)
+                    and re.search(r"\bheight:\s*[1-9]\d*\b",prefix)
+                    and re.search(r"\bdata:",prefix))
     return False
 
 
@@ -124,7 +128,14 @@ def main():
                 published=subprocess.run(["gz","topic","-l"],capture_output=True,
                     text=True,timeout=20).stdout
                 result["advertised_topics"]=published.splitlines()
-                for name,detail in meta["topics"].items():
+                streams = dict(meta["topics"])
+                if "lidar3d" in streams:
+                    lidar = streams["lidar3d"]
+                    streams["lidar3d_points"] = {
+                        "gazebo":lidar["pointcloud_topic_candidate"],
+                        "gz_type":"gz.msgs.PointCloudPacked"
+                    }
+                for name,detail in streams.items():
                     topic=detail["gazebo"]
                     outfile=tmp/(name+".log")
                     handle=outfile.open("wb")
@@ -140,6 +151,7 @@ def main():
                             proc.kill();proc.wait()
                     handle.close()
                     typ=("gpu_lidar" if detail["gz_type"]=="gz.msgs.LaserScan"
+                         else "pointcloud" if detail["gz_type"]=="gz.msgs.PointCloudPacked"
                          else "depth_camera" if name=="depth" else "camera")
                     result["topics"][name]={"topic":detail["gazebo"],
                         "advertised":detail["gazebo"] in published.splitlines(),
