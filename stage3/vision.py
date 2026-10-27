@@ -92,9 +92,11 @@ class LightOutGate:
         self.released_at=None
 
     def update(self,width,height,rgb,stamp_s,permission):
-        if not permission:
+        # 원본 운영자는 신호등 소등 직전에 /race/start=True를 발행한다.
+        # 따라서 False 상태에서도 '5개 빨간불 점등'의 카메라 증거는 수집해야 한다.
+        # 다만 False일 때 실제 출발은 절대 허가하지 않는다.
+        if not permission and self.state=="RELEASED":
             self.reset()
-            return False
         if not math.isfinite(stamp_s) or (self.last_time is not None and
             (stamp_s<=self.last_time or stamp_s-self.last_time>self.max_gap_s)):
             self.reset()
@@ -104,7 +106,7 @@ class LightOutGate:
         self.last_time=stamp_s
         self.last_ratios=roi_red_ratios(width,height,rgb,self.rois)
         if self.state=="RELEASED":
-            return True
+            return bool(permission)
         if self.state=="WAIT_FIVE_RED":
             if all(r>=self.threshold_on for r in self.last_ratios):
                 self.count+=1
@@ -112,7 +114,7 @@ class LightOutGate:
                     self.state="WAIT_ALL_OFF";self.count=0
             else:self.count=0
         elif self.state=="WAIT_ALL_OFF":
-            if all(r<=self.threshold_off for r in self.last_ratios):
+            if permission and all(r<=self.threshold_off for r in self.last_ratios):
                 self.count+=1
                 if self.count>=self.stable_frames:
                     self.state="RELEASED"
