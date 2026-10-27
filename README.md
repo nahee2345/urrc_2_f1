@@ -35,3 +35,26 @@ Generated SDF: `generated/urrc_stage1_rwd/model.sdf`.
 `urrc_f1_ws` officially permits LiDAR for driving and camera for lights only. This project's experiment-specific changes (camera/depth for driving and solo 3-lap PASS) are **overlays**, not changes to official upstream rules. Stage 1 includes no sensors or autonomous driving; these are later stages.
 
 Authoritative upstream lock: `docs/source_lock.json`.
+
+## Stage 2 — multi-sensor generation (10 vehicles)
+
+All 10 experimental vehicle designs are generated from the SAME validated physical 4-wheel chassis, each with a dedicated start-light camera and an independent selection of RGB, depth, stereo, 2D LiDAR or 3D LiDAR driving sensors.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+python3 -m unittest discover -s tests -v
+python3 scripts/build_sensors.py --ai all
+python3 scripts/stage2_sensor_smoke.py --run --ai AI-05
+cat generated/stage2_sensor_result.json
+~~~
+
+Each vehicle SDF and its exact sensor topics / overall dimensions are saved under `generated/stage2/AI-XX/`. ROS 2 Jazzy bridge YAML can be generated from a vehicle manifest:
+
+~~~bash
+python3 scripts/bridge_sensors.py --manifest generated/stage2/AI-05/manifest.json \
+  --output generated/stage2/AI-05/ros_bridge.yaml
+~~~
+
+Documentation: [Stage 2 Korean guide](docs/STAGE2_GUIDE.md), [Stage 2 test report](reports/STAGE_2.md). GitHub Actions builds/validates all ten SDF files and runs actual Gazebo rendering sensors. A successful sensor stream does **not** mean ROS bridging, actual camera traffic-light recognition, autonomous racing, or three clean laps have passed.
