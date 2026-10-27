@@ -155,3 +155,22 @@ python3 scripts/stage4_bridge.py --contacts generated/stage3/AI-01/contacts.json
 ~~~
 
 [4단계 Ubuntu 실제 실행법](docs/STAGE4_GUIDE.md) · [4단계 한국어 검증 보고서](reports/STAGE_4.md) · [GitHub Actions](https://github.com/nahee2345/urrc_2_f1/actions)
+
+
+## 5단계 — Monaco 공식 맵과 AI-01 자동주행 시험
+
+5단계부터 Monaco를 기본 트랙으로 사용합니다. 원본 고저차 약 8.41m, 도로 최소 폭 1.4m를 유지한 검정 AI-01 시뮬레이션을 생성하며, 실제 출발 카메라 5등 ROI 교정과 3바퀴 운영자 랩·충돌 감독을 연동했습니다.
+
+기존 Git clone에서 수정 내용만 업데이트:
+
+    cd ~/urrc_2_f1
+    git pull --ff-only
+    git submodule update --init --recursive
+    python3 scripts/stage5_prepare_monaco.py --ai AI-01
+    python3 scripts/stage5_bridge.py
+    python3 scripts/stage5_run_monaco.py --ai AI-01
+
+상세 설명: docs/STAGE5_GUIDE.md
+단계별 검증 결과: reports/STAGE_5.md
+
+실제 Monaco 카메라·위치·FWD 모터 물리는 GitHub Actions에서 기본 검증에 통과했습니다. 그러나 실제 빨간불 카메라 출발, RGB 주행 제어기 3랩 무충돌 완주는 아직 PASS가 아닙니다.
