@@ -181,6 +181,12 @@ def generate(v: Vehicle):
     for kind in ("visual", "collision"):
         part=sub(body,kind,name=f"body_{kind}")
         box_geometry(part,(v.body_length,v.body_width,v.body_height))
+        if kind=="visual":
+            # 무광에 가까운 검정 차체 (Gazebo 조명 아래 회색으로 보일 수 있음).
+            material=sub(part,"material")
+            sub(material,"ambient","0.015 0.015 0.018 1")
+            sub(material,"diffuse","0.028 0.028 0.033 1")
+            sub(material,"specular","0.045 0.045 0.045 1")
     for wheel in WHEELS:
         front = wheel.startswith("front")
         left = wheel.endswith("left")
