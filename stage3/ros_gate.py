@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--entry-id",required=True)
     ap.add_argument("--calibration",type=Path,required=True)
     ap.add_argument("--camera-topic")
+    ap.add_argument("--permission-topic",help="격리 실험에서만 사용하는 독립 운영자 출발허가 토픽")
     args,ros_args=ap.parse_known_args()
     gate=load_calibration(args.calibration)
     import rclpy
@@ -35,7 +36,9 @@ def main():
     from std_msgs.msg import Bool
     camera=args.camera_topic or f"/model/{args.vehicle}/sensors/start_camera"
     out=f"/urrc_2_f1/{args.vehicle}/start_allowed"
-    permit=f"/race/start/{args.entry_id}"
+    permit=args.permission_topic or f"/race/start/{args.entry_id}"
+    if args.permission_topic and args.permission_topic.startswith("/race/"):
+        raise ValueError("격리 실험의 출발 허가 토픽에 공식 /race 경로를 사용할 수 없습니다")
 
     class StartNode(Node):
         def __init__(self):
