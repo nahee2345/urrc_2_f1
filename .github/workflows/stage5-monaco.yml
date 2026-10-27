@@ -73,6 +73,13 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           set -euo pipefail
+          # GitHub runner의 선택적 Microsoft APT 소스가 간헐적으로 403을 반환함.
+          # 새 임시 CI 가상 머신 안에서만 비활성화; 사용자 PC에는 영향 없음.
+          for file in /etc/apt/sources.list.d/*; do
+            if [ -f "$file" ] && grep -q 'packages.microsoft.com' "$file"; then
+              sudo mv "$file" "$file.disabled"
+            fi
+          done
           timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
           timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri
           curl --fail --silent --show-error --max-time 45 --retry 2 \
