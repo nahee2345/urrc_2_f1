@@ -1,38 +1,40 @@
-# URRC AI 3단계 개발·시험 보고서
+# URRC 3단계 재진행 — 몬자 원본 지형 및 신호등 일치성
 
 기준일: 2026-10-27
 
-## 원본 보호
-- 쓰기 저장소: nahee2345/urrc_2_f1
-- 읽기 전용 원본: urrc_f1_ws@a23c7eec41b98b67ec3a3a2a46f9d7ed957f8290, urrc_2
-- 원본 경기장·신호등·룰 파일을 변경하지 않았습니다.
+## 원본 재검토
 
-## 구현 완료
-1. 실제 카메라 이미지 RGB8/BGR8/RGBA8/BGRA8 픽셀 처리 및 5개 빨간 렌즈 감시.
-2. 5등 점등 상태 확인 → 5등 전체 소등 + 운영자 허가에만 출발 허가.
-3. 시간 역행·카메라 중단·허가 철회·불완전한 4등 감지 시 출발 차단.
-4. 흰색 출발선 정방향 최초 통과 0랩, 정상 코스 후 정방향 재통과당 1랩 판정.
-5. 원본 Monza 10m 체크포인트 115개를 원본 읽기 전용으로 로드하여 코스 단축 방지.
-6. 노면 접촉과 벽·차량·미확인 충돌 분리.
-7. 원본 Monza 복사 SDF에 차량·7개 이상의 접촉 센서·운영자 위치 계측 설치.
-8. 실제 ROS2 Image / TFMessage / Contacts 단방향 브리지 설정 및 영상 PPM 저장 도구 작성.
-9. 출발 카메라 영역 템플릿은 calibrated=false 안전 기본값으로 보관.
+- urrc_f1_ws main: a23c7eec41b98b67ec3a3a2a46f9d7ed957f8290
+- 3단계 서브모듈 고정 SHA와 동일: GitHub 원본 변경 없음.
+- 원본 monza_geometry_report.json 고저차: 약 2.563m.
+- 원본 도로: model://urrc_monza/meshes/road.obj, 충돌: road_collision.obj.
+- 공식 run_world.py의 최초 실행에는 v10_assets.enhance_track가 필요하며, 이전 3단계는 이를 생략함.
+- 정식 원본 실행기는 5개 빨간등의 임시 모델 전체 제거로 일괄 소등하며, spectator camera 4대·아스팔트 텍스처를 실행시 생성함.
 
-## 테스트 결과
+## 원인과 수정
 
-- Python 규칙·안전·차량 회귀 단위 테스트: 44개 PASS.
-- 원본 체크포인트·모델 복사 파일 생성 및 센서 배치: PASS.
-- 실제 몬자 초회 실행: 원본 모델 URI model://urrc_monza 검색 실패.
-- 실험 CI 및 런타임에 SDF_PATH, GZ_SIM_RESOURCE_PATH를 적용해 재검증 중.
-- 실제 카메라 신호등 5등 점등·소등 판정: 미검증.
-- ROS2 전체 연동·실제 접촉 이벤트·3바퀴 무충돌 완주: 미검증.
+사용자에게 보인 3단계 맵이 원본과 다른 외형/시점을 보인 주된 코드 차이는 **원본 v10.8 에셋 사전 생성 과정과 원본 GUI 시점의 누락**입니다. 원본 자체의 고저차가 제거된 것으로 확인되지는 않았습니다.
 
-GitHub Actions: https://github.com/nahee2345/urrc_2_f1/actions
+- stage3/assets.py: 원본 파일을 generated/stage3/resources 아래로 **복제**하고, 공식 enhance_track를 **복사본에만** 실행.
+- stage3/instrument.py: 원본 복사 후 개선된 World SDF에 위치/접촉 감시 차량 추가.
+- stage3/terrain.py: 원본/복사본 도로 정점 Z 범위·개수 대조, 충돌 OBJ SHA256 대조, spectator 4대, 5등 단일모델, 지면 충돌 확인.
+- scripts/stage3_prepare_monza.py: terrain_fidelity.json으로 실측 정적 검증 결과 보존.
+- scripts/stage3_run_monza.py: 원본 monza_grid.gui.config, 격리 리소스 경로와 세션으로 Gazebo 실행.
+- scripts/stage3_lights.py: 원본 v10.8 스크립트의 on/off/sequence를 격리 모델에 수행. 원본 GitHub 변경 없음.
+- scripts/stage3_monza_smoke.py: 원본 향상 월드의 실제 카메라/포즈 메시지 및 5등 서비스 점등→일괄소등 시험.
+- tests/test_stage3_map_fidelity.py: 고저차 삭제 방지 회귀 검사.
+- .github/workflows/stage3-race-supervisor.yml: 공식 자원 재생성/높이/충돌 메시 무결성 검사와 실제 Gazebo 신호등 서비스 시험 자동화.
 
-## 최종 판정
+## 증거와 한계
 
-**3단계 판정 로직 및 44개 단위 시험 PASS, 실제 몬자 카메라·포즈 발행 PASS, 실제 출발 인식·자율주행 통합 검증은 추가 필요.**
+이전 3단계 CI #40458697552에서는 기존 월드로 Python 44개 검사 및 실제 카메라/포즈 수신을 확인했습니다. 이 시험 결과만으로 공식 시각 자산·높이 표현이나 5등 소등 성능을 검증했다고 볼 수 없습니다.
 
-모의 영상과 모의 차량 위치로 PASS한 결과를 실제 레이스 PASS로 둔갑시키지 않습니다. 진짜 카메라 신호등 영상, 전 접촉 센서의 실제 연결, 원본 몬자 주행을 확인하기 전까지 전체 최종 PASS가 아닙니다.
+새 CI는 고저차 보존과 원본 신호등 동작을 추가 검증합니다. 결과는 GitHub Actions의 **가장 최근 3단계 실행 완료 로그**를 확인해 판정해야 합니다.
 
-한국어 실행 안내: docs/STAGE3_GUIDE.md
+실제 카메라 광학 인식/ROS2 출발 안전 게이트 실연동 및 3바퀴 무충돌 AI 주행은 아직 통과했다고 보고하지 않습니다.
+
+원본 urrc_f1_ws 및 urrc_2에 파일 수정과 Git push를 수행하지 않았습니다.
+
+## 사용자 실행
+
+docs/STAGE3_LOCAL_INTEGRATION.md 를 확인하고 기존 저장소에서 git pull --ff-only만 실행하면 됩니다.

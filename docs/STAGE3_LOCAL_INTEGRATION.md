@@ -1,8 +1,18 @@
-# 3단계 — 사용자 Ubuntu 실제 출발 검증
+# URRC 3단계 — 원본 몬자 복원 후 실제 출발 검증
 
-## 다운로드 정책
-- 별도 ZIP·첨부파일·새 clone 없이 기존 ~/urrc_2_f1에서 git pull --ff-only만 실행.
-- 원본 urrc_f1_ws 및 urrc_2 GitHub에는 push 금지. 변경은 urrc_2_f1 main에만 올림.
+## 확인된 원인
+
+원본 urrc_f1_ws main 커밋은 기존에 고정한 a23c7eec41b98b67ec3a3a2a46f9d7ed957f8290과 동일합니다. 원본 monza_geometry_report.json에는 고저차 약 2.563m가 기록되어 있습니다.
+
+이전 urrc_2_f1은 원본 monza_race.sdf를 단순 복사해 Gazebo에서 열었지만, **공식 run_world.py가 시작 때 수행하는 enhance_track을 거치지 않았습니다.** 따라서 도로 아스팔트 텍스처, 지면 재질, 4개 관전 카메라 및 5개 점등→단일 소등 모델이 원본 실행 화면과 달랐습니다. 기본 GUI 카메라 시점도 달랐습니다.
+
+이제 원본 전체 맵을 임의 재설계하지 않고, 복사본 generated/stage3/resources/urrc_track_gazebo에 원본 향상 리소스를 생성합니다. 원본 충돌 OBJ와 중심선 CSV는 SHA256으로 동일함을 확인하며, 원본/복사본 OBJ의 최소·최대 Z와 정점수를 비교하여 평탄화되지 않았음을 검증합니다.
+
+**원본 urrc_f1_ws, urrc_2 GitHub는 어떤 수정이나 push도 하지 않습니다.**
+
+## 업데이트 방식
+
+기존 clone이 있으므로 다운로드/ZIP 없이 변경분만 받습니다.
 
 ~~~bash
 cd ~/urrc_2_f1
@@ -11,49 +21,51 @@ git submodule update --init --recursive
 source /opt/ros/jazzy/setup.bash
 python3 -m unittest discover -s tests -v
 python3 scripts/stage3_prepare_monza.py --ai AI-01
+cat generated/stage3/AI-01/terrain_fidelity.json
+~~~
+
+PASS_ORIGINAL_MONZA_TERRAIN과 고저차가 0보다 충분히 큰 값을 확인합니다. enhanced_road의 height_range_m이 원본과 동일해야 합니다.
+
+## 터미널 1: 공식 GUI 시점·원본 지형으로 몬자 실행
+
+~~~bash
+cd ~/urrc_2_f1
+source /opt/ros/jazzy/setup.bash
+python3 scripts/stage3_run_monza.py --ai AI-01
+~~~
+
+이 스크립트가 GZ_PARTITION 및 원본 복사 리소스 경로를 자동 설정하고, 원본 monza_grid.gui.config로 화면을 엽니다.
+
+다른 Gazebo 인스턴스가 실행 중이면 닫고 다시 실행하세요. 새로운 트랙을 만드는 것이 아니라 공식 원본의 향상 리소스를 반영한 실험용 월드입니다.
+
+## 터미널 2: ROS 2 센서 브리지
+
+~~~bash
+cd ~/urrc_2_f1
+source /opt/ros/jazzy/setup.bash
+export GZ_PARTITION="urrc_stage3_$(id -u)"
 python3 scripts/stage3_bridge.py --contacts generated/stage3/AI-01/contacts.json --output generated/stage3/AI-01/bridge.yaml
-~~~
-
-## A. 몬자 화면 실행(터미널 1)
-
-~~~bash
-cd ~/urrc_2_f1
-source /opt/ros/jazzy/setup.bash
-export GZ_PARTITION="urrc_stage3_$(id -u)"
-export GZ_SIM_RESOURCE_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models"
-export SDF_PATH="$PWD/upstream/urrc_f1_ws/src/urrc_track_gazebo/models"
-gz sim -r generated/stage3/AI-01/monza_experiment.sdf
-~~~
-
-출발 신호등과 차량이 보이는지 확인. 보이지 않으면 화면 캡처 또는 오류 로그를 알려 주세요.
-
-## B. ROS 2 센서 브리지(터미널 2)
-
-~~~bash
-cd ~/urrc_2_f1
-source /opt/ros/jazzy/setup.bash
-export GZ_PARTITION="urrc_stage3_$(id -u)"
 ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=$PWD/generated/stage3/AI-01/bridge.yaml
 ~~~
 
-별도 터미널에서 영상 주파수 확인:
+별도 터미널로 확인:
 
 ~~~bash
 source /opt/ros/jazzy/setup.bash
 ros2 topic hz /model/urrc_ai_01/sensors/start_camera
+ros2 topic hz /model/urrc_ai_01/urrc_timing
 ~~~
 
-주파수가 표시되지 않으면 브리지 실행 로그를 공유해 주세요.
-
-## C. 빨간불 5개 켜기 및 카메라 화면 확인(터미널 3과 4)
+## 터미널 3: 원본 v10.8 방식으로 빨간불 5개 모두 켜기
 
 ~~~bash
 cd ~/urrc_2_f1
-export GZ_PARTITION="urrc_stage3_$(id -u)"
-python3 upstream/urrc_f1_ws/race/scripts/lights.py on --track monza
+python3 scripts/stage3_lights.py on
 ~~~
 
-다른 터미널:
+이 명령은 5개 빨간 렌즈의 공식 v10.8 격리 모델을 켭니다. 이전 문서에 있던 race/scripts/lights.py는 레거시 방식으로, 실험에서 사용하지 않습니다.
+
+## 터미널 4: 실제 차량 카메라 화면 검사
 
 ~~~bash
 cd ~/urrc_2_f1
@@ -62,54 +74,22 @@ python3 scripts/stage3_capture_roi.py --topic /model/urrc_ai_01/sensors/start_ca
 xdg-open generated/stage3/AI-01/start_camera.ppm
 ~~~
 
-이미지에서 빨간 렌즈 5개가 보이는지 확인하고 해당 카메라 화면 스크린샷을 채팅에 전달해 주세요. 필요하면 urrc_2_f1의 카메라 각도와 판정 영역 설정을 변경해 push합니다.
+신호등 렌즈 5개가 화면에 모두 보이고 정확한 영역을 식별할 수 있는지 확인해 스크린샷을 채팅에 알려 주세요. calibrated=false 샘플을 임의로 활성화하지 마세요.
 
-주의: config/stage3_start_roi_template.json에는 검증되지 않은 예시 영역이 들어 있고 calibrated=false입니다. 실제 화면의 렌즈 영역을 교정하기 전에는 true로 변경하지 않습니다.
-
-## D. 출발 허가 시험(카메라 교정 후에만)
-
-먼저 기존 5개 점등 상태를 해제합니다.
+## 실제 순차 점등 후 동시에 소등
 
 ~~~bash
 cd ~/urrc_2_f1
-export GZ_PARTITION="urrc_stage3_$(id -u)"
-python3 upstream/urrc_f1_ws/race/scripts/lights.py off --track monza
+python3 scripts/stage3_lights.py off
+python3 scripts/stage3_lights.py sequence
 ~~~
 
-교정된 설정 파일이 생성된 뒤 다음 출발 안전 노드를 실행합니다.
+원본 v10.8의 랜덤 3~6초 목표 범위로 빨간불이 하나씩 켜지고 단일 모델 제거 요청으로 한꺼번에 꺼집니다. 실제 렌더링 및 차량의 이미지 인식은 교정 이후 검증해야 합니다. GitHub Actions는 Gazebo 서비스 호출 및 카메라·위치 메시지 연결을 별도 검사합니다.
 
-~~~bash
-cd ~/urrc_2_f1
-source /opt/ros/jazzy/setup.bash
-python3 -m stage3.ros_gate --vehicle urrc_ai_01 --entry-id urrc_ai_01 --calibration generated/stage3/AI-01/calibration.json --permission-topic /urrc_2_f1/operator_test_start --ros-args -p use_sim_time:=true
-~~~
+## 아직 PASS 아닌 부분
 
-다른 터미널에서 출발 허가 결과를 관측합니다.
+- 카메라가 **실제 픽셀**로 5개 점등을 확인하고 완전 소등 후에만 start_allowed=true를 내는지.
+- ROS 2 이미지·접촉 브리지의 실제 동작 및 벽 접촉 이벤트.
+- AI-01 주행 제어기: 아직 없으므로 신호 후 전진과 3바퀴 완주는 실행할 수 없습니다.
 
-~~~bash
-source /opt/ros/jazzy/setup.bash
-ros2 topic echo /urrc_2_f1/urrc_ai_01/start_allowed
-~~~
-
-다른 터미널에서 격리 실험용 운영자 허가를 반복 발행합니다(공식 /race/start 사용 금지).
-
-~~~bash
-source /opt/ros/jazzy/setup.bash
-ros2 topic pub -r 10 /urrc_2_f1/operator_test_start std_msgs/msg/Bool "{data: true}"
-~~~
-
-원본 신호등 코드는 읽기 전용으로 사용하면서 실제 점등·소등 시퀀스 실행:
-
-~~~bash
-cd ~/urrc_2_f1
-export GZ_PARTITION="urrc_stage3_$(id -u)"
-python3 upstream/urrc_f1_ws/race/scripts/lights.py sequence --track monza --hold 1
-~~~
-
-정상 조건: 모든 빨간등 소등 전까지 False, 5개 전부 켜졌다 동시에 꺼진 뒤 True, 운영자 허가 중지 또는 카메라 끊김 시 False.
-
-## E. 실제 레이스 3바퀴는 지금 불가
-
-현재 3단계는 출발 허가 신호를 발행할 뿐, 모터와 조향을 구동하는 AI-01 컨트롤러가 없습니다. 실제 무충돌 3바퀴 시험은 다음 단계에서 주행 컨트롤러와 안전 인터록을 연결한 뒤 가능해집니다.
-
-현재 GitHub Actions는 실제 몬자 이미지 및 운영자 위치 토픽 수신까지만 검증했습니다. 출발 신호등 실제 인식, ROS 2 실시간 출발 허가, 실제 충돌/3바퀴는 아직 PASS가 아닙니다.
+단위 검사 PASS와 실제 경기 3바퀴 PASS는 별도 판정합니다.
