@@ -141,10 +141,12 @@ def wheel_geometry(parent, radius, width):
 
 def make_joint(model, name, parent, child, axis, *, bounds=None, effort=None, velocity=None, damping=0.02):
     j = sub(model, "joint", type="revolute", name=name)
+    # The joint zero pose is coincident with its child link frame.
+    sub(j, "pose", fmt(0, 0, 0, 0, 0, 0), relative_to=child)
     sub(j, "parent", parent)
     sub(j, "child", child)
     a = sub(j, "axis")
-    sub(a, "xyz", fmt(*axis))
+    sub(a, "xyz", fmt(*axis), expressed_in="__model__")
     limit = sub(a, "limit")
     if bounds is not None:
         sub(limit, "lower", fmt(bounds[0]))
@@ -170,10 +172,9 @@ def make_plugin(model, name, filename, joint_name, topic, parameters):
 def generate(v: Vehicle):
     v.validate()
     sdf = ET.Element("sdf", version="1.9")
-    model = sub(sdf, "model", name=v.name)
+    model = sub(sdf, "model", name=v.name, canonical_link="base_link")
     sub(model, "static", "false")
     sub(model, "self_collide", "false")
-    sub(model, "canonical_link", "base_link")
     body = sub(model, "link", name="base_link")
     sub(body, "pose", fmt(0,0,v.body_center_z,0,0,0))
     inertial(body, v.body_mass, *box_inertia(v.body_mass,v.body_length,v.body_width,v.body_height))
@@ -197,7 +198,7 @@ def generate(v: Vehicle):
             angle=math.radians(v.max_steer_deg)
             make_joint(model,steer,"base_link",f"{wheel}_knuckle",(0,0,1),bounds=(-angle,angle),effort=v.steer_max_torque,velocity=math.pi/2)
             side="left" if left else "right"
-            make_plugin(model,f"{wheel}_steer_controller","gz-sim-joint-position-controller-system",steer,
+            make_plugin(model,"gz::sim::systems::JointPositionController","gz-sim-joint-position-controller-system",steer,
                         f"/model/{v.name}/steer/{side}",
                         {"p_gain":8.0,"i_gain":0.0,"d_gain":0.25,"cmd_max":v.steer_max_torque,"cmd_min":-v.steer_max_torque})
             parent=f"{wheel}_knuckle"
@@ -215,7 +216,7 @@ def generate(v: Vehicle):
         make_joint(model,spin,parent,f"{wheel}_wheel",(0,1,0),effort=v.motor_max_torque * 2,velocity=200,damping=0.005)
         driven=(v.drive=="awd" or (v.drive=="fwd" and front) or (v.drive=="rwd" and not front))
         if driven:
-            make_plugin(model,f"{wheel}_drive_controller","gz-sim-joint-controller-system",spin,
+            make_plugin(model,"gz::sim::systems::JointController","gz-sim-joint-controller-system",spin,
                         f"/model/{v.name}/drive/{wheel}",
                         {"use_force_commands":True,"p_gain":0.2,"i_gain":0.02,
                          "cmd_max":v.motor_max_torque,"cmd_min":-v.motor_max_torque,
