@@ -35,7 +35,7 @@ SDF 모델 생성: PASS.
 독립 평면 월드 SDF 생성: PASS.
 
 ## 실제 물리 주행
-로컬에서 `python3 scripts/stage1_smoke.py --run`을 호출했지만 `gz` 명령이 설치되지 않아 결과는 **UNAVAILABLE**. 따라서 실제 주행 검증을 완료했다고 주장하지 않습니다.
+초기 개발용 로컬 실행 환경에는 Gazebo가 없어 시험을 수행할 수 없었습니다. 이후 GitHub Actions의 Ubuntu 24.04 + Gazebo Harmonic에서 실제 물리 주행 시험을 실행했고, 사용자의 Ubuntu 환경에서도 같은 시험이 재현되었습니다.
 
 GitHub Actions: https://github.com/nahee2345/urrc_2_f1/actions
 
@@ -43,8 +43,8 @@ GitHub Actions: https://github.com/nahee2345/urrc_2_f1/actions
 
 ## 판정
 - Python 정적 검사 **PASS (12/12)**.
-- SDF 형식 설계 오류 수정 **완료**, 실제 Gazebo SDF 파싱은 CI 또는 Ubuntu에서 재확인.
-- Gazebo 실제 바퀴 운동 / 접지 / 제동 / 조향 **결과 확인 전까지 보류**.
+- SDF 형식 설계 오류 수정 **완료**. 이후 GitHub Actions 실제 Gazebo 시험에서도 SDF 로드·물리 주행 확인.
+- Gazebo 실제 바퀴 구동 전진·제동·좌회전: **독립 평면 시험 PASS**. 원본 몬자 맵의 접지·벽 충돌은 추가 검증 필요.
 - AI 주행·3랩 시험 **미실행**.
 
 

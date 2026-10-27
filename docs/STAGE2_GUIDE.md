@@ -9,16 +9,16 @@
 ## 10개 주행 센서 조합
 | 차량 | 구동 | 주행용 센서 |
 |---|---|---|
-| AI-01 | FWD | RGB camera only |
-| AI-02 | RWD | 3D GPU LiDAR only |
-| AI-03 | AWD | Stereo pair (two synchronized-position RGB cameras) |
-| AI-04 | FWD | Depth camera only |
-| AI-05 | RWD | RGB + 3D GPU LiDAR |
-| AI-06 | AWD | Depth + 3D GPU LiDAR |
-| AI-07 | FWD | RGB + Depth |
-| AI-08 | RWD | RGB + 2D GPU LiDAR + 3D GPU LiDAR |
-| AI-09 | AWD | Stereo + 3D GPU LiDAR |
-| AI-10 | AWD | RGB + Depth + 3D GPU LiDAR |
+| AI-01 | 전륜구동 | RGB 카메라만 |
+| AI-02 | 후륜구동 | 3D GPU LiDAR만 |
+| AI-03 | 사륜구동 | 스테레오 카메라 2개 |
+| AI-04 | 전륜구동 | Depth 카메라만 |
+| AI-05 | 후륜구동 | RGB 카메라 + 3D GPU LiDAR |
+| AI-06 | 사륜구동 | Depth 카메라 + 3D GPU LiDAR |
+| AI-07 | 전륜구동 | RGB 카메라 + Depth 카메라 |
+| AI-08 | 후륜구동 | RGB 카메라 + 2D·3D GPU LiDAR |
+| AI-09 | 사륜구동 | 스테레오 카메라 + 3D GPU LiDAR |
+| AI-10 | 사륜구동 | RGB 카메라 + Depth 카메라 카메라 + 3D GPU LiDAR |
 
 **모든 차량:** 5개 빨간불 소등 감지용 start_camera를 공통 장착. 이 카메라는 AI-02 등의 주행 센서에 포함하지 않음. 신호등 인식 및 출발 차단 제어 알고리즘은 별도 단계에서 구현·검증.
 
@@ -78,13 +78,13 @@ ros2 run ros_gz_bridge parameter_bridge \
 ~~~
 
 생성 YAML은 Gazebo -> ROS 방향으로만 설정됩니다. 이미지: sensor_msgs/msg/Image, LiDAR 스캔: sensor_msgs/msg/LaserScan.
-2D LaserScan과 달리 실제 3D 점군은 PointCloud2가 필요합니다. Gazebo `gz topic -l`에서 PointCloudPacked /points 토픽이 있는지 확인한 뒤에만 --include-points로 선택적 브리지 항목을 생성합니다. **3D PointCloud2 검증을 완료하지 않은 상태에서 검증 완료로 기록하지 않습니다.**
+3D 점군을 ROS 2에서 사용하려면 PointCloud2 메시지로 전달해야 합니다. Gazebo `gz topic -l`에서 PointCloudPacked /points 토픽이 있는지 확인한 뒤에만 --include-points로 선택적 브리지 항목을 생성합니다. **3D PointCloud2 검증을 완료하지 않은 상태에서 검증 완료로 기록하지 않습니다.**
 
 ## GitHub Actions
 https://github.com/nahee2345/urrc_2_f1/actions
-- Stage 1: 기존 동역학 회귀검사
-- Stage 2: 차량 10대 SDF / 정적 검사 및 Gazebo 물리·센서 오프스크린 데이터 발행 검증
-- 생성 모델 및 결과 JSON은 run artifact로 저장
+- 1단계: 기존 동역학 회귀검사
+- 2단계: 차량 10대 SDF/정적 검사 및 Gazebo 화면 없는 방식의 실제 센서 데이터 검증
+- 생성 모델 및 결과 JSON은 실행 결과 첨부 파일로 저장
 
 ## 검증 승인
 1. 10개 독립 SDF 생성/규격/센서 구성 정적 검증.
