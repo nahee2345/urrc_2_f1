@@ -4,7 +4,7 @@
 
 - **Stage 0:** pin and verify the `urrc_f1_ws` v10.8 source using an immutable Git submodule.
 - **Stage 1:** create an SDF 1.9 dynamic four-wheel vehicle with FWD/RWD/AWD configurations, individual front steering joints, force-limited motors, collision and inertial parameters.
-- **Status:** Python static/unit tests passed locally; Gazebo runtime physics and three-lap race are **NOT YET VERIFIED**. See `reports/STAGE_0_1.md`.
+- **Status:** Stage 1 has 12 passing Python tests. A real Gazebo Harmonic headless flat-world test has confirmed wheel-driven translation; braking and steering checks are implemented in the latest CI run. Official Monza racing and three-lap completion are **not yet verified**. See `reports/STAGE_1_HARDENING.md` and GitHub Actions.
 
 ## Download
 
@@ -25,6 +25,9 @@ python3 scripts/check_upstream.py
 ```bash
 python3 -m unittest discover -s tests -v
 python3 scripts/build_vehicle.py
+python3 scripts/stage1_smoke.py --prepare
+# On Ubuntu with Gazebo Harmonic:
+python3 scripts/stage1_smoke.py --run
 ```
 
 Generated SDF: `generated/urrc_stage1_rwd/model.sdf`.
