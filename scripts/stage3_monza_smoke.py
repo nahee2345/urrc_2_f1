@@ -110,10 +110,17 @@ def main():
                     result["five_light_command_exit"]=light.returncode
                     result["five_light_output"]=light.stdout[-2500:]
                     result["five_light_errors"]=light.stderr[-1000:]
+                    elapsed_match=re.search(r"LIGHTS OUT first_on_to_off=([0-9.]+)s",light.stdout)
+                    result["five_light_elapsed_s"]=(float(elapsed_match.group(1))
+                        if elapsed_match else None)
+                    result["five_light_timing_within_3_6_s"]=(
+                        elapsed_match is not None and
+                        3.0<float(elapsed_match.group(1))<6.0)
                     result["five_light_sequence_applied"]=(light.returncode==0
                         and all(f"RED {n}/5" in light.stdout for n in range(1,6))
                         and "LIGHTS OUT" in light.stdout
-                        and "model_remove=single_request" in light.stdout)
+                        and "model_remove=single_request" in light.stdout
+                        and result["five_light_timing_within_3_6_s"])
                     if not result["five_light_sequence_applied"]:
                         result.update(status="FAIL_LIGHT_SEQUENCE",reason="원본 5등 점등 및 동시 소등 서비스 검사 실패")
                         return 1
