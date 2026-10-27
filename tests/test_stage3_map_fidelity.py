@@ -32,12 +32,12 @@ class SourceElevationTests(unittest.TestCase):
     def test_sample_mesh_honors_z_range_and_geometry(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/"road.obj"
-            path.write_text("".join(f"v 0 1 {i*.01}\\n" for i in range(200)))
+            path.write_text("".join(f"v 0 1 {i*.01}\n" for i in range(200)))
             z=_vertices(path)
             self.assertAlmostEqual(z["height_range_m"],1.99)
             self.assertEqual(z["vertices"],200)
             self.assertEqual(_hash(path),_hash(path))
-            path.write_text("".join(f"v 0 1 0\\n" for i in range(200)))
+            path.write_text("".join(f"v 0 1 0\n" for i in range(200)))
             with self.assertRaises(ValueError):_vertices(path)
 
 if __name__=="__main__":unittest.main()
