@@ -32,7 +32,7 @@ def main():
     p.add_argument("--contacts-manifest",type=Path,
                    help="3단계 생성 명령으로 출력한 contacts.json, 누락 시 무충돌 PASS 차단")
     p.add_argument("--auto-arm",action="store_true",help="안전 출발 Bool 없이 계측 시운전할 때만")
-    args=p.parse_args()
+    args,ros_args=p.parse_known_args()
     finish,cps=gates_from_upstream(args.root,args.track)
     lap=LapSupervisor(finish,cps,target=args.target_laps)
     decode=load_official_world_pose(args.root)
@@ -52,6 +52,7 @@ def main():
         def __init__(self):
             super().__init__("urrc_stage3_official_geometry_observer")
             self.armed=False
+            self.result_written=False
             self.contact_subs=[]
             for topic in contacts:
                 sub=self.create_subscription(Contacts,topic,self.on_contacts,10)
@@ -88,15 +89,16 @@ def main():
                 for event in lap.update(sample):
                     audit.write(json.dumps(event,ensure_ascii=False)+"\n")
                     self.get_logger().info(str(event))
-                if lap.finished:
-                    # 5개 접촉 센서가 모두 실제 ROS 브리지에 연결돼야 무충돌 PASS 가능.
+                if lap.finished and not self.result_written:
+                    self.result_written=True
+                    # 모든 접촉 센서가 실제 ROS 브리지에 연결돼야 무충돌 PASS 가능.
                     lap.contact_monitor_ready=(bool(self.contact_subs) and
                         all(sub.get_publisher_count()>0 for sub in self.contact_subs))
                     audit.write(json.dumps({"type":"result",**lap.status()},ensure_ascii=False)+"\n")
             except Exception as exc:
                 lap.active=False
                 self.get_logger().error(f"계측 무효: {exc}")
-    rclpy.init()
+    rclpy.init(args=ros_args)
     node=Monitor()
     try:rclpy.spin(node)
     finally:
