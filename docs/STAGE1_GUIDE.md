@@ -32,7 +32,7 @@ python3 scripts/stage1_smoke.py --run
 cat generated/stage1_smoke_result.json
 ```
 
-이 스크립트는 기존 Monza 월드를 수정하지 않고 별도 평면 세계를 생성합니다. 실제 Gazebo를 headless 구동한 뒤 후륜 모터에 명령을 보내 모델 위치 변화와 높이를 검사하고 결과 JSON을 작성합니다. `PASS_MOTION_ONLY`는 실제 평면 이동만 검증했음을 의미합니다.
+이 스크립트는 기존 Monza 월드를 수정하지 않고 별도 평면 세계를 생성합니다. 실제 Gazebo를 headless 구동한 뒤 후륜 모터에 명령을 보내 모델 위치 변화와 높이를 검사하고 결과 JSON을 작성합니다. `PASS_FLAT_PHYSICS`는 실제 평면 **전진, 속도 0 제동, 좌회전** 검사에 성공했음을 의미합니다. GitHub Actions 실행 40435642363에서는 전진 1.594m, 제동 후 추가 이동 0.217m, 좌회전 횡이동 0.254m를 기록했습니다.
 
 GitHub Actions에도 동일한 정적/헤드리스 Gazebo 시험을 추가했습니다: https://github.com/nahee2345/urrc_2_f1/actions
 
