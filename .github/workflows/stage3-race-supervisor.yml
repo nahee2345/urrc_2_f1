@@ -82,12 +82,23 @@ jobs:
           test -f generated/stage3/resources/urrc_track_gazebo/worlds/monza_signal_active.sdf
           grep -q urrc_v10_spectator generated/stage3/AI-01/monza_experiment.sdf
           grep -q road_textured.obj generated/stage3/resources/urrc_track_gazebo/models/urrc_monza/model.sdf
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("generated/stage3/AI-01/terrain_fidelity.json")
+          data=json.loads(p.read_text())
+          assert data["status"]=="PASS_ORIGINAL_MONZA_TERRAIN"
+          assert data["enhanced_road"]["height_range_m"]>1.
+          assert data["spectator_cameras"]==4
+          assert data["five_light_single_model"]
+          print("원본 몬자 고저차/관전 카메라/5등 지형·신호등 무결성 PASS")
+          PY
           gz sdf -p generated/stage3/AI-01/monza_experiment.sdf >/dev/null
       - name: "실제 몬자 카메라 및 운영자 위치 데이터 수신"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           QT_QPA_PLATFORM: offscreen
-        run: python3 scripts/stage3_monza_smoke.py --ai AI-01 --startup-seconds 18 --capture-seconds 9
+        run: python3 scripts/stage3_monza_smoke.py --ai AI-01 --startup-seconds 18 --capture-seconds 9 --verify-lights
       - uses: actions/upload-artifact@v4
         if: always()
         with:
