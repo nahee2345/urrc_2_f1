@@ -84,3 +84,20 @@ ROS 2의 실제 메시지 수신 및 PointCloud2 변환은 별도 실험이 필�
 - [자동 시험 실행 내역](https://github.com/nahee2345/urrc_2_f1/actions)
 
 설명과 결과 보고서는 한국어로 작성합니다. 실행 필수 명령·코드 식별자·토픽 및 파일 경로는 원래 표기를 유지합니다.
+
+
+## 3단계 — 카메라 신호등 및 랩 계측
+
+실제 RGB 시작 카메라에 5개 빨간불이 모두 켜졌다 꺼지는 것을 확인하고 운영자 Bool이 허가일 때만 출발을 허용하는 안전 상태기계를 추가했습니다. 원본 몬자 흰색 출발선으로 랩을 세고 체크포인트 및 모든 접촉 센서로 유효성을 검사합니다.
+
+Python 단위 검사는 44개 PASS입니다. 실제 카메라 신호등 인식·원본 몬자 3바퀴 주행은 아직 PASS가 아닙니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+python3 -m unittest discover -s tests -v
+python3 scripts/stage3_prepare_monza.py --ai AI-01
+~~~
+
+[3단계 실행 안내](docs/STAGE3_GUIDE.md) · [3단계 검증 보고서](reports/STAGE_3.md)
