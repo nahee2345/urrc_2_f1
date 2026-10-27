@@ -35,7 +35,7 @@ def main():
     vehicle="urrc_ai_01"
     world=ROOT/"generated/stage5/AI-01/monaco_experiment.sdf"
     models=ROOT/"generated/stage5/resources/urrc_track_gazebo/models"
-    if not world.is_file() or not models.is_dir():raise SystemExit("3단계 모델 생성 필요")
+    if not world.is_file() or not models.is_dir():raise SystemExit("5단계 Monaco 월드 생성 필요")
     if shutil.which("gz") is None:raise SystemExit("Gazebo Harmonic 미설치")
     env=dict(os.environ)
     env["GZ_PARTITION"]=f"urrc_stage5_actuator_{os.getpid()}"
@@ -94,7 +94,7 @@ def main():
                     if not math.isfinite(result["final_z_m"]) or abs(result["final_z_m"]-result["initial_z_m"])>.8:
                         result.update(status="FAIL_TERRAIN_CONTACT",reason="차량 고저차/접촉에서 비정상 높이")
                         return 1
-                    result.update(status="PASS_MONZA_FWD_ACTUATORS",
+                    result.update(status="PASS_MONACO_FWD_ACTUATORS",
                                   reason="실제 모나코 3D 노면에서 AI-01 전륜 조인트 명령으로 이동 확인")
                     return 0
         except (OSError,subprocess.SubprocessError) as exc:
