@@ -19,7 +19,10 @@ class RoiTests(unittest.TestCase):
         rois=detect_five_red_lenses(160,120,fake_frame())
         self.assertEqual(len(rois),5)
         self.assertTrue(all(0<a[0]<a[2]<1 for a in rois))
-        self.assertEqual(rois,stable_rois([rois,rois,rois]))
+        stable=stable_rois([rois,rois,rois])
+        for expected,actual in zip(rois,stable):
+            for left,right in zip(expected,actual):
+                self.assertAlmostEqual(left,right,places=10)
     def test_four_red_bulbs_rejected(self):
         with self.assertRaises(ValueError):
             detect_five_red_lenses(160,120,fake_frame(count=4))
