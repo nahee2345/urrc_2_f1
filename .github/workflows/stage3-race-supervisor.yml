@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
-          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri
+          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri xvfb xauth libxkbcommon-x11-0
           curl --fail --silent --show-error --max-time 45 --retry 2 \
             https://packages.osrfoundation.org/gazebo.gpg | sudo tee \
             /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg >/dev/null
@@ -97,8 +97,8 @@ jobs:
       - name: "실제 몬자 카메라 및 운영자 위치 데이터 수신"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-          QT_QPA_PLATFORM: offscreen
-        run: python3 scripts/stage3_monza_smoke.py --ai AI-01 --startup-seconds 18 --capture-seconds 9 --verify-lights
+          QT_QPA_PLATFORM: xcb
+        run: xvfb-run -a -s '-screen 0 1600x1000x24' python3 scripts/stage3_monza_smoke.py --ai AI-01 --startup-seconds 25 --capture-seconds 12 --verify-lights
       - uses: actions/upload-artifact@v4
         if: always()
         with:
