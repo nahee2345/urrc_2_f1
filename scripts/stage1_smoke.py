@@ -132,28 +132,62 @@ def main():
                         result.update(status="FAIL_COMMAND",reason=f"{topic}: {r.stderr[-400:]}")
                         return 1
                 time.sleep(args.motion_seconds)
+                straight_positions = model_pose_stream(pose_log.read_text(errors="replace"),car.name)
+                if len(straight_positions) < 2:
+                    result.update(status="FAIL_TELEMETRY",reason="No poses during straight drive")
+                    return 1
+                start, driven = straight_positions[0], straight_positions[-1]
+                # Zero target angular velocity actively brakes the wheels through PID torque.
                 for side in ("rear_left","rear_right"):
                     subprocess.run(["gz","topic","-t",f"/model/{car.name}/drive/{side}",
                         "-m","gz.msgs.Double","-p","data: 0"],capture_output=True,
-                        text=True,timeout=15)
+                        text=True,timeout=15,check=True)
+                time.sleep(3)
+                brake_poses=model_pose_stream(pose_log.read_text(errors="replace"),car.name)
+                braked=brake_poses[-1]
+                # Positive Gazebo Z steering is LEFT: verify a real lateral turn.
+                for side in ("left","right"):
+                    subprocess.run(["gz","topic","-t",f"/model/{car.name}/steer/{side}",
+                        "-m","gz.msgs.Double","-p","data: 0.15"],capture_output=True,
+                        text=True,timeout=15,check=True)
+                for side in ("rear_left","rear_right"):
+                    subprocess.run(["gz","topic","-t",f"/model/{car.name}/drive/{side}",
+                        "-m","gz.msgs.Double","-p","data: 4.0"],capture_output=True,
+                        text=True,timeout=15,check=True)
+                time.sleep(8)
+                turn_poses=model_pose_stream(pose_log.read_text(errors="replace"),car.name)
+                turn_end=turn_poses[-1]
+                for side in ("rear_left","rear_right"):
+                    subprocess.run(["gz","topic","-t",f"/model/{car.name}/drive/{side}",
+                        "-m","gz.msgs.Double","-p","data: 0"],capture_output=True,
+                        text=True,timeout=15,check=True)
             positions = model_pose_stream(pose_log.read_text(errors="replace"),car.name)
             if len(positions) < 2:
                 result.update(status="FAIL_TELEMETRY",reason=f"pose samples: {len(positions)}")
                 return 1
-            start, end = positions[0],positions[-1]
-            displacement = math.dist(start[:2],end[:2])
-            result.update(samples=len(positions),start_xyz=start,end_xyz=end,
-                          displacement_m=round(displacement,6))
-            if end[0] - start[0] < 0.01:
-                result.update(status="FAIL_DIRECTION",reason="Commanded forward, but measured vehicle did not advance along +X")
+            forward_m=driven[0]-start[0]
+            brake_m=math.dist(driven[:2],braked[:2])
+            turn_lateral_m=turn_end[1]-braked[1]
+            result.update(samples=len(positions),start_xyz=start,straight_end_xyz=driven,
+                brake_end_xyz=braked,turn_end_xyz=turn_end,
+                forward_m=round(forward_m,6),brake_drift_m=round(brake_m,6),
+                turn_lateral_m=round(turn_lateral_m,6))
+            if forward_m < 0.05:
+                result.update(status="FAIL_DIRECTION",reason="Vehicle did not advance in +X during forward drive")
                 return 1
-            if abs(end[2] - car.wheel_radius) > 0.035:
-                result.update(status="FAIL_CONTACT",reason="Vehicle height inconsistent with wheel support")
+            if brake_m > 0.45:
+                result.update(status="FAIL_BRAKE",reason="Vehicle drift >0.45m in 3s after zero wheel-speed command")
                 return 1
-            result.update(status="PASS_MOTION_ONLY",
-                          reason="Wheel-driven translation observed. Steering, braking and Monza still unverified.")
+            if turn_lateral_m < 0.03:
+                result.update(status="FAIL_STEER",reason="Left steering did not produce sufficient +Y displacement")
+                return 1
+            if any(abs(p[2]-car.wheel_radius)>0.035 for p in (driven,braked,turn_end)):
+                result.update(status="FAIL_CONTACT",reason="Model height inconsistent with wheel support")
+                return 1
+            result.update(status="PASS_FLAT_PHYSICS",
+                reason="Forward, braking and left turn observed. Monza, wall collision and 3 laps not yet verified.")
             return 0
-        except (OSError,subprocess.TimeoutExpired) as e:
+        except (OSError,subprocess.TimeoutExpired,subprocess.CalledProcessError) as e:
             result.update(status="ERROR",reason=str(e))
             return 1
         finally:
