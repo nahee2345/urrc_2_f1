@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """기존 3단계 브리지에 AI-01의 실제 RGB 카메라와 물리 구동 명령 추가."""
 from __future__ import annotations
-import argparse,json
+import argparse,json,sys
 from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 from scripts.stage3_bridge import mappings as stage3_mappings
 
 def bridge_yaml(manifest):
