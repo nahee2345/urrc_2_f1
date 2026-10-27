@@ -36,7 +36,7 @@ class SensorRuntimeContracts(unittest.TestCase):
     def test_pointcloud_payload_validation(self):
         with tempfile.TemporaryDirectory() as folder:
             f=Path(folder)/"points.log"
-            f.write_text("header { } width: 360 height: 16 data: \"abc\"")
+            f.write_text("header { } width: 360 height: 16 data: \""+("a"*200)+"\"")
             self.assertTrue(has_sample(f,"pointcloud"))
             f.write_text("width: 360 height: 16 no_data: \"foo\"")
             self.assertFalse(has_sample(f,"pointcloud"))
