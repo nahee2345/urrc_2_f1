@@ -31,7 +31,6 @@ def main():
     p.add_argument("--target-laps",type=int,default=3)
     p.add_argument("--contacts-manifest",type=Path,
                    help="3단계 생성 명령으로 출력한 contacts.json, 누락 시 무충돌 PASS 차단")
-    p.add_argument("--auto-arm",action="store_true",help="안전 출발 Bool 없이 계측 시운전할 때만")
     args,ros_args=p.parse_known_args()
     finish,cps=gates_from_upstream(args.root,args.track)
     lap=LapSupervisor(finish,cps,target=args.target_laps)
@@ -84,8 +83,6 @@ def main():
         def on_pose(self,msg):
             try:
                 sample=decode(msg.transforms,args.vehicle,"base_link",args.track)
-                if args.auto_arm and lap.previous is not None and not self.armed:
-                    lap.arm(lap.previous[0]);self.armed=True
                 for event in lap.update(sample):
                     audit.write(json.dumps(event,ensure_ascii=False)+"\n")
                     self.get_logger().info(str(event))
