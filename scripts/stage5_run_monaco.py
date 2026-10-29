@@ -51,4 +51,4 @@ def main():
                 except subprocess.TimeoutExpired:
                     os.killpg(sim.pid,signal.SIGKILL);sim.wait()
     else:raise SystemExit(subprocess.call(cmd,env=env))
-if __name__=="__main__":main()
+if __name__=="__main__":raise SystemExit(main())
