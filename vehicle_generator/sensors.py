@@ -19,10 +19,12 @@ SENSOR_SPECS = {
     "start_camera": {"type":"camera","center":(0.235,0.000,0.065),
                      "size":(0.018,0.018,0.020),"mass":0.022,"rate":15,
                      "pitch":-0.55, "width":160,"height":120},
-    "rgb": {"type":"camera","center":(0.235,0.034,0.065),
+    "rgb": {"type":"camera","center":(0.235,0.034,0.105),
             "size":(0.018,0.022,0.020),"mass":0.030,"rate":15,
-            # Monaco 내리막·급코너에서 전방 도로가 영상 하단을 떠나지 않도록
-            # 기존 수평 0도 대신 아래로 0.26rad. 신호등 카메라는 별도 유지.
+            # 실제 Monaco 27m 실패 RGB: 낮은 6.5cm 카메라에서 방호벽이
+            # 도로 원거리 부분을 가림. 차량 높이 0.18m 한도 내로 10.5cm
+            # 하향 카메라를 들어 올려 코너 전방 도로 가시거리를 확보.
+            # 신호등 전용 start_camera 위치/방향은 그대로 유지한다.
             "pitch":-0.26,"width":160,"height":120},
     "depth": {"type":"depth_camera","center":(0.235,-0.034,0.065),
               "size":(0.018,0.022,0.020),"mass":0.040,"rate":10,
