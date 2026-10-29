@@ -141,6 +141,7 @@ jobs:
             generated/stage5/AI-01/calibration.json
             generated/stage5/AI-01/rgb_camera.ppm
             generated/stage5/AI-01/rgb_camera_road_lost.ppm
+            generated/stage5/AI-01/rgb_samples/*.ppm
             generated/stage5/AI-01/camera_light_gate.log
             generated/stage5/AI-01/rgb_controller.log
             generated/stage5/AI-01/race_supervisor.log
