@@ -253,3 +253,38 @@ python3 scripts/stage5_start.py
 로그는 사용자 PC에만 저장되며 자동으로 GitHub에 업로드하지 않습니다. 스크린샷과 함께 공유하면 원인을 구분할 수 있습니다.
 
 **주의:** GUI가 실제로 떠 있는지와 카메라 안전 출발 이후 3바퀴 완주는 별도로 검증해야 합니다. 교정 PASS만으로 주행 PASS가 아닙니다.
+
+
+## 2026-10-29 Monaco 차량 이동 및 종료 오류 진단
+
+사용자가 보낸 실제 로그에서는 빨간불 전체 소등을 카메라가 감지해 출발 허가가 생성됐습니다. ROS-Gazebo 브리지의 모터 명령 변환도 확인됐습니다. 다만 신호등 소등 허가 후 약 1.1초 만에 Ctrl+C로 종료하였고, 실제 주행 카메라 도로 검출이나 위치 변위 증거는 없으므로 차량이 움직이지 않았다고 확정할 수 없습니다.
+
+최신 코드는 단일 터미널에서 3초마다 실제 주행 RGB 프레임 수, 출발 허가, 도로 구간 검출, 좌측 전륜 목표 회전속도, Gazebo 실제 이동거리와 랩 수를 출력합니다. 출발 허가만으로는 전진하지 않으며, 도로 검출 실패 시 0속도 유지가 정상입니다.
+
+기존 Gazebo 창을 종료하고 아래 명령을 실행하세요:
+
+cd ~/urrc_2_f1
+
+git pull --ff-only
+
+git submodule update --init --recursive
+
+source /opt/ros/jazzy/setup.bash
+
+python3 scripts/stage5_start.py
+
+새로 생성되는 사용자 PC의 독립 자료:
+
+generated/stage5/AI-01/drive_status.json — 실제 RGB·출발 상태·명령 속도
+
+generated/stage5/AI-01/pose_status.json — 운영자 전용 Gazebo 위치·변위
+
+generated/stage5/AI-01/rgb_camera.ppm — AI-01 실제 주행용 RGB 카메라 화면
+
+generated/stage5/AI-01/rgb_controller.log — 주행 중 차단 이유
+
+카메라 영상 확인은 xdg-open generated/stage5/AI-01/rgb_camera.ppm 로 할 수 있습니다.
+
+로그의 publisher context invalid 및 rcl_shutdown already called는 ROS Jazzy SIGINT 종료 처리 오류였습니다. 게이트·주행기·운영자 계측의 중복 종료를 방지했으며, 종료 직전 Gazebo 전륜 모터와 조향에 0명령을 전송합니다.
+
+현재 실제 Monaco 3바퀴 완주 PASS는 아직 없습니다.

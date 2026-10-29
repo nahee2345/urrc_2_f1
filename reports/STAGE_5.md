@@ -121,3 +121,12 @@
 - Ctrl+C로 레이스를 종료하면 Python KeyboardInterrupt traceback 없이 종료하도록 처리.
 - tests/test_stage5_session_reuse.py: 교정 전후 동일 GUI 프로세스, 재교정 생략, GUI 중복 실행 차단 및 새 CLI 스위치 확인.
 - 실제 사용자 Ubuntu에서 GUI 유지 및 카메라 자동 출발·3바퀴 완주 검증은 **다음 현장 실행 필요**.
+
+
+## 2026-10-29 사용자가 제출한 Monaco GUI 및 ROS 로그 후속 검증
+
+실제 출발 영상 5개 점등/전체 소등 허가 확인. ros_gz_bridge의 ROS Float64→Gazebo Double 송신 기록 있음. 허가 로그 시점 1793249835.692과 SIGINT 로그 1793249836.801 사이 약 1.1초. 실제 바퀴 명령 크기 또는 물리 차량 이동 증거는 사용자 제공 자료만으로 미확인.
+
+수정: stage3/ros_gate.py의 출발 로그 반복과 shutdown 충돌 방지, stage4/ros_drive.py의 실제 RGB·명령·도로검출 진단과 rgb_camera.ppm 저장, stage3/pose_monitor.py의 실제 물리 이동량 계측, scripts/stage5_race.py의 3초 진단 출력과 종료 시 모터 0명령 전송.
+
+tests/test_stage5_live_diagnostics.py에서 미수신 진단값, 실제 진단 데이터 및 Gazebo 4개 액추에이터 0속도 명령을 검증. 110개 단위 시험 PASS 확인. 실제 원본 Monaco의 자동 3바퀴는 별도 검증이 필요합니다.
