@@ -23,6 +23,20 @@ def stable_rois(series,threshold=.023):
              for k in range(4)] for j in range(5)]
 
 
+def progress_line(received, valid, publishers, error, elapsed, duration):
+    """교정 작업 중 실제 ROS 이미지 수신 여부를 사용자에게 구분해 표시."""
+    if received == 0:
+        state="ROS 카메라 이미지 미수신"
+    elif valid < 3:
+        state="ROS 이미지 수신, 빨간 렌즈 5개 연속 인식 대기"
+    else:
+        state="ROS 이미지 5등 인식 성공"
+    reason=f" / 최근 인식 오류: {error}" if error else ""
+    return (f"[출발 카메라] {elapsed:.0f}/{duration:.0f}초 | {state} | "
+            f"ROS 발행자 {publishers}개, 수신 {received}프레임, "
+            f"연속 유효 {valid}/3{reason}")
+
+
 def main():
     p=argparse.ArgumentParser(description="실제 5개 빨간등 자동 ROI 검출")
     p.add_argument("--topic",default="/model/urrc_ai_01/sensors/start_camera")
@@ -56,9 +70,21 @@ def main():
     rclpy.init()
     node=Capture()
     try:
-        end=time.monotonic()+a.seconds
+        started=time.monotonic()
+        end=started+a.seconds
+        next_report=started
+        print(f"[출발 카메라] ROS 2 실제 영상 토픽: {a.topic}",flush=True)
+        print("[출발 카메라] 교정 중 5개 빨간불은 전부 켜둡니다. "
+              "교정이 끝나면 5개 전체 소등 후 레이스 신호등을 별도로 실행합니다.",
+              flush=True)
         while time.monotonic()<end:
             rclpy.spin_once(node,timeout_sec=.1)
+            now=time.monotonic()
+            if now>=next_report:
+                print(progress_line(node.attempts,len(node.frames),
+                    node.count_publishers(a.topic),node.error,
+                    now-started,a.seconds),flush=True)
+                next_report=now+3.
             if len(node.frames)>=3:
                 rois=stable_rois(node.frames)
                 output={"calibrated":True,"source_sensor":"start_camera",
@@ -68,8 +94,19 @@ def main():
                 a.output.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n")
                 print("Monaco 출발 신호등 ROI 교정 PASS:",a.output)
                 return 0
-        print(f"Monaco 출발 영상 ROI 교정 FAIL: 수신 {node.attempts}프레임 / {node.error}",
-              file=sys.stderr)
+        publishers=node.count_publishers(a.topic)
+        if not node.attempts:
+            reason=("ROS 카메라 발행자가 0개: Gazebo→ROS 브리지 연결 또는 "
+                    "카메라 센서 토픽을 확인하세요." if publishers==0 else
+                    "ROS 카메라 발행자는 있으나 이미지가 수신되지 않았습니다. "
+                    "브리지 상태·QoS·카메라 렌더링을 확인하세요.")
+        else:
+            reason=("실제 이미지 수신은 확인됐지만 빨간불 5개를 동시에 "
+                    "안정적으로 검출하지 못했습니다. 카메라 각도/화면/ROI 확인: "
+                    +str(node.error))
+        print(f"Monaco 출발 카메라 교정 FAIL: 수신 {node.attempts}프레임, "
+              f"연속 유효 {len(node.frames)}/3, ROS 발행자 {publishers}개. "
+              f"{reason}", file=sys.stderr,flush=True)
         return 1
     finally:
         node.destroy_node()
