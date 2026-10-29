@@ -16,6 +16,9 @@ def build_commands(calibration,speed=0.55,output=None):
     calibration=Path(calibration)
     from stage3.ros_gate import load_calibration
     load_calibration(calibration)
+    data=json.loads(calibration.read_text(encoding="utf-8"))
+    if data.get("track")!="monaco" or data.get("calibration_method")!="live_rgb_off_on_difference":
+        raise ValueError("Monaco 레이스는 실제 소등/점등 차분으로 교정된 5등 설정만 허용합니다")
     if not .15<=speed<=.85:raise ValueError("Monaco 초기 속도 상한: 0.15~0.85 m/s")
     p=ROOT/"generated/stage5/AI-01"
     if not (p/"monaco_experiment.sdf").is_file() or not (p/"bridge.yaml").is_file():
