@@ -38,6 +38,7 @@ def build_commands(calibration,speed=0.55,output=None):
             "--status-file",str(p/"drive_status.json"),
             "--image-file",str(p/"rgb_camera.ppm"),
             "--lost-image-file",str(p/"rgb_camera_road_lost.ppm"),
+            "--samples-dir",str(p/"rgb_samples"),
             "--ros-args","-p","use_sim_time:=true"]),
         ("race_supervisor",[sys.executable,"-m","stage3.pose_monitor",
             "--vehicle","urrc_ai_01","--track","monaco",
@@ -195,6 +196,11 @@ def main():
                 "rgb_camera_road_lost.ppm","stall_reason.txt"):
         candidate=base/old
         if candidate.exists():candidate.unlink()
+    samples_dir=base/"rgb_samples"
+    if samples_dir.exists():
+        # 이전 세션 이미지 파일은 실증 결과를 혼동하지 않도록 제거한다.
+        import shutil as _shutil
+        _shutil.rmtree(samples_dir)
     processes=[]
     began=time.monotonic()
     base.mkdir(parents=True,exist_ok=True)
