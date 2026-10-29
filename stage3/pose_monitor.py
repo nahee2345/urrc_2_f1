@@ -7,6 +7,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
+import time
 from pathlib import Path
 import sys
 from .lap import LapSupervisor,gates_from_upstream
@@ -29,6 +31,8 @@ def main():
     p.add_argument("--root",type=Path,default=Path(__file__).resolve().parents[1]/"upstream/urrc_f1_ws")
     p.add_argument("--output",type=Path,default=Path("generated/stage3_lap_events.jsonl"))
     p.add_argument("--target-laps",type=int,default=3)
+    p.add_argument("--status-file",type=Path,
+                   help="독립 운영자용 실제 위치/변위 진단 JSON (AI 주행에는 연결 안 함)")
     p.add_argument("--contacts-manifest",type=Path,
                    help="3단계 생성 명령으로 출력한 contacts.json, 누락 시 무충돌 PASS 차단")
     args,ros_args=p.parse_known_args()
@@ -53,6 +57,11 @@ def main():
             self.armed=False
             self.result_written=False
             self.contact_subs=[]
+            self.pose_samples=0
+            self.first_pose_xy=None
+            self.previous_pose_xy=None
+            self.distance_xy_m=0.
+            self.last_diag_at=0.
             for topic in contacts:
                 sub=self.create_subscription(Contacts,topic,self.on_contacts,10)
                 self.contact_subs.append(sub)
@@ -83,6 +92,36 @@ def main():
         def on_pose(self,msg):
             try:
                 sample=decode(msg.transforms,args.vehicle,"base_link",args.track)
+                self.pose_samples+=1
+                pos=(sample[1],sample[2])
+                if self.first_pose_xy is None:
+                    self.first_pose_xy=pos
+                if self.previous_pose_xy is not None:
+                    step=math.dist(pos,self.previous_pose_xy)
+                    if step<3.:
+                        self.distance_xy_m+=step
+                self.previous_pose_xy=pos
+                now=time.monotonic()
+                if now-self.last_diag_at>=3.:
+                    self.last_diag_at=now
+                    delta=math.dist(pos,self.first_pose_xy)
+                    diag={"vehicle":args.vehicle,"pose_samples":self.pose_samples,
+                          "position_x_m":round(sample[1],4),
+                          "position_y_m":round(sample[2],4),
+                          "position_z_m":round(sample[3],4),
+                          "displacement_from_start_xy_m":round(delta,4),
+                          "distance_measured_xy_m":round(self.distance_xy_m,4),
+                          "laps":lap.laps,"collision_count":lap.collision_count,
+                          "source":"simulated Gazebo base_link measured by supervisor (not AI input)"}
+                    if args.status_file:
+                        args.status_file.parent.mkdir(parents=True,exist_ok=True)
+                        tmp=args.status_file.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(diag,ensure_ascii=False,indent=2)+"\n")
+                        tmp.replace(args.status_file)
+                    self.get_logger().info(
+                        f"실제 차량 위치 샘플={self.pose_samples}, "
+                        f"출발 위치 대비 이동={delta:.3f}m, "
+                        f"누적 거리={self.distance_xy_m:.3f}m, 랩={lap.laps}")
                 for event in lap.update(sample):
                     audit.write(json.dumps(event,ensure_ascii=False)+"\n")
                     self.get_logger().info(str(event))
@@ -97,10 +136,16 @@ def main():
                 self.get_logger().error(f"계측 무효: {exc}")
     rclpy.init(args=ros_args)
     node=Monitor()
-    try:rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
         audit.write(json.dumps({"type":"final",**lap.status()},ensure_ascii=False)+"\n")
-        audit.close();node.destroy_node();rclpy.shutdown()
+        audit.close()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.try_shutdown()
 
 if __name__=="__main__":
     main()
