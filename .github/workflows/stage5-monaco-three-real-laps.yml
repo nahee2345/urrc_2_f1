@@ -7,6 +7,11 @@ on:
     paths:
       - '.github/workflows/stage5-monaco-three-real-laps.yml'
       - 'scripts/stage5_full_lap_audit.py'
+      - 'scripts/stage5_start.py'
+      - 'scripts/stage5_race.py'
+      - 'stage5/**'
+      - 'stage4/**'
+      - 'vehicle_generator/sensors.py'
       - 'tests/test_stage5_real_3lap_gate.py'
 
 permissions:
