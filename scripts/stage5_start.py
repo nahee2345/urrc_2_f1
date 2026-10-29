@@ -34,7 +34,8 @@ def calibrated(path=CALIBRATION):
         return False
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("track") != "monaco":
+        if (data.get("track") != "monaco" or
+            data.get("calibration_method") != "live_rgb_off_on_difference"):
             return False
         load_calibration(path)
         return True
