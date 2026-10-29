@@ -12,8 +12,9 @@ class CameraDrive:
     camera_timeout_s:float=.42
     gate_timeout_s:float=.26
     speed_limit_mps:float=1.10
-    turn_speed_mps:float=.42
-    steer_limit_rad:float=.32
+    # Monaco 최소 폭 1.4m·급코너 기준 보수적 속도 및 조향.
+    turn_speed_mps:float=.29
+    steer_limit_rad:float=.38
     accel_mps2:float=.55
     steer_rate_rps:float=.85
     last_camera_at:float|None=None
@@ -65,7 +66,7 @@ class CameraDrive:
         else:
             self.last_reason="카메라 도로 인식 주행"
             target_steer=max(-self.steer_limit_rad,min(self.steer_limit_rad,
-                1.45*self.lane.error))
+                1.75*self.lane.error))
             if elapsed:
                 max_delta=self.steer_rate_rps*elapsed
                 self.steering=max(self.steering-max_delta,
