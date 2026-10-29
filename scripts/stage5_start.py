@@ -172,24 +172,33 @@ def calibrate_in_one_terminal(env, path, seconds=40):
                       "실제 이미지 수신 여부는 다음 교정 단계에서 검사합니다.",
                       flush=True)
 
-        print("[5단계] 지금은 출발이 아닌 카메라 교정 모드입니다. "
-              "빨간불 5개를 즉시 켜고 촬영하는 것이 정상입니다.", flush=True)
+        print("[5단계] 카메라 교정 모드: 먼저 신호등이 꺼진 화면을 수집한 뒤,"
+              " 5등을 모두 켜 점등 전후를 비교합니다.", flush=True)
         print("[5단계] 교정이 끝나거나 실패하면 교정용 신호등을 끄고 "
               "Gazebo를 정리합니다. 실제 레이스의 3~6초 순차 점등은 이후 별도 실행됩니다.",
               flush=True)
-        print("[5단계] 빨간불 5개 전체 점등 및 실제 카메라 자동 교정", flush=True)
+        baseline=GENERATED/"start_camera_lights_off.ppm"
+        print("[5단계] ① 실제 ROS 출발 카메라에서 신호등 소등 기준 영상 저장",flush=True)
+        run_checked("실제 카메라 OFF 기준 촬영", [
+            sys.executable, str(ROOT/"scripts/stage5_calibrate_lights.py"),
+            "--capture-baseline", "--output", str(baseline), "--seconds", "20"
+        ], env, timeout=30)
+
+        print("[5단계] ② 교정용 빨간불 5개 전체 점등 (레이스 시퀀스 아님)",flush=True)
         run_checked("원본 5등 점등", [sys.executable,
                     str(ROOT / "scripts/stage5_lights.py"), "on"], env, timeout=90)
         lights_on = True
 
+        print("[5단계] ③ 실제 카메라 점등/소등 영상 차분으로 5개 렌즈 교정",flush=True)
         result = subprocess.run([
             sys.executable, str(ROOT / "scripts/stage5_calibrate_lights.py"),
+            "--baseline", str(baseline),
             "--output", str(path), "--seconds", str(seconds)],
             cwd=ROOT, env=env, timeout=seconds + 20)
         if result.returncode != 0 or not calibrated(path):
             capture_diagnostic(env)
             raise RuntimeError(
-                "실제 빨간불 5개 자동 교정 실패. 모터 구동 금지. "
+                "실제 소등/점등 차분 5개 교정 실패. 모터 구동 금지. "
                 "calibration_gazebo.log / calibration_bridge.log 및 카메라 진단 이미지 확인")
 
         print("[5단계] 출발 카메라 5등 교정 PASS", flush=True)
