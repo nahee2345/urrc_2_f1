@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse,json,os,signal,shutil,subprocess,sys,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+# scripts/에서 직접 실행해도 stage3/.. 패키지를 정상 참조하도록 고정.
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 
 def build_commands(calibration,speed=0.55,output=None):
     calibration=Path(calibration)

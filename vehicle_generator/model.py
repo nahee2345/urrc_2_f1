@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
+from .colors import color_for_vehicle, material_rgb
 
 STEER_LIMIT_DEG = 35.0
 LIMITS = (0.55, 0.25, 0.18)
@@ -182,11 +183,13 @@ def generate(v: Vehicle):
         part=sub(body,kind,name=f"body_{kind}")
         box_geometry(part,(v.body_length,v.body_width,v.body_height))
         if kind=="visual":
-            # 무광에 가까운 검정 차체 (Gazebo 조명 아래 회색으로 보일 수 있음).
+            # 검정색 도로에서 구분되도록 AI-01~AI-10 각각 원색 지정.
+            pigment=color_for_vehicle(v.name)
             material=sub(part,"material")
-            sub(material,"ambient","0.015 0.015 0.018 1")
-            sub(material,"diffuse","0.028 0.028 0.033 1")
-            sub(material,"specular","0.045 0.045 0.045 1")
+            sub(material,"ambient",material_rgb(tuple(min(.55,x*.45) for x in pigment)))
+            sub(material,"diffuse",material_rgb(pigment))
+            sub(material,"specular","0.08 0.08 0.08 1")
+            sub(material,"emissive",material_rgb(tuple(x*.035 for x in pigment)))
     for wheel in WHEELS:
         front = wheel.startswith("front")
         left = wheel.endswith("left")

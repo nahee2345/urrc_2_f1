@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from .model import Vehicle, LIMITS, fmt, generate, sub, box_inertia
+from .colors import color_for_vehicle,material_rgb
 
 # Centers are in MODEL coordinates (+X forward, +Y left, +Z up).
 # Lens / emitter is moved beyond its housing to avoid scanning through itself.
@@ -88,14 +89,15 @@ def optical_center(name):
     return x+s["size"][0]/2+0.003,y,z
 
 
-def add_box(link, kind, name, center, size, body_z):
+def add_box(link, kind, name, center, size, body_z, color=None):
     elem=sub(link,kind,name=name)
     sub(elem,"pose",fmt(center[0],center[1],center[2]-body_z,0,0,0))
     sub(sub(sub(elem,"geometry"),"box"),"size",fmt(*size))
     if kind=="visual":
+        rgb=color if color is not None else (0.027,0.027,0.031)
         mat=sub(elem,"material")
-        sub(mat,"ambient","0.013 0.013 0.015 1")
-        sub(mat,"diffuse","0.027 0.027 0.031 1")
+        sub(mat,"ambient",material_rgb(tuple(x*.44 for x in rgb)))
+        sub(mat,"diffuse",material_rgb(rgb))
 
 
 def _set_composite_inertia(link,v:Vehicle,names):
@@ -170,7 +172,7 @@ def build(v:Vehicle,driving):
     for name in names:
         spec=SENSOR_SPECS[name]
         center=spec["center"]
-        add_box(link,"visual",f"{name}_housing_visual",center,spec["size"],v.body_center_z)
+        add_box(link,"visual",f"{name}_housing_visual",center,spec["size"],v.body_center_z,color_for_vehicle(v.name))
         add_box(link,"collision",f"{name}_housing_collision",center,spec["size"],v.body_center_z)
         sensor=sub(link,"sensor",name=name,type=spec["type"])
         ox,oy,oz=optical_center(name)

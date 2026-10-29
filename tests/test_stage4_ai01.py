@@ -127,7 +127,7 @@ class Stage4SafetyTests(unittest.TestCase):
 
 
 class Stage4ModelTests(unittest.TestCase):
-    def test_black_body_visual(self):
+    def test_dark_default_body_visual(self):
         v=Vehicle()
         root=ET.fromstring(generate(v))
         body=root.find("./model/link[@name='base_link']/visual[@name='body_visual']")
@@ -135,10 +135,10 @@ class Stage4ModelTests(unittest.TestCase):
         self.assertEqual(len(rgb),3)
         self.assertTrue(all(x<.05 for x in rgb))
         self.assertTrue(all(x>0 for x in rgb))
-    def test_stage2_sensor_does_not_remove_black(self):
+    def test_stage2_sensor_preserves_ai_color(self):
         root=ET.fromstring(build(Vehicle(name="urrc_ai_01",drive="fwd"),["rgb"])[0])
         visual=root.find("./model/link[@name='base_link']/visual[@name='body_visual']")
-        self.assertIn("0.028",visual.findtext("material/diffuse"))
+        self.assertIn("1.000 0.880 0.030",visual.findtext("material/diffuse"))
     def test_stage4_bridge_only_rgb_and_actuator(self):
         s=bridge_yaml({"vehicle":"urrc_ai_01",
                        "topics":["/model/urrc_ai_01/contacts/body"]})

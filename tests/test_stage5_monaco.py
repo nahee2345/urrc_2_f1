@@ -47,7 +47,9 @@ class MonacoStage5Test(unittest.TestCase):
             self.assertGreater(len(car.findall(".//sensor[@type='contact']")),5)
             rgb=[float(x) for x in car.findtext(
                 "./link[@name='base_link']/visual[@name='body_visual']/material/diffuse").split()[:3]]
-            self.assertTrue(all(v<.05 for v in rgb))
+            self.assertAlmostEqual(rgb[0],1.,places=3)
+            self.assertAlmostEqual(rgb[1],.88,places=3)
+            self.assertAlmostEqual(rgb[2],.03,places=3)
             self.assertGreater(result["checkpoints"],50)
             check=inspect_original(SRC,output/"resources/urrc_track_gazebo",result["world"])
             self.assertEqual(check["status"],"PASS_MONACO_SOURCE_FIDELITY")
