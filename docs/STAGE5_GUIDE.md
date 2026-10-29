@@ -217,3 +217,39 @@ python3 scripts/stage5_start.py
     xdg-open generated/stage5/AI-01/start_camera_diagnostic.ppm
 
 이 이미지와 오류 메시지를 공유하면 카메라 실제 시야를 기준으로 추가 수정합니다. 새 코드가 실제 사용자 카메라에서 5등을 인식하거나 3바퀴 주행을 성공했다는 증거는 아직 없습니다.
+
+
+## 교정 성공 뒤 Gazebo 창이 사라지던 문제 수정 (2026-10-29)
+
+현장 로그에서 출발 카메라 OFF/ON **교정 PASS**를 확인했습니다. 문제는 교정과정에서 사용한 정상 Gazebo·ROS 브리지를 종료하고 레이스가 이를 새로 기동하는 과정에 있었습니다. 그 사이 GUI 화면이 나타나지 않는 현상을 피하도록 **같은 Gazebo 프로세스/GUI와 동일 ROS 브리지를 교정부터 레이스 종료까지 유지**합니다.
+
+작업 순서는 다음과 같습니다.
+
+1. Monaco Gazebo GUI **한 번만 실행**하고 visual_config 서비스 확인
+2. ROS 2 브리지 **한 번만 실행**해 카메라 영상 수신
+3. 실제 소등/점등 카메라 차분 교정 (이미 교정되었다면 재사용)
+4. 교정용 빨간불 소등, 단 Gazebo 화면과 ROS 브리지는 **종료하지 않음**
+5. 같은 Gazebo 창에 **카메라 출발 게이트/AI-01 RGB 제어/운영자 계측만 추가 연결**
+6. 정식 Monaco 신호등 순차 점등 및 전체 소등
+7. 레이스 종료/Ctrl+C 이후 이 실행기가 시작한 ROS와 Gazebo 프로세스만 종료
+
+기존 Gazebo가 남아 있으면 먼저 닫은 후 한 터미널에서 실행하세요.
+
+    cd ~/urrc_2_f1
+    git pull --ff-only
+    git submodule update --init --recursive
+    source /opt/ros/jazzy/setup.bash
+    python3 scripts/stage5_start.py
+
+이전 교정 파일이 이미 있으므로 **--recalibrate 없이** 실행해도 됩니다. 새로운 차분 교정값이 유효하면 재사용합니다.
+
+실패하면 실행기에 다음 로그를 확인하세요.
+
+    tail -n 60 generated/stage5/AI-01/calibration_gazebo.log
+    tail -n 60 generated/stage5/AI-01/calibration_bridge.log
+    tail -n 60 generated/stage5/AI-01/camera_light_gate.log
+    tail -n 60 generated/stage5/AI-01/rgb_controller.log
+
+로그는 사용자 PC에만 저장되며 자동으로 GitHub에 업로드하지 않습니다. 스크린샷과 함께 공유하면 원인을 구분할 수 있습니다.
+
+**주의:** GUI가 실제로 떠 있는지와 카메라 안전 출발 이후 3바퀴 완주는 별도로 검증해야 합니다. 교정 PASS만으로 주행 PASS가 아닙니다.

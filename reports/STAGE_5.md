@@ -110,3 +110,14 @@
 - 새 교정 방식의 7~8개 붉은 연결영역, 5개만 새로 켜진 LED 식별, 4개 이하 fail-closed, OFF/ON 동일 영상의 출발 불허, PPM 저장·재로드 정상 테스트 PASS.
 - CI 실제 Gazebo 동적 시험은 별도 작업이며, 실제 ROS2 카메라에서 5등을 인식했다는 실측 근거는 아직 없음.
 - 사용자가 Ctrl+C로 교정 중단해도 ROS 종료 두 번 호출하지 않고 마지막 카메라 이미지를 진단용으로 보존하도록 수정.
+
+
+## 2026-10-29 교정 PASS 후 GUI 재기동 실패 수정
+
+- 사용자 실제 실행 로그: 소등 기준 RGB 촬영 → 빨간불 5개 ON → 차분 교정 **PASS**.
+- 기존 scripts/stage5_start.py: 교정 성공 직후 정상 Gazebo GUI 및 ROS 브리지를 종료하고 별도 scripts/stage5_race.py에서 다시 실행. 이 경로에서 화면이 사라지고, 재실행 실패 로그는 화면에 표시되지 않았음.
+- 신규 stage5/session.py: Gazebo GUI와 ROS 브리지 실행을 딱 1회로 통합. 교정 OFF/ON 시퀀스 뒤 Gazebo를 유지한 상태에서 레이스를 연결.
+- scripts/stage5_race.py --reuse-gazebo: 이미 존재하는 Gazebo와 브리지에는 새 프로세스를 생성하지 않고 출발 게이트/주행 제어/계측만 실행. 기존 GUI 서비스 존재 확인, 런타임 노드 로그 위치 표시.
+- Ctrl+C로 레이스를 종료하면 Python KeyboardInterrupt traceback 없이 종료하도록 처리.
+- tests/test_stage5_session_reuse.py: 교정 전후 동일 GUI 프로세스, 재교정 생략, GUI 중복 실행 차단 및 새 CLI 스위치 확인.
+- 실제 사용자 Ubuntu에서 GUI 유지 및 카메라 자동 출발·3바퀴 완주 검증은 **다음 현장 실행 필요**.
