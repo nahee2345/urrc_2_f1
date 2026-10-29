@@ -108,6 +108,25 @@ def service_ready(env, simulator, timeout=90):
     raise RuntimeError(f"Gazebo 신호등 시각 서비스 연결 실패: {service}")
 
 
+
+
+def avoid_duplicate_world(env):
+    """이미 실행 중인 Monaco가 있으면 동일 파티션에 두 번째 월드를 만들지 않는다."""
+    try:
+        check = subprocess.run(["gz", "service", "-l"], cwd=ROOT, env=env,
+                               capture_output=True, text=True, timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        # 조회 실패를 '다른 인스턴스 없음'으로 확정하지 않는다. 이후 서비스 점검에서 재확인.
+        return
+    if check.returncode == 0 and any(
+        line.startswith("/world/monaco/") for line in check.stdout.splitlines()
+    ):
+        raise RuntimeError(
+            "이미 Monaco Gazebo가 실행 중입니다. 기존 Gazebo 창을 먼저 닫고 다시 실행하세요. "
+            "중복 실행은 신호등 및 ROS 센서 토픽을 혼동시킵니다."
+        )
+
+
 def capture_diagnostic(env):
     """교정 실패시 진단용 실제 카메라 사진을 남긴다. ROI 값은 만들지 않는다."""
     output = GENERATED / "start_camera_diagnostic.ppm"
@@ -220,6 +239,7 @@ def main():
         p.error("ROS 2 Jazzy 및 Gazebo Harmonic 설치와 source /opt/ros/jazzy/setup.bash 확인")
     GENERATED.mkdir(parents=True, exist_ok=True)
     try:
+        avoid_duplicate_world(env)
         for name, cmd in commands[:2]:
             run_checked(name, cmd, env)
         if args.recalibrate or not calibrated(args.calibration):
