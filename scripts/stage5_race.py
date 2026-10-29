@@ -107,16 +107,22 @@ def diagnostic_line(drive,pose):
 class ProgressWatchdog:
     """출발 이후 장시간 미인식/정차를 3랩 PASS가 아닌 실패로 판정한다."""
 
-    def __init__(self,lane_timeout_s=25.,no_progress_timeout_s=90.):
+    def __init__(self,lane_timeout_s=25.,no_progress_timeout_s=90.,
+                 start_timeout_s=45.):
         self.lane_timeout_s=lane_timeout_s
         self.no_progress_timeout_s=no_progress_timeout_s
+        self.start_timeout_s=start_timeout_s
+        self.first_checked_at=None
         self.last_valid_at=None
         self.started_at=None
         self.last_progress_at=None
         self.last_distance=0.
 
     def check(self,drive,pose,now):
+        if self.first_checked_at is None:self.first_checked_at=now
         if drive is None or not drive.get("start_allowed"):
+            if now-self.first_checked_at>=self.start_timeout_s:
+                return "실제 신호등 전체 소등 후 45초 동안 카메라 출발 허가 미발행"
             return None
         if self.started_at is None:
             self.started_at=now
