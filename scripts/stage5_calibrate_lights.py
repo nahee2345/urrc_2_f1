@@ -181,7 +181,10 @@ def main():
               f"ROS 발행자 {publishers}개 / {reason}",file=sys.stderr,flush=True)
         return 1
     except KeyboardInterrupt:
-        print("\n[출발 카메라] 사용자 중단. 교정 파일 생성하지 않음",flush=True)
+        if node.last is not None and not a.capture_baseline:
+            save_ppm(a.diagnostic,*node.last)
+            print(f"\n[카메라 진단] 중단 직전 출발 카메라 이미지 저장: {a.diagnostic}",flush=True)
+        print("[출발 카메라] 사용자 중단. 교정 파일 생성하지 않음",flush=True)
         return 130
     finally:
         node.destroy_node()
