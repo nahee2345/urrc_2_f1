@@ -16,6 +16,7 @@ from unittest import mock
 from scripts.stage5_start import (
     calibrated, stages, base_environment, calibrate_in_one_terminal, avoid_duplicate_world, ROOT
 )
+from scripts.stage5_calibrate_lights import progress_line
 
 
 class OneTerminalTests(unittest.TestCase):
@@ -86,6 +87,16 @@ class OneTerminalTests(unittest.TestCase):
             stdout="/world/monza/visual_config\n",stderr="")
         with mock.patch("scripts.stage5_start.subprocess.run",return_value=other):
             avoid_duplicate_world(base_environment())
+    def test_camera_status_does_not_claim_connected_before_first_frame(self):
+        missing=progress_line(0,0,0,None,3,40)
+        self.assertIn("ROS 카메라 이미지 미수신",missing)
+        self.assertIn("발행자 0개",missing)
+        receiving=progress_line(17,0,1,"렌즈 4개",6,40)
+        self.assertIn("ROS 이미지 수신",receiving)
+        self.assertIn("렌즈 4개",receiving)
+        detected=progress_line(20,3,1,None,9,40)
+        self.assertIn("인식 성공",detected)
+
     def test_calibration_fails_closed_before_motor_start(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"calibration.json"
