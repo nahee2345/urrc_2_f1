@@ -288,3 +288,30 @@ generated/stage5/AI-01/rgb_controller.log — 주행 중 차단 이유
 로그의 publisher context invalid 및 rcl_shutdown already called는 ROS Jazzy SIGINT 종료 처리 오류였습니다. 게이트·주행기·운영자 계측의 중복 종료를 방지했으며, 종료 직전 Gazebo 전륜 모터와 조향에 0명령을 전송합니다.
 
 현재 실제 Monaco 3바퀴 완주 PASS는 아직 없습니다.
+
+
+## 2026-10-29 Monaco 3.8m 이후 도로 경계 상실 해결 시도
+
+실제 사용자 Monaco 레이스 로그에서 신호등 소등 인식, 출발 허가, RGB 도로 검출, 전륜 목표 11~13.75 rad/s, 차량 실제 누적 이동 약 3.8043m 확인. 그 다음 주행 카메라가 연속 도로 경계를 추적하지 못해 안전상 목표 전륜 속도 0으로 정지. **모터·신호등 오류가 아니라 RGB 도로 추종 한계**.
+
+수정 사항: (1) 주행용 RGB 카메라만 기존 수평 0rad에서 -0.26rad 하향하여 전방/내리막 도로 관찰 개선; 출발 신호등 카메라는 변경하지 않음. (2) RGB 도로 마스크를 밝기 8~112 범위, 녹갈색 외곽과 중립색 아스팔트를 구분하도록 재설계. (3) Monaco 코너에서 이미지 하단 가까운 노면부터 먼 행으로 경계를 연결하고 앞쪽 도로 중심을 강조해 선제 조향. (4) 최대 조향 0.38rad 이내, 코너 목표속도 0.29m/s. (5) 도로 인식이 사라지면 기존처럼 전륜 목표 0 명령 유지.
+
+주행 중 경계 상실 시 실제 RGB 화면을 generated/stage5/AI-01/rgb_camera_road_lost.ppm 에 최초 한 번 자동 저장합니다. 종전 첫 프레임은 rgb_camera.ppm 입니다. 해당 화면을 통해 실제 미검출 원인을 정확히 확인할 수 있습니다.
+
+다시 실행 (기존 Gazebo 창 먼저 닫기):
+
+cd ~/urrc_2_f1
+
+git pull --ff-only
+
+git submodule update --init --recursive
+
+source /opt/ros/jazzy/setup.bash
+
+python3 scripts/stage5_start.py
+
+새 sensor pitch/추종 로직을 사용하려면 반드시 stage5_start.py가 차량 모델을 재생성해야 합니다. 이미 성공한 신호등 교정은 재사용되므로 --recalibrate가 필요하지 않습니다.
+
+결과 파일: cat generated/stage5/AI-01/drive_status.json / cat generated/stage5/AI-01/pose_status.json / xdg-open generated/stage5/AI-01/rgb_camera_road_lost.ppm
+
+회귀검사는 Monaco 그림자, 밝은 아스팔트, 좌우 급커브, 어두운 전체 프레임 및 도로 미검출 안전 정지를 다룹니다. **이 검사는 합성 영상이고, 실제 Monaco 주행 3랩 완주 PASS 증거는 아닙니다.**

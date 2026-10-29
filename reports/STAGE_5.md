@@ -130,3 +130,12 @@
 수정: stage3/ros_gate.py의 출발 로그 반복과 shutdown 충돌 방지, stage4/ros_drive.py의 실제 RGB·명령·도로검출 진단과 rgb_camera.ppm 저장, stage3/pose_monitor.py의 실제 물리 이동량 계측, scripts/stage5_race.py의 3초 진단 출력과 종료 시 모터 0명령 전송.
 
 tests/test_stage5_live_diagnostics.py에서 미수신 진단값, 실제 진단 데이터 및 Gazebo 4개 액추에이터 0속도 명령을 검증. 110개 단위 시험 PASS 확인. 실제 원본 Monaco의 자동 3바퀴는 별도 검증이 필요합니다.
+
+
+## 2026-10-29 AI-01 실제 Monaco 3.8m 후 도로 추적 상실
+
+현장 실측 신호등 순차 점등→동시 소등 4.372초, RGB 카메라 173~448프레임, 출발 허가 True, 도로 추종 정상 상태 전륜 목표 11~13.75rad/s, 누적 3.8043m 이동. 이후 `연속 도로 경계 부족`으로 속도 0·랩 0.
+
+stage4/lane.py: Monza 고정 17~67 밝기 분할을 어두운/그림자/밝은 Monaco 아스팔트·녹갈색 배경 구별로 변경. 수평 이미지 하단부터 먼 행 방향 연속 도로 연결과 곡선 선제 추종. stage4/safety.py: Monaco 코너 감속 및 선제 조향, 실영상 유효성/watchdog 실패 정지 유지. vehicle_generator/sensors.py: AI-01 주행 RGB 카메라만 pitch -0.26rad 하향, start_camera -0.55rad 유지. stage4/ros_drive.py 및 scripts/stage5_race.py: 최초 경계 상실 순간 실제 주행용 RGB 프레임 rgb_camera_road_lost.ppm 저장(이전 결과 삭제 후 새 실행).
+
+tests/test_stage5_monaco_lane.py에서 그림자·강한 코너·반대 방향 코너·모든 픽셀이 검정인 잘못된 화면·도로 소실/정지 회귀검사 추가. 이번 정적 단위 검사 122개 PASS. 실제 Gazebo 연속 주행·무충돌 3바퀴는 미검증.
