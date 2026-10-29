@@ -104,6 +104,43 @@ def diagnostic_line(drive,pose):
     return "[AI-01 실제 주행 진단] "+d+" | "+p
 
 
+class ProgressWatchdog:
+    """출발 이후 장시간 미인식/정차를 3랩 PASS가 아닌 실패로 판정한다."""
+
+    def __init__(self,lane_timeout_s=25.,no_progress_timeout_s=90.):
+        self.lane_timeout_s=lane_timeout_s
+        self.no_progress_timeout_s=no_progress_timeout_s
+        self.last_valid_at=None
+        self.started_at=None
+        self.last_progress_at=None
+        self.last_distance=0.
+
+    def check(self,drive,pose,now):
+        if drive is None or not drive.get("start_allowed"):
+            return None
+        if self.started_at is None:
+            self.started_at=now
+            self.last_progress_at=now
+            self.last_valid_at=now
+        if drive.get("lane_valid"):
+            self.last_valid_at=now
+        elif now-self.last_valid_at>=self.lane_timeout_s:
+            return "출발 후 실제 RGB 도로 검출 연속 실패(장시간)"
+        if pose is None:
+            if now-self.started_at>=self.no_progress_timeout_s:
+                return "Gazebo 실제 위치 계측 누락"
+            return None
+        distance=pose.get("distance_measured_xy_m",0)
+        if not isinstance(distance,(int,float)):
+            return "실제 이동거리 데이터 형식 오류"
+        if distance-self.last_distance>.30:
+            self.last_distance=distance
+            self.last_progress_at=now
+        if now-self.last_progress_at>=self.no_progress_timeout_s:
+            return f"출발 후 물리 차량 이동이 없음: 누적 {distance:.3f}m"
+        return None
+
+
 def stop_motors(env):
     """ROS 종료 뒤에도 남을 수 있는 Gazebo 모터 명령을 직접 0으로 전환."""
     errors=[]
@@ -149,7 +186,7 @@ def main():
     if race_log.exists():race_log.unlink()
     # 이전 세션 상태를 현재 증거로 오인하지 않는다.
     for old in ("drive_status.json","pose_status.json","rgb_camera.ppm",
-                "rgb_camera_road_lost.ppm"):
+                "rgb_camera_road_lost.ppm","stall_reason.txt"):
         candidate=base/old
         if candidate.exists():candidate.unlink()
     processes=[]
@@ -187,17 +224,23 @@ def main():
             raise RuntimeError("공식 신호등 점등/소등 실패: "+light.stderr[-300:])
         deadline=began+a.minutes*60
         next_status=0.
+        progress=ProgressWatchdog()
         print("[AI-01] 신호등 소등 후 실제 카메라/바퀴/물리 변위를 모니터링합니다.",flush=True)
         while time.monotonic()<deadline:
             time.sleep(1)
             for name,proc,_ in processes:
                 if proc.poll() is not None:raise RuntimeError(name+" 비정상 종료")
             now=time.monotonic()
+            drive=read_diagnostics(base/"drive_status.json")
+            pose=read_diagnostics(base/"pose_status.json")
             if now>=next_status:
                 next_status=now+3
-                print(diagnostic_line(
-                    read_diagnostics(base/"drive_status.json"),
-                    read_diagnostics(base/"pose_status.json")),flush=True)
+                print(diagnostic_line(drive,pose),flush=True)
+            failure=progress.check(drive,pose,now)
+            if failure:
+                print("[5단계 실측 실패: 3랩 PASS 불가] "+failure,flush=True)
+                (base/"stall_reason.txt").write_text(failure+"\n")
+                return 1
             verdict=parse_verdict(race_log)
             if verdict["status"]=="PASS_THREE_LAPS":
                 print(json.dumps(verdict,ensure_ascii=False,indent=2))
