@@ -74,6 +74,8 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     anchor=max(width*.06,min(width*.94,(prior+1.)*width/2.))
     centers=[]
     near_count=0
+    near_full_width_rows=[]
+    first_bounded_road_row=None
     bounded_count=0
     previous_selected_row=None
     longest_streak=0
@@ -81,7 +83,13 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     for k,frac in enumerate(rows):
         y=min(height-1,int(height*frac))
         candidates=[]
-        for left,right in _row_segments(width,height,rgb,y):
+        segments=_row_segments(width,height,rgb,y)
+        # 실제 Monaco 160x120 RGB: 가까운 차도는 화면 전체를 채우지만
+        # 멀리서는 양쪽 경계가 보인다. 전폭 구간은 조향 중심으로 쓰지 않고
+        # 가까운 차도 존재 증거로만 기록한다(전폭 영상만으로는 출발 불가).
+        if frac>=.79 and any(left==0 and right==width for left,right in segments):
+            near_full_width_rows.append(k)
+        for left,right in segments:
             span=right-left
             midpoint=(left+right)/2.
             # 차로 전체가 화면을 채우면 경계를 볼 수 없어 신뢰 불가.
@@ -104,6 +112,8 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
             near_count+=1
         if bounded:
             bounded_count+=1
+            if first_bounded_road_row is None:
+                first_bounded_road_row=k
         # 도로가 몇 개의 연속 영상 행에 걸쳐 보이지 않으면 작은 그림자로 간주.
         if previous_selected_row is not None and k==previous_selected_row+1:
             streak+=1
@@ -116,7 +126,15 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
         centers.append((midpoint,weight,span))
         anchor=.57*anchor+.43*midpoint
 
-    if len(centers)<4 or near_count<2 or longest_streak<3 or bounded_count<2:
+    # 근거리 전폭 아스팔트와 전방의 경계 있는 차도가 이어질 때만 인정.
+    # 실제 RGB의 근거리 전폭 구간을 '경계 있는 도로'로 오인하지 않으며,
+    # 단색/가려진 영상은 기존 bounded_count 안전 조건에서 계속 정지한다.
+    near_visible=(near_count>=2 or (
+        len(near_full_width_rows)>=3 and
+        first_bounded_road_row is not None and
+        min(abs(first_bounded_road_row-k) for k in near_full_width_rows)<=10
+    ))
+    if len(centers)<4 or not near_visible or longest_streak<3 or bounded_count<2:
         return LaneEstimate(False,samples=len(centers),
                             reason="연속 도로 경계 부족")
     total=sum(item[1] for item in centers)

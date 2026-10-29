@@ -25,6 +25,24 @@ class MonacoRealCameraBandRegression(unittest.TestCase):
         self.assertTrue(est.valid,est)
         self.assertGreaterEqual(est.samples,4)
         self.assertGreater(est.confidence,.32)
+    def test_real_camera_style_near_full_width_with_far_boundaries(self):
+        # 합성 회귀: 실제 CI RGB에서 관찰한 근거리 전폭 차도/전방 경계 패턴.
+        # 실주행 PASS 증거는 GitHub Actions Gazebo 통합 검증만 인정한다.
+        w,h=160,120
+        px=bytearray(bytes((0,0,0))*(w*h))
+        for y in range(75,120):
+            if y>=94:
+                left,right=0,w
+            else:
+                left=max(0,65-4*(y-75))
+                right=min(w,109+3*(y-75))
+            for x in range(left,right):
+                k=(y*w+x)*3
+                px[k:k+3]=bytes((40,42,46))
+        est=estimate_lane(w,h,bytes(px))
+        self.assertTrue(est.valid,est)
+        self.assertGreaterEqual(est.samples,4)
+
     def test_only_one_band_line_is_not_road(self):
         source=bytearray(narrow_monaco_band())
         w=160
