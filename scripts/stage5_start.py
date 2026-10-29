@@ -145,6 +145,7 @@ def calibrate_in_one_terminal(env, path, seconds=40):
     """신호등 5등 ON 상태의 실제 ROS 카메라 영상만으로 안전하게 ROI를 생성."""
     GENERATED.mkdir(parents=True, exist_ok=True)
     gui = bridge = None
+    lights_on = False
     log_handles = []
     try:
         # 이 준비 구간에는 운전자/모터 명령 퍼블리셔를 시작하지 않는다.
@@ -167,10 +168,19 @@ def calibrate_in_one_terminal(env, path, seconds=40):
                 time.sleep(3)
                 if bridge.poll() is not None:
                     raise RuntimeError("ROS2 브리지 시작 실패: " + str(dest))
+                print("[카메라 연결] ROS 브리지 프로세스 실행 확인. "
+                      "실제 이미지 수신 여부는 다음 교정 단계에서 검사합니다.",
+                      flush=True)
 
+        print("[5단계] 지금은 출발이 아닌 카메라 교정 모드입니다. "
+              "빨간불 5개를 즉시 켜고 촬영하는 것이 정상입니다.", flush=True)
+        print("[5단계] 교정이 끝나거나 실패하면 교정용 신호등을 끄고 "
+              "Gazebo를 정리합니다. 실제 레이스의 3~6초 순차 점등은 이후 별도 실행됩니다.",
+              flush=True)
         print("[5단계] 빨간불 5개 전체 점등 및 실제 카메라 자동 교정", flush=True)
         run_checked("원본 5등 점등", [sys.executable,
                     str(ROOT / "scripts/stage5_lights.py"), "on"], env, timeout=90)
+        lights_on = True
 
         result = subprocess.run([
             sys.executable, str(ROOT / "scripts/stage5_calibrate_lights.py"),
@@ -183,10 +193,19 @@ def calibrate_in_one_terminal(env, path, seconds=40):
                 "calibration_gazebo.log / calibration_bridge.log 및 카메라 진단 이미지 확인")
 
         print("[5단계] 출발 카메라 5등 교정 PASS", flush=True)
-        run_checked("신호등 교정용 점등 해제",
-                    [sys.executable, str(ROOT / "scripts/stage5_lights.py"), "off"],
-                    env, timeout=45)
     finally:
+        if lights_on:
+            # 정상/교정 실패/사용자 중단 시 모두 5등을 끄고 안전하게 종료.
+            try:
+                print("[5단계] 카메라 교정용 5개 빨간불 소등 및 임시 월드 정리",flush=True)
+                lights_off=subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/stage5_lights.py"), "off"],
+                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=25)
+                if lights_off.returncode:
+                    print("[5단계] 5등 소등 서비스 응답 실패. Gazebo 종료로 "
+                          "교정용 월드를 정리합니다.",flush=True)
+            except (OSError, subprocess.TimeoutExpired):
+                print("[5단계] 소등 명령 응답 없음. Gazebo 종료로 정리합니다.",flush=True)
         terminate_group(bridge)
         terminate_group(gui)
         for handle in log_handles:
