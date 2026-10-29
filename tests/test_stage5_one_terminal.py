@@ -14,7 +14,7 @@ import unittest
 from unittest import mock
 
 from scripts.stage5_start import (
-    calibrated, stages, base_environment, calibrate_in_one_terminal, ROOT
+    calibrated, stages, base_environment, calibrate_in_one_terminal, avoid_duplicate_world, ROOT
 )
 
 
@@ -73,6 +73,19 @@ class OneTerminalTests(unittest.TestCase):
             self.assertIn("stage5_bridge.py",p.stdout)
             self.assertIn("stage5_race.py",p.stdout)
             self.assertIn("5등",p.stdout)
+    def test_existing_monaco_gazebo_is_rejected(self):
+        busy=subprocess.CompletedProcess(
+            args=["gz","service","-l"],returncode=0,
+            stdout="/world/monaco/visual_config\n/world/monaco/control\n",stderr="")
+        with mock.patch("scripts.stage5_start.subprocess.run",return_value=busy):
+            with self.assertRaisesRegex(RuntimeError,"이미 Monaco Gazebo"):
+                avoid_duplicate_world(base_environment())
+    def test_other_world_does_not_block_monaco(self):
+        other=subprocess.CompletedProcess(
+            args=["gz","service","-l"],returncode=0,
+            stdout="/world/monza/visual_config\n",stderr="")
+        with mock.patch("scripts.stage5_start.subprocess.run",return_value=other):
+            avoid_duplicate_world(base_environment())
     def test_calibration_fails_closed_before_motor_start(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"calibration.json"
