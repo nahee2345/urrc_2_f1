@@ -75,7 +75,7 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     centers=[]
     near_count=0
     near_full_width_rows=[]
-    first_bounded_road_row=None
+    first_visible_road_row=None
     bounded_count=0
     previous_selected_row=None
     longest_streak=0
@@ -110,10 +110,10 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
             continue
         if frac>=.79:
             near_count+=1
+        if first_visible_road_row is None:
+            first_visible_road_row=k
         if bounded:
             bounded_count+=1
-            if first_bounded_road_row is None:
-                first_bounded_road_row=k
         # 도로가 몇 개의 연속 영상 행에 걸쳐 보이지 않으면 작은 그림자로 간주.
         if previous_selected_row is not None and k==previous_selected_row+1:
             streak+=1
@@ -131,8 +131,8 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     # 단색/가려진 영상은 기존 bounded_count 안전 조건에서 계속 정지한다.
     near_visible=(near_count>=2 or (
         len(near_full_width_rows)>=3 and
-        first_bounded_road_row is not None and
-        min(abs(first_bounded_road_row-k) for k in near_full_width_rows)<=10
+        first_visible_road_row is not None and
+        min(abs(first_visible_road_row-k) for k in near_full_width_rows)<=10
     ))
     if len(centers)<4 or not near_visible or longest_streak<3 or bounded_count<2:
         return LaneEstimate(False,samples=len(centers),
