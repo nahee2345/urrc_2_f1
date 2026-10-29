@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'stage5/**'
+      - 'stage4/**'
+      - 'vehicle_generator/sensors.py'
       - 'scripts/stage5_*.py'
       - 'tests/test_stage5_*.py'
       - '.github/workflows/stage5-monaco.yml'
@@ -14,7 +16,7 @@ permissions:
 
 jobs:
   monaco_static:
-    name: "Monaco 고저차·검정 AI-01·신호등·안전 단위 테스트"
+    name: "0~5단계 Monaco 실맵·실센서·신호등·주행 안전 회귀시험"
     runs-on: ubuntu-24.04
     timeout-minutes: 14
     steps:
@@ -101,7 +103,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           python3 scripts/stage5_monaco_sensor_smoke.py \
-            --ai AI-01 --startup-seconds 17 --capture-seconds 7
+            --ai AI-01 --startup-seconds 17 --capture-seconds 7 \
+            --capture-driving-rgb
       - name: "실제 Monaco 빨간불 5개 순차 점등·동시 소등 GUI 서비스 검증"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
@@ -126,4 +129,7 @@ jobs:
             generated/stage5/monaco_smoke_result.json
             generated/stage5/monaco_lights_result.json
             generated/stage5/ai01_physics_result.json
+            generated/stage5/actual_driving_rgb.ppm
+            generated/stage5/actual_driving_rgb.json
+            generated/stage5/actual_driving_rgb_proto.txt
           if-no-files-found: warn
