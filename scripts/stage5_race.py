@@ -72,6 +72,7 @@ def main():
     p.add_argument("--speed-limit",type=float,default=.55)
     p.add_argument("--minutes",type=float,default=85)
     p.add_argument("--dry-run",action="store_true")
+    p.add_argument("--reuse-gazebo",action="store_true",help="기존 Monaco GUI/ROS 브리지 유지하고 카메라·주행 노드만 기동")
     a=p.parse_args()
     if not 1<=a.minutes<=180:p.error("1~180분 범위 지정")
     base=ROOT/"generated/stage5/AI-01"
@@ -79,6 +80,10 @@ def main():
     try:commands=build_commands(a.calibration,a.speed_limit,race_log)
     except (ValueError,FileNotFoundError) as exc:
         p.error(str(exc))
+    if a.reuse_gazebo:
+        # 부모 프로세스가 만든 GUI/ROS 브리지는 절대 재실행하지 않는다.
+        commands=[(name,cmd) for name,cmd in commands
+                  if name not in ("monaco_gazebo","ros_bridge")]
     if a.dry_run:
         for name,cmd in commands:print(name+": "+" ".join(cmd))
         return 0
@@ -91,12 +96,25 @@ def main():
     processes=[]
     began=time.monotonic()
     base.mkdir(parents=True,exist_ok=True)
+    if a.reuse_gazebo:
+        try:
+            service=subprocess.run(["gz","service","-l"],cwd=ROOT,env=env,
+                                   capture_output=True,text=True,timeout=8)
+        except (OSError,subprocess.TimeoutExpired) as exc:
+            print("[레이스 시작 불가] Monaco GUI 확인 실패:",exc,file=sys.stderr,flush=True)
+            return 2
+        if service.returncode!=0 or "/world/monaco/visual_config" not in service.stdout.splitlines():
+            print("[레이스 시작 불가] 기존 Monaco GUI 서비스가 없습니다. "
+                  "calibration_gazebo.log 확인",file=sys.stderr,flush=True)
+            return 2
+        print("[레이스] 교정이 끝난 Monaco GUI 및 ROS 브리지를 그대로 사용합니다.",flush=True)
     try:
         for name,cmd in commands:
             f=(base/f"{name}.log").open("wb")
             proc=subprocess.Popen(cmd,cwd=ROOT,env=env,
                         stdout=f,stderr=subprocess.STDOUT,start_new_session=True)
             processes.append((name,proc,f))
+            print(f"[레이스] {name} 시작 / 로그: {base/(name+'.log')}",flush=True)
             time.sleep(3 if name=="monaco_gazebo" else 1)
             if proc.poll() is not None:
                 raise RuntimeError(f"{name} 시작 실패: {base/(name+'.log')}")
@@ -104,6 +122,8 @@ def main():
         light=subprocess.run([sys.executable,str(ROOT/"scripts/stage5_lights.py"),
               "sequence"],env=env,cwd=ROOT,capture_output=True,text=True,timeout=125)
         (base/"lights.log").write_text(light.stdout+"\n"+light.stderr)
+        if light.stdout:
+            print("[레이스 신호등] "+light.stdout.strip()[-850:],flush=True)
         if light.returncode:
             raise RuntimeError("공식 신호등 점등/소등 실패: "+light.stderr[-300:])
         deadline=began+a.minutes*60
@@ -117,8 +137,17 @@ def main():
                 return 0
         print("운영자 기록 기준 3랩 미확인: 시간 만료")
         return 1
+    except KeyboardInterrupt:
+        print("\n[레이스 안전 종료] Ctrl+C 감지. 모든 주행 프로세스를 종료합니다.",flush=True)
+        return 130
     except (RuntimeError,subprocess.TimeoutExpired) as exc:
-        print("안전 종료:",exc,file=sys.stderr)
+        print("[레이스 실패]",exc,file=sys.stderr,flush=True)
+        for name,_,_ in processes:
+            log=base/(name+".log")
+            if log.exists():
+                tail=log.read_text(errors="replace")[-850:]
+                if tail.strip():
+                    print(f"[{name} 로그] {tail}",file=sys.stderr,flush=True)
         return 2
     finally:
         for _,proc,_ in reversed(processes):
