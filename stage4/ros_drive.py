@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--speed-limit",type=float,default=1.10)
     parser.add_argument("--status-file",type=Path,help="실제 카메라/모터 제어 상태 JSON 로그")
     parser.add_argument("--image-file",type=Path,help="실제 RGB 카메라 첫 프레임 PPM 진단 사진")
+    parser.add_argument("--lost-image-file",type=Path,help="주행 중 도로 검출 실패 직전의 실제 RGB 프레임 PPM")
     args,ros_args=parser.parse_known_args()
     if args.vehicle!="urrc_ai_01":
         raise ValueError("4단계에서는 AI-01만 지원합니다")
@@ -49,6 +50,8 @@ def main():
             self.camera_frames=0
             self.gate_messages=0
             self.image_saved=False
+            self.had_valid_road=False
+            self.lost_image_saved=False
             self.last_est=LaneEstimate(False,reason="첫 RGB 프레임 미수신")
             self.cmd={}
             self.gate_sub=self.create_subscription(Bool,permit,self.on_gate,10)
@@ -73,8 +76,22 @@ def main():
                 est=estimate_ros(msg,self.last_error)
                 self.last_est=est
                 driver.camera(est,time.monotonic())
-                if est.valid:self.last_error=est.error
-                else:self.last_error=0.
+                if est.valid:
+                    self.last_error=est.error
+                    self.had_valid_road=True
+                else:
+                    self.last_error=0.
+                if (args.lost_image_file and not est.valid and
+                        self.had_valid_road and driver.started and
+                        not self.lost_image_saved):
+                    from stage3.vision import rgb_from_ros
+                    w,h,data=rgb_from_ros(msg)
+                    args.lost_image_file.parent.mkdir(parents=True,exist_ok=True)
+                    args.lost_image_file.write_bytes(
+                        f"P6\n{w} {h}\n255\n".encode()+data)
+                    self.lost_image_saved=True
+                    self.get_logger().warn(
+                        f"실제 도로 검출 상실 화면 저장: {args.lost_image_file} / {est.reason}")
                 if args.image_file and not self.image_saved:
                     from stage3.vision import rgb_from_ros
                     w,h,rgb_bytes=rgb_from_ros(msg)
@@ -122,7 +139,8 @@ def main():
                           "command_steer_rad":round(out["race_steer_rad"],4),
                           "front_left_radps":round(out["drive_wheel_radps"]["front_left"],4),
                           "front_right_radps":round(out["drive_wheel_radps"]["front_right"],4),
-                          "image_saved":self.image_saved}
+                          "image_saved":self.image_saved,
+                          "lost_image_saved":self.lost_image_saved}
                     if args.status_file:
                         args.status_file.parent.mkdir(parents=True,exist_ok=True)
                         tmp=args.status_file.with_suffix(".tmp")
