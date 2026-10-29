@@ -91,8 +91,11 @@ jobs:
             ros-jazzy-sensor-msgs ros-jazzy-std-msgs
       - name: "실제 Monaco 카메라·5등·3랩 감사 실행 — FAIL은 FAIL"
         run: |
-          set -euo pipefail
+          set -eo pipefail
+          # ROS Jazzy setup.bash 내부에서는 미정의 환경 변수를 읽기 때문에
+          # nounset(-u)를 해제한 뒤 환경을 불러오고 다시 엄격 셸 설정을 켠다.
           source /opt/ros/jazzy/setup.bash
+          set -u
           python3 scripts/stage5_prepare_monaco.py --ai AI-01
           python3 scripts/stage5_bridge.py
           export PYTHONUNBUFFERED=1
