@@ -21,7 +21,9 @@ SENSOR_SPECS = {
                      "pitch":-0.55, "width":160,"height":120},
     "rgb": {"type":"camera","center":(0.235,0.034,0.065),
             "size":(0.018,0.022,0.020),"mass":0.030,"rate":15,
-            "pitch":0.0,"width":160,"height":120},
+            # Monaco 내리막·급코너에서 전방 도로가 영상 하단을 떠나지 않도록
+            # 기존 수평 0도 대신 아래로 0.26rad. 신호등 카메라는 별도 유지.
+            "pitch":-0.26,"width":160,"height":120},
     "depth": {"type":"depth_camera","center":(0.235,-0.034,0.065),
               "size":(0.018,0.022,0.020),"mass":0.040,"rate":10,
               "pitch":0.0,"width":160,"height":120},
