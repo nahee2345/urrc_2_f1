@@ -124,6 +124,7 @@ def capture_diagnostic(env):
 
 def calibrate_in_one_terminal(env, path, seconds=40):
     """신호등 5등 ON 상태의 실제 ROS 카메라 영상만으로 안전하게 ROI를 생성."""
+    GENERATED.mkdir(parents=True, exist_ok=True)
     gui = bridge = None
     log_handles = []
     try:
