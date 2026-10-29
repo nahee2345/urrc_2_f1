@@ -165,3 +165,25 @@ Gazebo GUI의 visual_config가 없거나 동일한 GZ_PARTITION이 아니면 실
 ### 실제 3랩 자동주행 전제
 
 신호등 점등 시연은 카메라 교정 없이 가능합니다. 실제 5단계 자동주행은 Monaco start_camera 영상에서 실제 빨간불 5개를 교정한 calibration.json이 필요합니다. 교정이 없을 경우 출발 안전장치가 주행을 거부해야 정상입니다. 아직 실제 무충돌 3랩 PASS는 아닙니다.
+
+## 교정 중 빨간불 5개가 즉시 켜지고 계속 켜져 있을 때
+
+`stage5_start.py`의 **카메라 자동 교정 모드에서는 정상 동작**입니다. 정식 레이스의 랜덤 3~6초 순차 점등과 다르게 빨간불 5개를 곧바로 모두 켜서 ROI를 측정합니다. 교정이 끝나면 다섯 등을 소등한 뒤 Gazebo/브리지를 종료하고, 정식 레이스를 다시 시작합니다.
+
+수정된 실행기는 3초마다 **ROS 카메라 발행자 수, 실제 이미지 수신 프레임 수, 다섯 렌즈 연속 인식 횟수**를 표시합니다. `[READY] Gazebo visual service and start/overview camera topics ready` 문구는 Gazebo 자체 카메라 준비 상태로, **차량 start_camera 이미지가 ROS2에서 수신됐다는 의미가 아닙니다**.
+
+- `ROS 카메라 이미지 미수신`: ROS2 브리지/토픽/QoS/렌더러 점검 필요
+- `ROS 이미지 수신, 빨간 렌즈 5개 연속 인식 대기`: 카메라 연결은 됐지만 실제 LED 5개 검출이 실패할 수 있음
+- `Monaco 출발 신호등 ROI 교정 PASS`: 실제 카메라 프레임 3회 연속 검출 성공
+- 실패, 시간 만료 또는 Ctrl+C 시 교정용 신호등을 끄고 임시 월드 종료. 필요 시 로컬 start_camera_diagnostic.ppm을 확인
+
+**기존 Gazebo를 종료한 뒤 최신 커밋으로 git pull하고 재실행해야** 새 상태 메시지가 표시됩니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+source /opt/ros/jazzy/setup.bash
+python3 scripts/stage5_start.py
+~~~
+
