@@ -3,7 +3,7 @@
 도로의 절대 RGB 색상을 단일 값으로 가정하지 않는다. 그림자 아래 어두운
 중립색 아스팔트를 인식하고 녹갈색 바깥 지형은 색 편차로 배제한다.
 차체 위치/센터라인/운영자 pose는 절대로 참조하지 않는다.
-정확한 도로 세그먼트가 3개 미만이면 안전상 정지한다.
+가까운 화면의 연결된 도로 구간과 내부 양측 경계를 확인하지 못하면 안전상 정지한다.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -68,10 +68,13 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     # 탐색하면 가장 가까운 다른 도로 구간/장벽 그림자를 잘못 고를 수 있다.
     # 실제 Monaco RGB 원본 프레임에서 고저차로 차도가 화면 77~85% 구간에
     # 좁게 보이는 상황을 확인. 기존 7개 희소 행은 모두 지나쳐 검출 실패했음.
-    rows=(.93,.91,.89,.87,.85,.83,.81,.79,.77,.75,.73,.71,.69,.67,.65,.62)
+    # 실제 Monaco 실측: 하단 시야에서 도로 폭이 90%를 넘으며
+    # 기존 16행 스캔은 정지 영상의 유효 행 3개만 남겼음.
+    rows=tuple(.95-.01*k for k in range(34))
     anchor=max(width*.06,min(width*.94,(prior+1.)*width/2.))
     centers=[]
     near_count=0
+    bounded_count=0
     previous_selected_row=None
     longest_streak=0
     streak=0
@@ -82,21 +85,25 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
             span=right-left
             midpoint=(left+right)/2.
             # 차로 전체가 화면을 채우면 경계를 볼 수 없어 신뢰 불가.
-            if not width*.055<=span<=width*.90:
+            # 도로가 화면 끝에서 잘려 폭이 90~97%인 구간도 허용.
+            # 단색 화면(폭 100%)은 도로로 인정하지 않음.
+            if not width*.055<=span<=width*.97:
                 continue
             difference=abs(midpoint-anchor)
             if difference>width*.42:
                 continue
             # 작은 검정 그림자보다 폭이 확보된 도로 구간 우선.
             cost=difference/width-.12*min(1.,span/(width*.26))
-            candidates.append((cost,midpoint,span))
+            candidates.append((cost,midpoint,span,left>0 and right<width))
         if not candidates:
             continue
-        _,midpoint,span=min(candidates,key=lambda item:item[0])
+        _,midpoint,span,bounded=min(candidates,key=lambda item:item[0])
         if centers and abs(midpoint-centers[-1][0])>width*.34:
             continue
         if frac>=.79:
             near_count+=1
+        if bounded:
+            bounded_count+=1
         # 도로가 몇 개의 연속 영상 행에 걸쳐 보이지 않으면 작은 그림자로 간주.
         if previous_selected_row is not None and k==previous_selected_row+1:
             streak+=1
@@ -105,11 +112,11 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
         longest_streak=max(longest_streak,streak)
         previous_selected_row=k
         # 먼 행을 약간 강조해 Monaco 코너 접근 전에 선회.
-        weight=(1+.065*k)*min(1.,span/(width*.23))
+        weight=(1+.03*k)*min(1.,span/(width*.23))
         centers.append((midpoint,weight,span))
         anchor=.57*anchor+.43*midpoint
 
-    if len(centers)<4 or near_count<2 or longest_streak<3:
+    if len(centers)<4 or near_count<2 or longest_streak<3 or bounded_count<2:
         return LaneEstimate(False,samples=len(centers),
                             reason="연속 도로 경계 부족")
     total=sum(item[1] for item in centers)

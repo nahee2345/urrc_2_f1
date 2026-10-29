@@ -50,6 +50,25 @@ class MonacoLaneRecoveryTests(unittest.TestCase):
         self.assertTrue(right.valid)
         self.assertLess(left.error,0)
         self.assertGreater(right.error,0)
+    def test_actual_ci_like_near_road_widens_to_image_edges(self):
+        # GitHub Actions 미인식 사진의 행별 폭을 근사한 회귀 영상.
+        # 구형 16행 스캔은 y=.83을 폭 초과로 제외해 3행만 남겼음.
+        w,h=160,120
+        data=bytearray(bytes((78,82,67))*(w*h))
+        for y in range(int(.76*h),h):
+            half=min(.75,.13+5.2*(y/h-.76))
+            left=max(0,int(w*(.5-half)))
+            right=min(w,int(w*(.5+half)))
+            for x in range(left,right):
+                offset=(y*w+x)*3
+                data[offset:offset+3]=bytes((39,41,44))
+        est=estimate_lane(w,h,bytes(data))
+        self.assertTrue(est.valid,est.reason)
+        self.assertGreaterEqual(est.samples,4)
+        self.assertLess(abs(est.error),.08)
+    def test_wide_uniform_gray_cannot_be_road(self):
+        img=bytes((39,41,44))*(160*120)
+        self.assertFalse(estimate_lane(160,120,img).valid)
     def test_grass_only_must_stop(self):
         est=estimate_lane(160,120,frame(visible=False))
         self.assertFalse(est.valid)
