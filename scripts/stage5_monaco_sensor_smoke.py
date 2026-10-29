@@ -12,8 +12,11 @@ import shutil
 import subprocess
 import tempfile
 import time
+import sys
 
 ROOT=Path(__file__).resolve().parents[1]
+# python3 scripts/... 로 직접 실행해도 실제 센서 증거 모듈을 읽도록 수정.
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 
 def main():
     p=argparse.ArgumentParser()
