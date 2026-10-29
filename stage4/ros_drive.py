@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--status-file",type=Path,help="실제 카메라/모터 제어 상태 JSON 로그")
     parser.add_argument("--image-file",type=Path,help="실제 RGB 카메라 첫 프레임 PPM 진단 사진")
     parser.add_argument("--lost-image-file",type=Path,help="주행 중 도로 검출 실패 직전의 실제 RGB 프레임 PPM")
+    parser.add_argument("--samples-dir",type=Path,help="출발 후 실제 RGB 도로 추종 중간 프레임 보관")
     args,ros_args=parser.parse_known_args()
     if args.vehicle!="urrc_ai_01":
         raise ValueError("4단계에서는 AI-01만 지원합니다")
@@ -52,6 +53,7 @@ def main():
             self.image_saved=False
             self.had_valid_road=False
             self.lost_image_saved=False
+            self.saved_sample_count=0
             self.last_est=LaneEstimate(False,reason="첫 RGB 프레임 미수신")
             self.cmd={}
             self.gate_sub=self.create_subscription(Bool,permit,self.on_gate,10)
@@ -92,6 +94,16 @@ def main():
                     self.lost_image_saved=True
                     self.get_logger().warn(
                         f"실제 도로 검출 상실 화면 저장: {args.lost_image_file} / {est.reason}")
+                # 초기, 27m 도로 이탈처럼 주행 중 변화하는 RGB를 확인하기 위해
+                # 출발 이후 75프레임마다 실제 센서 화면을 기록(최대 30장).
+                if (args.samples_dir and driver.started and self.saved_sample_count<30 and
+                        self.camera_frames%75==0):
+                    from stage3.vision import rgb_from_ros
+                    w,h,data=rgb_from_ros(msg)
+                    args.samples_dir.mkdir(parents=True,exist_ok=True)
+                    dest=args.samples_dir/f"rgb_{self.camera_frames:06d}.ppm"
+                    dest.write_bytes(f"P6\n{w} {h}\n255\n".encode()+data)
+                    self.saved_sample_count+=1
                 if args.image_file and not self.image_saved:
                     from stage3.vision import rgb_from_ros
                     w,h,rgb_bytes=rgb_from_ros(msg)
@@ -140,7 +152,8 @@ def main():
                           "front_left_radps":round(out["drive_wheel_radps"]["front_left"],4),
                           "front_right_radps":round(out["drive_wheel_radps"]["front_right"],4),
                           "image_saved":self.image_saved,
-                          "lost_image_saved":self.lost_image_saved}
+                          "lost_image_saved":self.lost_image_saved,
+                          "saved_sample_count":self.saved_sample_count}
                     if args.status_file:
                         args.status_file.parent.mkdir(parents=True,exist_ok=True)
                         tmp=args.status_file.with_suffix(".tmp")
