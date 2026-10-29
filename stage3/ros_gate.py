@@ -60,13 +60,18 @@ def main():
                 width,height,rgb=rgb_from_ros(msg)
                 stamp=float(msg.header.stamp.sec)+msg.header.stamp.nanosec/1e9
                 self.last_frame=stamp
-                if gate.update(width,height,rgb,stamp,self.allowed):
+                prior_state=gate.state
+                triggered=gate.update(width,height,rgb,stamp,self.allowed)
+                if triggered and prior_state!="RELEASED" and rclpy.ok():
                     self.get_logger().info("5개 점등 확인 후 전체 소등을 카메라로 확인: 출발 허가")
             except Exception as exc:
                 gate.reset()
                 self.get_logger().error(f"카메라 오류 - 출발 차단: {exc}")
             self.publish_state()
         def publish_state(self):
+            # SIGINT로 이미 ROS 컨텍스트가 종료된 경우 publish() 금지.
+            if not rclpy.ok():
+                return
             state=Bool()
             # 프레임 갱신이 끊기면 이미 출발 허가 상태라도 안전하게 취소.
             if self.last_frame is None:
@@ -78,14 +83,24 @@ def main():
                     state.data=False
                 else:
                     state.data=bool(self.allowed and gate.state=="RELEASED")
-            self.pub.publish(state)
+            if rclpy.ok():
+                try:
+                    self.pub.publish(state)
+                except Exception:
+                    if rclpy.ok():
+                        raise
 
     rclpy.init(args=ros_args)
     node=StartNode()
-    try:rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt,):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # ROS 2 Jazzy가 SIGINT 처리 중 먼저 종료했을 수 있음.
+        if rclpy.ok():
+            rclpy.try_shutdown()
 
 if __name__=="__main__":
     main()
