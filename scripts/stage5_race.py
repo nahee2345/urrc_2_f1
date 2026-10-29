@@ -185,13 +185,14 @@ def main():
             raise RuntimeError("공식 신호등 점등/소등 실패: "+light.stderr[-300:])
         deadline=began+a.minutes*60
         next_status=0.
+        print("[AI-01] 신호등 소등 후 실제 카메라/바퀴/물리 변위를 모니터링합니다.",flush=True)
         while time.monotonic()<deadline:
-            time.sleep(2)
+            time.sleep(1)
             for name,proc,_ in processes:
                 if proc.poll() is not None:raise RuntimeError(name+" 비정상 종료")
             now=time.monotonic()
             if now>=next_status:
-                next_status=now+5
+                next_status=now+3
                 print(diagnostic_line(
                     read_diagnostics(base/"drive_status.json"),
                     read_diagnostics(base/"pose_status.json")),flush=True)
