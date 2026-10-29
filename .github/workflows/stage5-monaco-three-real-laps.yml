@@ -12,7 +12,7 @@ on:
       - 'stage5/**'
       - 'stage4/**'
       - 'vehicle_generator/sensors.py'
-      - 'tests/test_stage5_real_3lap_gate.py'
+      - 'tests/test_stage5_*.py'
 
 permissions:
   contents: read
