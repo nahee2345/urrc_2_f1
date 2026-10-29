@@ -66,10 +66,15 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
 
     # 가까운 바닥부터 도로를 따라 원거리로 연결. 급커브에서 먼 행을 먼저
     # 탐색하면 가장 가까운 다른 도로 구간/장벽 그림자를 잘못 고를 수 있다.
-    rows=(.93,.87,.81,.75,.69,.62,.55)
+    # 실제 Monaco RGB 원본 프레임에서 고저차로 차도가 화면 77~85% 구간에
+    # 좁게 보이는 상황을 확인. 기존 7개 희소 행은 모두 지나쳐 검출 실패했음.
+    rows=(.93,.91,.89,.87,.85,.83,.81,.79,.77,.75,.73,.71,.69,.67,.65,.62)
     anchor=max(width*.06,min(width*.94,(prior+1.)*width/2.))
     centers=[]
     near_count=0
+    previous_selected_row=None
+    longest_streak=0
+    streak=0
     for k,frac in enumerate(rows):
         y=min(height-1,int(height*frac))
         candidates=[]
@@ -90,21 +95,30 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
         _,midpoint,span=min(candidates,key=lambda item:item[0])
         if centers and abs(midpoint-centers[-1][0])>width*.34:
             continue
-        if k<4:
+        if frac>=.79:
             near_count+=1
+        # 도로가 몇 개의 연속 영상 행에 걸쳐 보이지 않으면 작은 그림자로 간주.
+        if previous_selected_row is not None and k==previous_selected_row+1:
+            streak+=1
+        else:
+            streak=1
+        longest_streak=max(longest_streak,streak)
+        previous_selected_row=k
         # 먼 행을 약간 강조해 Monaco 코너 접근 전에 선회.
         weight=(1+.065*k)*min(1.,span/(width*.23))
         centers.append((midpoint,weight,span))
         anchor=.57*anchor+.43*midpoint
 
-    if len(centers)<3 or near_count<2:
+    if len(centers)<4 or near_count<2 or longest_streak<3:
         return LaneEstimate(False,samples=len(centers),
                             reason="연속 도로 경계 부족")
     total=sum(item[1] for item in centers)
     if total<=0:
         return LaneEstimate(False,samples=len(centers),reason="도로 가중치 부족")
     average=sum(c*w for c,w,_ in centers)/total
-    coverage=len(centers)/len(rows)
+    # 부분 시야에서 5~6개 인접 행만 보이는 것이 실제 정상 Monaco 도로.
+    # 전체 화면에서 보이지 않는 하늘 행까지 나눠 신뢰도를 낮추지 않는다.
+    coverage=min(1.,len(centers)/6.)
     width_score=sum(min(1.,span/(width*.23)) for _,_,span in centers)/len(centers)
     confidence=coverage*width_score
     error=max(-1.,min(1.,(average-width/2.)/(width/2.)))
