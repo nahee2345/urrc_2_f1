@@ -37,6 +37,7 @@ def build_commands(calibration,speed=0.55,output=None):
             "--vehicle","urrc_ai_01","--speed-limit",str(speed),
             "--status-file",str(p/"drive_status.json"),
             "--image-file",str(p/"rgb_camera.ppm"),
+            "--lost-image-file",str(p/"rgb_camera_road_lost.ppm"),
             "--ros-args","-p","use_sim_time:=true"]),
         ("race_supervisor",[sys.executable,"-m","stage3.pose_monitor",
             "--vehicle","urrc_ai_01","--track","monaco",
@@ -147,7 +148,8 @@ def main():
     env["PYTHONPATH"]=str(ROOT)+os.pathsep+env.get("PYTHONPATH","")
     if race_log.exists():race_log.unlink()
     # 이전 세션 상태를 현재 증거로 오인하지 않는다.
-    for old in ("drive_status.json","pose_status.json","rgb_camera.ppm"):
+    for old in ("drive_status.json","pose_status.json","rgb_camera.ppm",
+                "rgb_camera_road_lost.ppm"):
         candidate=base/old
         if candidate.exists():candidate.unlink()
     processes=[]
