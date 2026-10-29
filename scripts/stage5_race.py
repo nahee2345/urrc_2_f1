@@ -35,11 +35,15 @@ def build_commands(calibration,speed=0.55,output=None):
             "--ros-args","-p","use_sim_time:=true"]),
         ("rgb_controller",[sys.executable,"-m","stage4.ros_drive",
             "--vehicle","urrc_ai_01","--speed-limit",str(speed),
+            "--status-file",str(p/"drive_status.json"),
+            "--image-file",str(p/"rgb_camera.ppm"),
             "--ros-args","-p","use_sim_time:=true"]),
         ("race_supervisor",[sys.executable,"-m","stage3.pose_monitor",
             "--vehicle","urrc_ai_01","--track","monaco",
             "--contacts-manifest",str(p/"contacts.json"),"--target-laps","3",
-            "--output",str(out),"--ros-args","-p","use_sim_time:=true"]),
+            "--output",str(out),
+            "--status-file",str(p/"pose_status.json"),
+            "--ros-args","-p","use_sim_time:=true"]),
         ("isolated_operator_permission",["ros2","topic","pub","-r","10",
             "/urrc_2_f1/operator_test_start","std_msgs/msg/Bool","{data: true}"]),
     ]
@@ -73,6 +77,51 @@ def parse_verdict(path):
             "collisions":final.get("collisions"),"rejected_crossings":final.get("rejected_crossings"),
             "invalid_reasons":final.get("invalid_reasons",[])}
 
+def read_diagnostics(path):
+    """실제 ROS 카메라 제어/운영자 포즈의 마지막 기록만 읽는다."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError,ValueError,TypeError):
+        return None
+
+
+def diagnostic_line(drive,pose):
+    if drive is None:
+        d="주행 컨트롤러 진단 미수신 (rgb_controller.log 확인)"
+    else:
+        d=(f"카메라={drive.get('camera_frames',0)}프레임, "
+           f"출발허가={drive.get('start_allowed',False)}, "
+           f"도로검출={drive.get('lane_valid',False)}, "
+           f"전륜목표={drive.get('front_left_radps',0)}rad/s, "
+           f"차단/상태={drive.get('stop_reason','unknown')}")
+    if pose is None:
+        p="물리 위치 계측 미수신 (race_supervisor.log 확인)"
+    else:
+        p=(f"실제 변위={pose.get('displacement_from_start_xy_m',0)}m, "
+           f"누적 주행={pose.get('distance_measured_xy_m',0)}m, "
+           f"유효 랩={pose.get('laps',0)}")
+    return "[AI-01 실제 주행 진단] "+d+" | "+p
+
+
+def stop_motors(env):
+    """ROS 종료 뒤에도 남을 수 있는 Gazebo 모터 명령을 직접 0으로 전환."""
+    errors=[]
+    for topic in (
+        "/model/urrc_ai_01/drive/front_left",
+        "/model/urrc_ai_01/drive/front_right",
+        "/model/urrc_ai_01/steer/left",
+        "/model/urrc_ai_01/steer/right",
+    ):
+        try:
+            p=subprocess.run(["gz","topic","-t",topic,"-m","gz.msgs.Double","-p","data: 0"],
+                             cwd=ROOT,env=env,timeout=4,capture_output=True,text=True)
+            if p.returncode:
+                errors.append(topic)
+        except (OSError,subprocess.TimeoutExpired):
+            errors.append(topic)
+    return errors
+
+
 def main():
     p=argparse.ArgumentParser(description="Monaco 3랩 실측: 카메라 출발 인터록 필수")
     p.add_argument("--calibration",type=Path,default=ROOT/"generated/stage5/AI-01/calibration.json")
@@ -97,6 +146,10 @@ def main():
     env.setdefault("GZ_PARTITION",f"urrc_stage5_{os.getuid()}")
     env["PYTHONPATH"]=str(ROOT)+os.pathsep+env.get("PYTHONPATH","")
     if race_log.exists():race_log.unlink()
+    # 이전 세션 상태를 현재 증거로 오인하지 않는다.
+    for old in ("drive_status.json","pose_status.json","rgb_camera.ppm"):
+        candidate=base/old
+        if candidate.exists():candidate.unlink()
     processes=[]
     began=time.monotonic()
     base.mkdir(parents=True,exist_ok=True)
@@ -131,10 +184,17 @@ def main():
         if light.returncode:
             raise RuntimeError("공식 신호등 점등/소등 실패: "+light.stderr[-300:])
         deadline=began+a.minutes*60
+        next_status=0.
         while time.monotonic()<deadline:
             time.sleep(2)
             for name,proc,_ in processes:
                 if proc.poll() is not None:raise RuntimeError(name+" 비정상 종료")
+            now=time.monotonic()
+            if now>=next_status:
+                next_status=now+5
+                print(diagnostic_line(
+                    read_diagnostics(base/"drive_status.json"),
+                    read_diagnostics(base/"pose_status.json")),flush=True)
             verdict=parse_verdict(race_log)
             if verdict["status"]=="PASS_THREE_LAPS":
                 print(json.dumps(verdict,ensure_ascii=False,indent=2))
@@ -154,6 +214,11 @@ def main():
                     print(f"[{name} 로그] {tail}",file=sys.stderr,flush=True)
         return 2
     finally:
+        # 카메라/허가 스트림이 사라지는 종료 순간에도 Gazebo 모터를 반드시 0으로 보낸다.
+        errors=stop_motors(env)
+        if errors:
+            print("[종료 경고] Gazebo 0속도 송신 실패 토픽: "+", ".join(errors),
+                  file=sys.stderr,flush=True)
         for _,proc,_ in reversed(processes):
             if proc.poll() is None:
                 os.killpg(proc.pid,signal.SIGTERM)
