@@ -1,10 +1,12 @@
-name: "4단계 - AI-01 검정 차량·RGB 자율주행 및 안전 제어 검증"
+name: "4단계 - AI-01 노란색 차량·RGB 자율주행 및 안전 제어 검증"
 on:
   push:
     branches: [main]
     paths:
       - 'stage4/**'
       - 'vehicle_generator/model.py'
+      - 'vehicle_generator/colors.py'
+      - 'vehicle_generator/sensors.py'
       - 'scripts/stage4_*.py'
       - 'tests/test_stage4_*.py'
       - '.github/workflows/stage4-ai01.yml'
@@ -15,7 +17,7 @@ permissions:
 
 jobs:
   stage4_rules:
-    name: "AI-01 도로 인식·조향·검정 차체·출발 안전 인터록 검사"
+    name: "AI-01 도로 인식·조향·노란색 차체·출발 안전 인터록 검사"
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     steps:
@@ -44,11 +46,11 @@ jobs:
           body=world.find(".//model[@name='urrc_ai_01']/link[@name='base_link']/visual[@name='body_visual']")
           assert body is not None
           rgb=[float(x) for x in body.findtext('material/diffuse').split()[:3]]
-          assert all(0<k<.05 for k in rgb),rgb
+          assert rgb==[1.0,0.88,0.03],rgb
           bridge=Path("generated/stage4/ai01_bridge.yaml").read_text()
           assert bridge.count("direction: ROS_TO_GZ")==4
           assert "/model/urrc_ai_01/sensors/rgb" in bridge
-          print("AI-01 검정 차체 및 물리 구동 ROS 토픽 계약 PASS")
+          print("AI-01 노란색 차체 및 물리 구동 ROS 토픽 계약 PASS")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
