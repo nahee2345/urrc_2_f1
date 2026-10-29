@@ -24,7 +24,7 @@
 
 PASS_MONACO_SOURCE_FIDELITY이면 원본 지형/모델 구조 검증에 성공한 것입니다. 3바퀴 완주 PASS가 아닙니다.
 
-## 2. Monaco 검정 AI-01 시뮬레이션 확인 (터미널 1)
+## 2. Monaco 노란색 AI-01 시뮬레이션 확인 (터미널 1)
 
     cd ~/urrc_2_f1
     source /opt/ros/jazzy/setup.bash
@@ -83,3 +83,56 @@ PASS_THREE_LAPS는 실제 위치 계측으로 유효 3랩, 체크포인트 정�
 현재 GitHub Actions 자동 검사에서는 Monaco 실제 카메라·위치 발행과 전륜 물리 구동 기초 시험까지 확인했습니다. 실제 ROS2 카메라 인식→안전 출발→3바퀴 완주는 아직 검증되지 않았습니다.
 
 참고: AI-01의 현재 도로 추적기는 색상 기반 기초 영상처리로, 학습된 CNN 모델을 구현한 상태는 아닙니다. Monaco 협소 구간·헤어핀 성능은 추후 보완이 필요합니다.
+
+
+## 2026-10-29: 직접 실행 오류 및 신호등 미점등 수정
+
+원인: Python scripts/stage5_race.py를 직접 실행할 때 모듈 검색 경로에 프로젝트 루트가 빠져 stage3을 불러오지 못했습니다. 실행기 내부에서 루트를 sys.path에 추가해 수정했습니다.
+
+또한 stage5_run_monaco.py는 기본적으로 맵과 차량만 띄웁니다. 빨간불 5개 점등/소등 명령은 별도 서비스 호출이 필요합니다. 이번 수정으로 다음 명령에서 신호등 시퀀스를 직접 실행하도록 --lights 옵션을 추가했습니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+python3 scripts/stage5_prepare_monaco.py --ai AI-01
+python3 scripts/stage5_run_monaco.py --ai AI-01 --lights
+~~~
+
+다른 Gazebo 월드가 떠 있으면 먼저 종료하세요. 한꺼번에 두 개의 Monaco 월드를 띄우면 안 됩니다. --lights를 사용하면 원본 5개 빨간불이 차례로 켜졌다가 다 같이 꺼지고 화면은 그대로 유지됩니다. 이 명령은 차량을 자동 출발시키는 레이스 통합 명령이 아닙니다.
+
+이미 단독 실행한 Monaco 창이 있다면 별도 터미널에서 다음을 실행할 수 있습니다.
+
+~~~bash
+cd ~/urrc_2_f1
+python3 scripts/stage5_lights.py sequence
+~~~
+
+서비스 점검이 필요하다면:
+
+~~~bash
+export GZ_PARTITION="urrc_stage5_$(id -u)"
+gz service -l | grep '/world/monaco/visual_config'
+gz topic -l | grep '/urrc/monaco/spectator/'
+~~~
+
+Gazebo GUI의 visual_config가 없거나 동일한 GZ_PARTITION이 아니면 실제 발광 서비스가 실행되지 않을 수 있습니다. 이때는 --lights를 실행한 터미널의 오류 출력을 공유하세요.
+
+### AI-01~AI-10 차량의 고대비 원색
+
+- AI-01 노랑
+- AI-02 빨강
+- AI-03 파랑
+- AI-04 초록
+- AI-05 주황
+- AI-06 자홍
+- AI-07 청록
+- AI-08 보라
+- AI-09 연두
+- AI-10 분홍
+
+차체 및 센서 하우징을 차량별 원색으로 바꾸고 타이어는 검정색으로 유지했습니다. 앞서 만들어둔 검정색 SDF를 계속 볼 경우 stage5_prepare_monaco.py를 다시 실행해야 새 차량 색상이 반영됩니다.
+
+### 실제 3랩 자동주행 전제
+
+신호등 점등 시연은 카메라 교정 없이 가능합니다. 실제 5단계 자동주행은 Monaco start_camera 영상에서 실제 빨간불 5개를 교정한 calibration.json이 필요합니다. 교정이 없을 경우 출발 안전장치가 주행을 거부해야 정상입니다. 아직 실제 무충돌 3랩 PASS는 아닙니다.

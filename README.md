@@ -174,3 +174,19 @@ python3 scripts/stage4_bridge.py --contacts generated/stage3/AI-01/contacts.json
 단계별 검증 결과: reports/STAGE_5.md
 
 실제 Monaco 카메라·위치·FWD 모터 물리는 GitHub Actions에서 기본 검증에 통과했습니다. 그러나 실제 빨간불 카메라 출발, RGB 주행 제어기 3랩 무충돌 완주는 아직 PASS가 아닙니다.
+
+
+## Monaco 신호등 및 10대 원색 차량 (2026-10-29)
+
+기존 검정 AI-01은 노랑으로 변경했습니다. AI-01부터 AI-10까지 노랑/빨강/파랑/초록/주황/자홍/청록/보라/연두/분홍 고대비 원색을 각각 사용하며 타이어는 검정입니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+python3 scripts/stage5_prepare_monaco.py --ai AI-01
+python3 scripts/stage5_run_monaco.py --ai AI-01 --lights
+~~~
+
+위 명령으로 신호등 5등 순차 점등·전체 소등을 볼 수 있습니다. 단독 Monaco Gazebo 실행은 신호등 서비스를 자동 호출하지 않습니다. 실제 RGB 자동주행은 start_camera 5등 교정 후 레이스 통합 실행기를 사용합니다.
+
+상세 사용법: docs/STAGE5_GUIDE.md
