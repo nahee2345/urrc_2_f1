@@ -81,7 +81,7 @@ jobs:
             fi
           done
           timeout 240 sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=40 update
-          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri
+          timeout 240 sudo apt-get install -y curl gnupg lsb-release libegl1 libgl1-mesa-dri xvfb xauth libxkbcommon-x11-0
           curl --fail --silent --show-error --max-time 45 --retry 2 \
             https://packages.osrfoundation.org/gazebo.gpg | sudo tee \
             /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg >/dev/null
@@ -102,6 +102,15 @@ jobs:
         run: |
           python3 scripts/stage5_monaco_sensor_smoke.py \
             --ai AI-01 --startup-seconds 17 --capture-seconds 7
+      - name: "실제 Monaco 빨간불 5개 순차 점등·동시 소등 GUI 서비스 검증"
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: xcb
+        run: |
+          xvfb-run -a -s '-screen 0 1600x1000x24' \
+            python3 scripts/stage5_monaco_sensor_smoke.py \
+              --ai AI-01 --startup-seconds 17 --capture-seconds 7 \
+              --verify-lights --report generated/stage5/monaco_lights_result.json
       - name: "실제 Monaco 전륜 모터 물리 이동 검증"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
@@ -115,5 +124,6 @@ jobs:
           name: stage5-monaco-actual-gazebo-results
           path: |
             generated/stage5/monaco_smoke_result.json
+            generated/stage5/monaco_lights_result.json
             generated/stage5/ai01_physics_result.json
           if-no-files-found: warn
