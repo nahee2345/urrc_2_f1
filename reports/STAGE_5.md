@@ -101,3 +101,12 @@
 - Jazzy Ctrl+C 예외 중복 shutdown 방지.
 - 기존 교정 파일이 있더라도 OFF/ON 실제 차분 검증 표시가 없으면 레이스 실행 금지.
 - 실제 ROS2 카메라 영상에서 최종 5등 검출과 Monaco 3랩 완주는 아직 미검증.
+
+
+### 교정 오류 수정 자동검사 결과
+
+- GitHub Actions 실행: https://github.com/nahee2345/urrc_2_f1/actions/runs/40818551110
+- 0~5단계 Python 회귀시험: **100/100 PASS**.
+- 새 교정 방식의 7~8개 붉은 연결영역, 5개만 새로 켜진 LED 식별, 4개 이하 fail-closed, OFF/ON 동일 영상의 출발 불허, PPM 저장·재로드 정상 테스트 PASS.
+- CI 실제 Gazebo 동적 시험은 별도 작업이며, 실제 ROS2 카메라에서 5등을 인식했다는 실측 근거는 아직 없음.
+- 사용자가 Ctrl+C로 교정 중단해도 ROS 종료 두 번 호출하지 않고 마지막 카메라 이미지를 진단용으로 보존하도록 수정.
