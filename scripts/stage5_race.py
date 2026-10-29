@@ -44,6 +44,13 @@ def build_commands(calibration,speed=0.55,output=None):
             "/urrc_2_f1/operator_test_start","std_msgs/msg/Bool","{data: true}"]),
     ]
 
+def select_commands(commands,reuse_gazebo=False):
+    """외부 GUI/브리지가 있으면 이 둘을 다시 띄우지 않는다."""
+    if not reuse_gazebo:return list(commands)
+    return [(name,cmd) for name,cmd in commands
+            if name not in ("monaco_gazebo","ros_bridge")]
+
+
 def parse_verdict(path):
     path=Path(path)
     if not path.is_file():return {"status":"NOT_PASSED","reason":"운영자 랩 기록 미생성"}
@@ -80,10 +87,7 @@ def main():
     try:commands=build_commands(a.calibration,a.speed_limit,race_log)
     except (ValueError,FileNotFoundError) as exc:
         p.error(str(exc))
-    if a.reuse_gazebo:
-        # 부모 프로세스가 만든 GUI/ROS 브리지는 절대 재실행하지 않는다.
-        commands=[(name,cmd) for name,cmd in commands
-                  if name not in ("monaco_gazebo","ros_bridge")]
+    commands=select_commands(commands,a.reuse_gazebo)
     if a.dry_run:
         for name,cmd in commands:print(name+": "+" ".join(cmd))
         return 0
