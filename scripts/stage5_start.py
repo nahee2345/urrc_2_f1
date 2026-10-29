@@ -262,7 +262,7 @@ def main():
     if args.dry_run:
         for label, command in commands:
             print(label, " ".join(command))
-        print("교정: Gazebo GUI 한번만 생성→ROS 브리지→OFF/ON 카메라→같은 GUI로 레이스")
+        print("교정: Gazebo GUI 한번만 생성→ROS 브리지→OFF/ON 실제 카메라 5등→같은 GUI로 레이스")
         return 0
     if not shutil.which("gz") or not shutil.which("ros2"):
         p.error("ROS 2 Jazzy 및 Gazebo Harmonic 설치와 source /opt/ros/jazzy/setup.bash 확인")
