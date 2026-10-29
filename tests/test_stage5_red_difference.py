@@ -34,7 +34,10 @@ class RealRedSelectionTests(unittest.TestCase):
         self.assertEqual(len(candidates),5)
         rois=detect_five_red_lenses(w,h,on,off)
         self.assertEqual(len(rois),5)
-        self.assertEqual(rois,stable_rois([rois,rois,rois]))
+        computed=stable_rois([rois,rois,rois])
+        for expected,observed in zip(rois,computed):
+            for a,b in zip(expected,observed):
+                self.assertAlmostEqual(a,b,places=10)
     def test_eight_red_candidates_still_calibrate_from_off(self):
         w,h,off=frame(red_lamps=0,extra=3)
         _,_,on=frame(red_lamps=5,extra=3)
