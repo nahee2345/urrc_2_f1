@@ -23,10 +23,13 @@ class ProgressMonacoTest(unittest.TestCase):
             d={"start_allowed":True,"lane_valid":True}
             pose={"distance_measured_xy_m":t*.14}
             self.assertIsNone(x.check(d,pose,float(t)))
-    def test_before_light_out_does_not_time_out(self):
-        x=ProgressWatchdog(lane_timeout_s=10,no_progress_timeout_s=10)
-        for t in range(1,50,5):
+    def test_no_permission_is_refused_after_actual_lights_out_timeout(self):
+        x=ProgressWatchdog(lane_timeout_s=10,no_progress_timeout_s=10,
+                           start_timeout_s=25)
+        for t in (1,10,20,25):
             self.assertIsNone(x.check({"start_allowed":False,"lane_valid":False},None,t))
+        self.assertIn("출발 허가",x.check(
+            {"start_allowed":False,"lane_valid":False},None,27))
     def test_missing_pose_after_start_is_not_pass(self):
         x=ProgressWatchdog(lane_timeout_s=10,no_progress_timeout_s=15)
         x.check({"start_allowed":True,"lane_valid":True},None,0)
