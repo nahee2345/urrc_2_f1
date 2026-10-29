@@ -86,7 +86,8 @@ jobs:
             sudo tee /etc/apt/sources.list.d/ros2.list
           timeout 280 sudo apt-get -o Acquire::Retries=2 update
           timeout 720 sudo apt-get -o Acquire::Retries=2 install -y \
-            gz-harmonic ros-jazzy-ros-base ros-jazzy-ros-gz-bridge \
+            gz-harmonic ros-jazzy-ros-base ros-jazzy-ros-gz \
+            ros-jazzy-gz-sim-vendor ros-jazzy-ros-gz-bridge \
             ros-jazzy-ros-gz-interfaces ros-jazzy-tf2-msgs \
             ros-jazzy-sensor-msgs ros-jazzy-std-msgs
       - name: "실제 Monaco 카메라·5등·3랩 감사 실행 — FAIL은 FAIL"
@@ -96,6 +97,10 @@ jobs:
           # nounset(-u)를 해제한 뒤 환경을 불러오고 다시 엄격 셸 설정을 켠다.
           source /opt/ros/jazzy/setup.bash
           set -u
+          # Jazzy ROS Gazebo vendor가 gz sim CLI 플러그인을 제공해야 한다.
+          # 컨테이너의 기본 gz-tools만 있는 경우 실제 물리 시험을 시작하면 안 됨.
+          echo "Gazebo command plugins:"; gz --commands
+          gz sim --versions
           python3 scripts/stage5_prepare_monaco.py --ai AI-01
           python3 scripts/stage5_bridge.py
           export PYTHONUNBUFFERED=1
