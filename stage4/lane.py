@@ -128,9 +128,15 @@ def estimate_lane(width:int,height:int,rgb:bytes,prior:float=0.):
     # *먼쪽* 후보의 중심을 목표로 삼아 방호벽 앞에서 선제 선회한다.
     forward=centers[-min(5,max(2,len(centers)//3)):]
     forward_center=sum(c*w for c,w,_ in forward)/sum(w for _,w,_ in forward)
-    # 먼 도로를 주로 추종하되 한 픽셀 그림자로 급격하게 휘지 않도록
-    # 전체 도로 중심의 20%를 섞어 조향 안정성을 유지한다.
-    target_center=.80*forward_center+.20*average
+    # 짧은 Monaco 카메라 시야에서 가까운 아스팔트는 중앙에 보여도
+    # 앞쪽 차선 중심이 급격히 좌/우로 이동할 수 있음. 상/하단 차선
+    # 중심 차이를 이용하여 곡선 진행 방향을 카메라만으로 선제 추정.
+    # 전방 3~5개 행 중심에 추가 조향 선행량을 반영하되 무제한 외삽 금지.
+    near=centers[:min(5,max(2,len(centers)//3))]
+    near_center=sum(c*w for c,w,_ in near)/sum(w for _,w,_ in near)
+    curve_delta=max(-width*.22,min(width*.22,forward_center-near_center))
+    target_center=(.80*forward_center+.20*average
+                   +.65*curve_delta)
     # 부분 시야에서 5~6개 인접 행만 보이는 것이 실제 정상 Monaco 도로.
     # 전체 화면에서 보이지 않는 하늘 행까지 나눠 신뢰도를 낮추지 않는다.
     coverage=min(1.,len(centers)/6.)

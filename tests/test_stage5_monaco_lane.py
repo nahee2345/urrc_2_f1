@@ -69,6 +69,28 @@ class MonacoLaneRecoveryTests(unittest.TestCase):
     def test_wide_uniform_gray_cannot_be_road(self):
         img=bytes((39,41,44))*(160*120)
         self.assertFalse(estimate_lane(160,120,img).valid)
+    def test_predictive_curve_precedes_near_center(self):
+        # 가까운 도로 중심은 정면에 있지만 먼쪽 차도 중심은 오른쪽으로
+        # 이동하는 급커브. 실제 RGB 기반 선행 조향은 오른쪽이어야 한다.
+        w,h=160,120
+        img=bytearray(bytes((78,82,67))*(w*h))
+        for y in range(76,h):
+            reach=max(0.,min(1.,(105-y)/28.))
+            center=.5+.24*reach
+            half=.11+.025*(1.-reach)
+            l=max(0,int(w*(center-half)))
+            r=min(w,int(w*(center+half)))
+            for x in range(l,r):
+                at=(y*w+x)*3
+                img[at:at+3]=bytes((35,37,40))
+        estimate=estimate_lane(w,h,bytes(img))
+        self.assertTrue(estimate.valid,estimate.reason)
+        self.assertGreater(estimate.error,.15)
+        car=CameraDrive(Vehicle(name="urrc_ai_01",drive="fwd"),speed_limit_mps=.55)
+        car.permission(True,1.)
+        car.camera(estimate,1.)
+        car.tick(1.)
+        self.assertGreater(car.tick(1.1)["race_steer_rad"],0.)
     def test_grass_only_must_stop(self):
         est=estimate_lane(160,120,frame(visible=False))
         self.assertFalse(est.valid)
@@ -89,10 +111,10 @@ class MonacoLaneRecoveryTests(unittest.TestCase):
         self.assertFalse(_asphalt(255,0,0))
         self.assertFalse(_asphalt(240,240,240))
     def test_camera_pitch_only_for_driving_rgb(self):
-        self.assertAlmostEqual(SENSOR_SPECS["rgb"]["pitch"],-.26)
+        self.assertAlmostEqual(SENSOR_SPECS["rgb"]["pitch"],-.12)
         self.assertAlmostEqual(SENSOR_SPECS["start_camera"]["pitch"],-.55)
         sdf,_=build(Vehicle(name="urrc_ai_01",drive="fwd"),["rgb"])
-        self.assertIn("-0.26",sdf)
+        self.assertIn("-0.12",sdf)
     def test_missing_lane_does_not_disable_emergency_stop(self):
         c=CameraDrive(Vehicle(name="urrc_ai_01",drive="fwd"),speed_limit_mps=.55)
         lane=estimate_lane(160,120,frame(shade=39,curve=.20))
