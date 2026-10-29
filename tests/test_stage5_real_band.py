@@ -32,5 +32,28 @@ class MonacoRealCameraBandRegression(unittest.TestCase):
             source[y*w*3:(y+1)*w*3]=bytes((0,0,0))*w
         self.assertFalse(estimate_lane(160,120,bytes(source)).valid)
 
+class MonacoLookaheadDirectionTest(unittest.TestCase):
+    def test_far_road_right_near_center_drives_right_early(self):
+        w,h=160,120
+        bg=bytes((88,96,75))
+        img=bytearray(bg*(w*h))
+        for row in range(55,112):
+            frac=(row-55)/56
+            # 카메라 가까이는 중앙 도로, 먼 도로는 우측으로 휘어 있음.
+            center=int(102-22*frac)
+            half=int(10+22*frac)
+            for x in range(max(0,center-half),min(w,center+half)):
+                k=(row*w+x)*3
+                img[k:k+3]=bytes((40,42,45))
+        from stage4.lane import estimate_lane
+        lane=estimate_lane(w,h,bytes(img))
+        self.assertTrue(lane.valid,lane)
+        self.assertGreater(lane.error,.10)
+    def test_no_remote_roads_remains_fail_closed(self):
+        from stage4.lane import estimate_lane
+        rgb=bytes((95,95,95))*(160*120)
+        self.assertFalse(estimate_lane(160,120,rgb).valid)
+
+
 if __name__=="__main__":
     unittest.main()
