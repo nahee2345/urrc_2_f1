@@ -19,6 +19,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--ai",default="AI-01")
     p.add_argument("--verify-lights",action="store_true",help="원본 5등 순차점등 후 단일 모델 소등 검증")
+    p.add_argument("--capture-driving-rgb",action="store_true",help="실제 Gazebo 주행카메라 RGB를 픽셀 추출하고 아스팔트 분할 검증")
     p.add_argument("--startup-seconds",type=float,default=20.)
     p.add_argument("--capture-seconds",type=float,default=8.)
     p.add_argument("--report",type=Path,default=ROOT/"generated/stage5/monaco_smoke_result.json")
@@ -82,6 +83,31 @@ def main():
                        and re.search(r"\bheight:\s*120\b",camera) and "data:" in camera)
             result["pose_received"]=bool("pose {" in poses or 'name: "' in poses)
             if all(result[k] for k in ("camera_advertised","pose_advertised","image_received","pose_received")):
+                if a.capture_driving_rgb:
+                    # 실제 Gazebo Sensor에서 나온 원본 프레임. 모의 RGB 사용 금지.
+                    from scripts.stage5_capture_actual_rgb import (
+                        capture,parse_gz_camera_image,inspect_rgb)
+                    topic=f"/model/{car}/sensors/rgb"
+                    dump=ROOT/"generated/stage5/actual_driving_rgb_proto.txt"
+                    raw=capture(env,topic,seconds=3)
+                    dump.parent.mkdir(parents=True,exist_ok=True)
+                    dump.write_text(raw[:1_000_000],encoding="utf-8",errors="replace")
+                    try:
+                        w,h,pixels=parse_gz_camera_image(raw)
+                        inspection=inspect_rgb(w,h,pixels)
+                        result["real_driving_rgb"]=inspection
+                        frame=ROOT/"generated/stage5/actual_driving_rgb.ppm"
+                        frame.write_bytes(f"P6\n{w} {h}\n255\n".encode()+pixels)
+                        (ROOT/"generated/stage5/actual_driving_rgb.json").write_text(
+                            json.dumps(inspection,ensure_ascii=False,indent=2)+"\n")
+                        if not inspection["lane_valid"]:
+                            result.update(status="FAIL_REAL_RGB_LANE",
+                                reason="실제 Monaco 주행 카메라 RGB에서 도로 분할 실패. "
+                                       "정적 회귀 PASS를 실제 주행 PASS로 처리할 수 없음")
+                            return 1
+                    except ValueError as error:
+                        result.update(status="FAIL_REAL_RGB_DECODE",reason=str(error))
+                        return 1
                 if a.verify_lights:
                     # 실제 Gazebo GUI가 visual_config 엔드포인트를 제공할 때만
                     # 렌즈 emissive 제어를 수행한다. 가상 서버 신호 시험과 혼동 금지.
