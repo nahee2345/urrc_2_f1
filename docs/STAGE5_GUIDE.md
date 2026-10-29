@@ -1,5 +1,34 @@
 # 5단계 — Monaco 기준 AI-01 자동주행 실험
 
+## 5단계 — 한 터미널에서 전 과정 자동 실행 (기본 권장)
+
+**이 방법을 사용하면 터미널을 4개 열 필요가 없습니다.** 기존 Gazebo/ROS 브리지 창은 먼저 종료하세요. 커맨드 한 번으로 맵 준비 → ROS 브리지 준비 → 카메라 교정(필요 시) → 신호등 초기화 → 실험 재시작 → 5등 순차 점등·동시 소등 → RGB 주행/랩 감시 순서로 진행합니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+source /opt/ros/jazzy/setup.bash
+python3 scripts/stage5_start.py
+~~~
+
+기본값은 AI-01, Monaco, 0.55m/s, 최대 120분입니다. 필요하면 \`--speed-limit 0.4 --minutes 30\`을 추가할 수 있습니다. **실제 교정 파일이 없으면 검증된 빨간불 5개 픽셀을 자동으로 찾아 저장**하고, 이미 교정된 Monaco 설정이 있으면 재사용합니다.
+
+옵션:
+- \`--calibrate-only\`: 맵·신호등 카메라 교정만 실행하고 안전하게 종료
+- \`--recalibrate\`: 기존 ROI가 있어도 다시 카메라 영상에서 교정
+- \`--dry-run\`: 실제 Gazebo·ROS를 켜지 않고 실행 순서만 확인
+
+원본의 신호등 시퀀스를 실제 카메라가 인식하지 못하면 출발 허가가 생성되지 않습니다. 교정이 실패하면 **실제 주행이 차단**되며, \`generated/stage5/AI-01/start_camera_diagnostic.ppm\`, \`calibration_gazebo.log\`, \`calibration_bridge.log\`에 점검 자료를 남깁니다(이미지 수신이 된 경우). 이 자료의 화면과 로그를 공유하면 이후 GitHub에서 수정합니다.
+
+실행 후 실제 3랩 판정은 \`generated/stage5/AI-01/stage5_verdict.json\`에 기록됩니다. **RGB 알고리즘의 3바퀴 완주는 아직 PASS로 검증된 상태가 아닙니다.**
+
+아래 문서의 4개 터미널 수동 실행은 문제 원인을 파악할 때만 사용합니다.
+
+---
+
+
+
 ## 트랙 및 정책
 
 - 5단계의 기준 트랙은 공식 Monaco입니다.

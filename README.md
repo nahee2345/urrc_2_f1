@@ -190,3 +190,20 @@ python3 scripts/stage5_run_monaco.py --ai AI-01 --lights
 위 명령으로 신호등 5등 순차 점등·전체 소등을 볼 수 있습니다. 단독 Monaco Gazebo 실행은 신호등 서비스를 자동 호출하지 않습니다. 실제 RGB 자동주행은 start_camera 5등 교정 후 레이스 통합 실행기를 사용합니다.
 
 상세 사용법: docs/STAGE5_GUIDE.md
+
+
+## Monaco 5단계: 한 터미널 자동 실행
+
+기존 clone에서 별도 파일 없이 수정분만 받아 출발 카메라 교정과 AI-01 레이스 통합 실행까지 한 터미널에서 수행할 수 있습니다.
+
+~~~bash
+cd ~/urrc_2_f1
+git pull --ff-only
+git submodule update --init --recursive
+source /opt/ros/jazzy/setup.bash
+python3 scripts/stage5_start.py
+~~~
+
+실제 5개 빨간 렌즈가 카메라에 확인되지 않거나 신호등/브리지가 실패하면 **바퀴를 구동하지 않고 종료**합니다. 이미 검증된 교정 설정이 있으면 재사용하며 \`--recalibrate\`로 다시 교정할 수 있습니다. 코너 추종 및 무충돌 3바퀴 완주는 아직 실증 PASS가 아닙니다.
+
+[한 터미널 실행 상세 안내](docs/STAGE5_GUIDE.md)
