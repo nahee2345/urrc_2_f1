@@ -262,7 +262,7 @@ def main():
     if args.dry_run:
         for label, command in commands:
             print(label, " ".join(command))
-        print("교정: 실제 Gazebo+브리지→5등 전체 점등→ROS 카메라 ROI→신호등 초기화")
+        print("교정: Gazebo GUI 한번만 생성→ROS 브리지→OFF/ON 카메라→같은 GUI로 레이스")
         return 0
     if not shutil.which("gz") or not shutil.which("ros2"):
         p.error("ROS 2 Jazzy 및 Gazebo Harmonic 설치와 source /opt/ros/jazzy/setup.bash 확인")
@@ -271,17 +271,11 @@ def main():
         avoid_duplicate_world(env)
         for name, cmd in commands[:2]:
             run_checked(name, cmd, env)
-        if args.recalibrate or not calibrated(args.calibration):
-            print("[5단계] 유효한 Monaco 출발 카메라 교정 파일 없음: 자동 교정 시작", flush=True)
-            calibrate_in_one_terminal(env, args.calibration)
-        else:
-            print("[5단계] 검증 형식에 맞는 기존 Monaco 교정 설정 재사용", flush=True)
-        if args.calibrate_only:
-            print("[5단계] 교정 완료. 차량 자동주행은 실행하지 않았습니다.", flush=True)
-            return 0
-        if not calibrated(args.calibration):
-            raise RuntimeError("출발 카메라 ROI 검증 실패: 주행 시작 차단")
-        return run_race(commands[-1][1], env)
+        # 교정 성공 직후 Gazebo를 종료/재기동하면 GUI가 사라질 수 있다.
+        # 이번 경로는 단일 세션에서 같은 Gazebo 창·ROS 브리지를 유지한다.
+        from stage5.session import run_stage5
+        return run_stage5(args.calibration,args.speed_limit,args.minutes,
+                          args.recalibrate,args.calibrate_only,env)
     except KeyboardInterrupt:
         print("\n[안전 종료] 사용자 중단. 출발 허가 없이 종료합니다.", flush=True)
         return 130
