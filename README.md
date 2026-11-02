@@ -1,39 +1,39 @@
-# URRC 맵 · 관전 카메라 실행
+# URRC 대회 맵·관전 카메라 실행 방법
 
-**지원 환경:** Ubuntu 24.04 / ROS 2 Jazzy / Gazebo Harmonic
+**환경:** Ubuntu 24.04 / ROS 2 Jazzy / Gazebo Harmonic
 
 ## 1. 다운로드
 
-기존 실험용 `~/urrc_2_f1` 폴더와 구분하여 맵 실행용 폴더에 받습니다.
+처음 설치하는 경우:
 
 ```bash
 cd ~
-git clone --recurse-submodules https://github.com/nahee2345/urrc_2_f1.git urrc_2_f1_maps
-cd ~/urrc_2_f1_maps
+git clone --recurse-submodules https://github.com/nahee2345/urrc_2_f1.git
+cd ~/urrc_2_f1
 source /opt/ros/jazzy/setup.bash
 ```
 
-이미 `~/urrc_2_f1_maps`를 받았다면:
+이미 다운로드한 경우:
 
 ```bash
-cd ~/urrc_2_f1_maps
+cd ~/urrc_2_f1
 git pull --ff-only
 git submodule update --init --recursive
 source /opt/ros/jazzy/setup.bash
 ```
 
-> GitHub의 `Download ZIP`에는 서브모듈의 맵 파일이 포함되지 않으므로 위 `git clone --recurse-submodules` 명령어를 사용합니다.
+> GitHub의 ZIP 다운로드에는 서브모듈의 실제 맵 파일이 포함되지 않습니다. 위 `git clone --recurse-submodules`를 사용하세요.
 
 ## 2. 맵 실행 — 터미널 1
 
 ```bash
-cd ~/urrc_2_f1_maps
+cd ~/urrc_2_f1
 source /opt/ros/jazzy/setup.bash
 ```
 
-아래에서 **한 개의 맵**을 선택합니다. 빨간 신호등 5개가 순차 점등된 뒤 동시에 소등됩니다.
+다음 중 한 가지 명령어를 실행하세요. 신호등 5개가 순서대로 켜지고 동시에 꺼집니다.
 
-| 맵 | 실행 명령어 |
+| 맵 | 명령어 |
 | --- | --- |
 | Monza | `bash run_v10.sh monza` |
 | Spa | `bash run_v10.sh spa` |
@@ -43,24 +43,24 @@ source /opt/ros/jazzy/setup.bash
 | Baku | `bash run_v10.sh baku` |
 | 랜덤 맵 | `bash run_v10.sh random` |
 
-## 3. 관전 카메라 — 터미널 2
+## 3. 관전 카메라 실행 — 터미널 2
 
-맵 실행 후 **새 터미널**에서 진행합니다.
+맵 실행 후 별도 터미널에서:
 
 ```bash
-cd ~/urrc_2_f1_maps
+cd ~/urrc_2_f1
 source /opt/ros/jazzy/setup.bash
 bash watch_v10.sh monaco
 ```
 
-`monaco`를 터미널 1에서 실행한 **동일한 맵 이름**으로 변경합니다.
+`monaco` 대신 실행 중인 맵 이름을 입력하세요. 랜덤 맵을 실행한 경우 `bash watch_v10.sh random`을 사용하면 최근 실행된 맵의 카메라가 열립니다.
 
-| 키 | 화면 |
+| 키 | 관전 화면 |
 | --- | --- |
 | `U` | 출발·결승선 |
 | `I` | 전체 코스 |
-| `O` | 두 번째 구간 |
-| `P` | 세 번째 구간 |
+| `O` | 두 번째 구간 확대 |
+| `P` | 세 번째 구간 확대 |
 | `Q` | 관전 종료 |
 
-종료: 맵 터미널에서 `Ctrl+C`.
+맵 종료: 맵 실행 터미널에서 `Ctrl+C`.
