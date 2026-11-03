@@ -110,7 +110,7 @@ class V7Tests(unittest.TestCase):
                                    and any(isinstance(t,ast.Name) and t.id=='DEFAULTS'
                                            for t in n.targets)))
         self.assertEqual(defaults['target_straight_speed_mps'],20.)
-        self.assertEqual(defaults['straight_speed_mps'],7.)
+        self.assertEqual(defaults['straight_speed_mps'],8.)
         self.assertEqual(defaults['grid_discovery_speed_mps'],1.25)
 
     def test_closed_loop_27_degree_sweep_stays_centered(self):

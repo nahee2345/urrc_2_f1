@@ -69,7 +69,7 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
     x=y=yaw=s=0.
     positions=[];lengths=[]
     first_steer=None;maxcurv=0.;min_edge=100.;first_hit=float('inf')
-    look=max(.60,min(1.6,.65+max(0.,float(speed))*.17))
+    look=max(.75,min(2.6,.75+max(0.,float(speed))*.26))
     ds=.14
     n=int(limit/ds)
     for i in range(n):

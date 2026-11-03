@@ -622,7 +622,7 @@
       <wheel_base>.34</wheel_base>
       <wheel_radius>.040</wheel_radius>
       <steering_limit>.520</steering_limit>
-      <min_velocity>0</min_velocity>
+      <min_velocity>-12</min_velocity><!-- gazebo-sim8: angular yaw must permit negative yaw for right turns; adapter blocks reversing -->
       <max_velocity>12</max_velocity>
       <min_acceleration>-5</min_acceleration>
       <max_acceleration>2</max_acceleration>

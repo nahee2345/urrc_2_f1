@@ -19,7 +19,7 @@ from team01_race.signal_vision import SignalVision
 
 
 DEFAULTS = {
-    'straight_speed_mps': 7.0, 'corner_speed_factor': .30,
+    'straight_speed_mps': 8.0, 'corner_speed_factor': .30,
     'target_straight_speed_mps': 20.0, 'preview_curvature_threshold': .08,
     'corner_threshold_deg': 10., 'max_center_steer_deg': 29.8,
     'wheel_base_m': .34, 'max_lateral_accel_mps2': 5.0,
@@ -40,7 +40,7 @@ DEFAULTS = {
     'startup_right_hold_s': 3.0, 'startup_max_steer_deg': 3.0,
     'center_transition_s': 2.0,
     'disable_first_lap_racing_line': True, 'enable_overtake': False,
-    'second_lap_straight_speed_mps': 12.0,
+    'second_lap_straight_speed_mps': 10.0,
     'grid_min_ahead_m': 1.65, 'grid_min_width_m': .68,
     'road_confirm_frames': 6, 'corner_prelook_heading_deg': 7.5,
     'corner_end_heading_deg': 3.5, 'corner_entry_length_m': 1.2,

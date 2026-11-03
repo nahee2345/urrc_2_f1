@@ -180,6 +180,46 @@ def estimate_road_corridor(points, *, min_width=.65, max_width=5.5):
     return RoadCorridor(centers,float(np.median(a[:,2])/2),True,heading)
 
 
+def fuse_verified_corridors(vision, lidar, *, max_center_error_m=.30,
+                            max_width_error_m=.65):
+    """Extend short aligned RGB/depth asphalt with independently sensed rails.
+
+    NEVER read a preloaded track, odometry pose, or map. Corridor extension is
+    permitted only where observed LiDAR and visual centres/widths agree across
+    a useful overlapping interval; fused boundary is deliberately shrunken
+    6 cm beyond vision to account for uncertain rail distance.
+    """
+    if vision is None or lidar is None or not vision.valid or not lidar.valid:
+        return None
+    if vision.bounds is None or len(vision.bounds)<4 or len(lidar.centers)<4:
+        return None
+    v=np.asarray(vision.bounds,dtype=float)
+    lc=np.asarray(lidar.centers,dtype=float)
+    lo=max(float(v[0,0]),float(lc[0,0]))
+    hi=min(float(v[-1,0]),float(lc[-1,0]))
+    if hi-lo<.75 or float(lc[-1,0])-float(v[-1,0])<.75:
+        return None
+    probes=np.linspace(lo+.10,hi-.10,5)
+    vr=np.interp(probes,v[:,0],v[:,1]);vl=np.interp(probes,v[:,0],v[:,2])
+    vc=.5*(vr+vl)
+    ll=np.interp(probes,lc[:,0],lc[:,1])
+    if (np.max(np.abs(vc-ll))>max_center_error_m or
+            np.max(np.abs(vl-vr-2*float(lidar.half_width)))>max_width_error_m):
+        return None
+    extra=lc[lc[:,0]>v[-1,0]+.08]
+    extra=extra[extra[:,0]<=min(11.,v[-1,0]+8.)]
+    if len(extra)<2:return None
+    half=max(.30,float(lidar.half_width)-.06)
+    additions=np.column_stack((extra[:,0],extra[:,1]-half,extra[:,1]+half))
+    fused=np.vstack((v,additions))
+    if np.any(np.diff(fused[:,0])<=0):return None
+    centers=np.column_stack((fused[:,0],(fused[:,1]+fused[:,2])*.5))
+    slope=np.diff(centers[:,1])/np.maximum(.05,np.diff(centers[:,0]))
+    heading=math.degrees(math.atan(float(np.median(slope))))
+    return RoadCorridor(centers,float(np.median((fused[:,2]-fused[:,1])/2)),
+                        True,heading,fused)
+
+
 class SafetyPlanner:
     def __init__(self, cfg):
         self.cfg=cfg
@@ -328,8 +368,15 @@ class SafetyPlanner:
         pts=pts[(pts[:,0]>.28) & (pts[:,0]<12.) & (np.abs(pts[:,1])<5.)]
         lidar_road=estimate_road_corridor(lidar_obstacles)
         vision_road=self._visual_corridor(road_bounds)
-        self.road=vision_road if vision_road is not None else lidar_road
-        self.road_source='rgb_depth' if vision_road is not None else ('lidar' if lidar_road.valid else 'none')
+        # F1TENTH-style adaptive local lookahead: RGB/Depth proves nearby
+        # asphalt; continuous, cross-checked LiDAR barriers extend the *same*
+        # drivable corridor for high-speed braking and corner anticipation.
+        # A disagreement is NOT fused into a permissive drivable polygon.
+        fused=fuse_verified_corridors(vision_road, lidar_road)
+        self.road=fused if fused is not None else (vision_road if vision_road is not None else lidar_road)
+        self.road_source=('rgb_depth+lidar' if fused is not None else
+                          'rgb_depth' if vision_road is not None else
+                          'lidar' if lidar_road.valid else 'none')
         # Optional Gazebo wheel odometry is a diagnostic and corrects the
         # commanded-distance dead reckoning; never use world pose or map XY.
         self.measured_speed=(float(actual_speed) if actual_speed is not None and
@@ -372,7 +419,7 @@ class SafetyPlanner:
             return Motion(0.,0.,'STOP','no verified black asphalt + depth corridor')
         # Prior v5 alternated left/right every 12 s. First-lap lane holding
         # must instead follow measured center and corner geometry.
-        horizon=min(8.0,max(3.6,1.9+self.speed*.72))
+        horizon=min(10.0,max(3.6,2.8+self.speed*.95))
         lead=self._lead(depth_obstacles,dt)
         self.lead_distance=lead
         self.overtake_start_distance_m=None
