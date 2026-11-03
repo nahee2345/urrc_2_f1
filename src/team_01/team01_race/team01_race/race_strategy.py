@@ -65,8 +65,12 @@ class RacingLine:
         self.center_confirmed=False
         self.center_transition_from_m=0.
         self.center_transition_elapsed_s=0.
+        self.held_lane_offset_m=None
+        self.recenter_active=False
+        self.safe_straight_frames=0
 
-    def update(self, road, speed, dt, overtake_side=0, exploration_lap=False):
+    def update(self, road, speed, dt, overtake_side=0, exploration_lap=False,
+               center_requested=False):
         dt=max(0.,min(.25,float(dt)))
         d=max(0.,min(10.,float(speed)))*dt
         self.traveled_m+=d
@@ -112,6 +116,11 @@ class RacingLine:
                     self.center_transition_from_m=float(np.clip(
                         self.right_reference_m-half_width,-max_offset,max_offset))
                 if not emergency_bend:self.center_transition_elapsed_s=0.
+                half=max(0.,info.width_m/2-self.cfg['path_half_width_m']-.12)
+                self.held_lane_offset_m=float(np.clip(-info.midpoint_m,-half,half))
+                if emergency_bend:
+                    self.recenter_active=True
+                    self.held_lane_offset_m=0.
             self.offset_m=0.
             return
         if self.center_confirmed:
@@ -119,8 +128,34 @@ class RacingLine:
         duration=max(.2,float(self.cfg.get('center_transition_s',2.0)))
         fraction=max(0.,min(1.,self.center_transition_elapsed_s/duration))
         transition_offset=self.center_transition_from_m*(1.-fraction)
+        if exploration_lap and self.cfg.get('hold_safe_lane_mode',False):
+            # Preserve the current collision-free observed lateral lane offset.
+            # Gradually centre only for verified bends, hazards or near curbs.
+            self.phase='CENTER'
+            if not usable:
+                return
+            half=max(0.,info.width_m/2-self.cfg['path_half_width_m']-.16)
+            if self.held_lane_offset_m is None:
+                self.held_lane_offset_m=float(np.clip(-info.midpoint_m,-half,half))
+            near_edge=min(info.left_m,info.right_m)
+            if center_requested or near_edge<=self.cfg['path_half_width_m']+.22:
+                self.recenter_active=True
+                self.held_lane_offset_m=0.
+                self.safe_straight_frames=0
+            elif self.recenter_active:
+                if abs(info.midpoint_m)<self.cfg.get('center_reached_tolerance_m',.12):
+                    self.safe_straight_frames+=1
+                else:
+                    self.safe_straight_frames=0
+                if self.safe_straight_frames>=12:
+                    self.recenter_active=False
+                    self.held_lane_offset_m=0.
+            target=0. if self.recenter_active else float(np.clip(self.held_lane_offset_m,-half,half))
+            max_delta=self.cfg.get('max_line_offset_change_mps',.28)*dt
+            self.offset_m=float(np.clip(target,self.offset_m-max_delta,self.offset_m+max_delta))
+            return
         if exploration_lap:
-            # No preplanned racing line / overtaking during first lap.
+            # Retain legacy behavior for old tests / disabled setting.
             self.phase='CENTER'
             self.offset_m=transition_offset
             return

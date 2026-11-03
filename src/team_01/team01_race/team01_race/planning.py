@@ -260,6 +260,12 @@ class SafetyPlanner:
         self.edge_alert='NONE'
         self.startup_steer_limit_active=False
         self.startup_right_error_m=None
+        self.static_wall_distance_m=None
+        self.front_wall_speed_mps=None
+        self._prev_wall_distance_m=None
+        self._wall_static_frames=0
+        self.pre_corner_active=False
+        self.recenter_reason='none'
 
     @staticmethod
     def _visual_corridor(bounds):
@@ -362,6 +368,60 @@ class SafetyPlanner:
         self.last_lead=d
         return d
 
+    def _front_wall(self, points, measured_speed, dt):
+        """Detect a wide, stationary front LiDAR wall; not a bend by itself."""
+        cloud=np.asarray(points,dtype=float).reshape((-1,2))
+        self.static_wall_distance_m=None
+        self.front_wall_speed_mps=None
+        if len(cloud)<10:
+            self._prev_wall_distance_m=None
+            self._wall_static_frames=0
+            return False
+        front=cloud[(cloud[:,0]>1.0)&(cloud[:,0]<10.)&(abs(cloud[:,1])<1.8)]
+        distances=[]
+        for x in np.arange(1.0,10.,.35):
+            band=front[abs(front[:,0]-x)<.22]
+            if len(band)>=7 and np.ptp(band[:,1])>=.65:
+                distances.append(float(np.median(band[:,0])))
+        if not distances:
+            self._prev_wall_distance_m=None
+            self._wall_static_frames=0
+            return False
+        distance=min(distances)
+        self.static_wall_distance_m=distance
+        if (self._prev_wall_distance_m is not None and .015<dt<.25 and
+                measured_speed is not None):
+            world_speed=measured_speed+(distance-self._prev_wall_distance_m)/dt
+            if abs(world_speed)<1.5:
+                self._wall_static_frames+=1
+            else:
+                self._wall_static_frames=0
+            self.front_wall_speed_mps=world_speed
+        self._prev_wall_distance_m=distance
+        return self._wall_static_frames>=2
+
+    def _lane_obstacle_ahead(self, points, corridor, lane_offset, horizon):
+        if not corridor.valid:
+            return False
+        cloud=np.asarray(points,dtype=float).reshape((-1,2))
+        if len(cloud)==0:return False
+        cloud=cloud[(cloud[:,0]>.9)&(cloud[:,0]<horizon)]
+        if len(cloud)==0:return False
+        xs=np.clip(cloud[:,0],corridor.centers[0,0],corridor.centers[-1,0])
+        center=np.interp(xs,corridor.centers[:,0],corridor.centers[:,1])+lane_offset
+        return bool(np.any(abs(cloud[:,1]-center)<self.cfg['path_half_width_m']+.18))
+
+    def _soft_steer(self, desired, dt, measured_speed):
+        """Slow wheel response without modifying independent safety gates."""
+        v=max(0.,self.speed,float(measured_speed or 0.))
+        maxrate=float(self.cfg.get('max_steer_rate_deg_s',35.0))
+        if v>=5.:maxrate=min(maxrate,27.0)
+        delta=math.radians(maxrate)*dt
+        provisional=float(np.clip(desired,self.prev_steer-delta,self.prev_steer+delta))
+        tau=max(.001,float(self.cfg.get('steer_smoothing_tau_s',.16)))
+        alpha=dt/(tau+dt)
+        return self.prev_steer+alpha*(provisional-self.prev_steer)
+
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
              depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None):
         if not enabled or not depth_valid or (not front_lidar_valid and
@@ -394,9 +454,28 @@ class SafetyPlanner:
         observed=self.measured_speed if self.measured_speed is not None else self.speed
         self.lap_learner.integrate(observed,self.prev_steer,dt,
                                    self.cfg['wheel_base_m'],self.road,self.last_mode)
+        # A stationary car is not evidence of a corner: require independently
+        # observed curvature in addition to a broad stationary front wall.
+        early_curve=preview_curvature(self.road)
+        bending=bool(self.road.valid and
+                     (abs(self.road.heading_deg)>=self.cfg.get('corner_prelook_heading_deg',7.5)
+                      or early_curve>=self.cfg.get('preview_curvature_threshold',.08)))
+        wall_static=self._front_wall(lidar_obstacles,self.measured_speed,dt)
+        wall_bend=bool(wall_static and bending and
+                       self.static_wall_distance_m is not None and
+                       self.static_wall_distance_m<self.cfg.get('precorner_wall_range_m',10.))
+        current_lane=self.racing_line.offset_m
+        risk_distance=max(4.,min(10.,observed*self.cfg['reaction_delay_s']+
+                       observed*observed/(2*self.cfg['max_braking_mps2'])+3.0))
+        obstruction=self._lane_obstacle_ahead(pts,self.road,current_lane,risk_distance)
+        self.pre_corner_active=bending or wall_bend
+        self.recenter_reason=('corner_wall' if wall_bend else
+                              'corner' if bending else
+                              'obstacle' if obstruction else 'none')
         self.racing_line.update(self.road,observed,dt,self.overtake_side,
             exploration_lap=(self.cfg.get('disable_first_lap_racing_line',False)
-                             and self.lap_learner.lap==1))
+                             and self.lap_learner.lap==1),
+            center_requested=(bending or wall_bend or obstruction))
         info=self.racing_line.last_distances
         # A visible road can still have the CAR outside its boundaries. v7
         # checked future arcs, but not the immediate base_link curb clearance.
@@ -575,7 +654,7 @@ class SafetyPlanner:
             not records or abs(self.road.heading_deg)>=3. or
             self.preview_curve>=.04 or self.racing_line.corner)
         if use_adaptive:
-            choice=max(adaptive,key=lambda c:c.score)
+            choice=max(adaptive,key=lambda c:c.score-.40*abs(c.steer_rad-self.prev_steer))
             free,steer=choice.first_collision_m,choice.steer_rad
             self.planner_type='adaptive_pursuit'
         else:
@@ -597,6 +676,10 @@ class SafetyPlanner:
             self.prev_steer=0.
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','grid straight path is not verified safe')
+        if not startup_hold and self.cfg.get('hold_safe_lane_mode',False):
+            # The chosen adaptive trajectory was checked for edges; smoothing
+            # must not require a constant arc to reproduce a varying curve.
+            steer=self._soft_steer(steer,dt,self.measured_speed)
         # Clamp initial steering, with a stop if the clamped arc would not fit
         # the curb corridor. No unchecked steering override after validation.
         if startup_hold and abs(steer)>startup_limit+1e-8:
@@ -653,6 +736,7 @@ class SafetyPlanner:
             v=min(v,self.cfg.get('unmapped_speed_mps',.75))
         if (abs(steer)>=math.radians(self.cfg['corner_threshold_deg'])
                 or self.racing_line.corner or self.lap_learner.learned_corner_ahead()
+                or self.pre_corner_active
                 or self.preview_curve >= self.cfg.get('preview_curvature_threshold',.08)):
             v=min(v,lap_target*lap_boost*
                   self.cfg['corner_speed_factor'])

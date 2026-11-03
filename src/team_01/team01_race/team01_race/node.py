@@ -52,6 +52,9 @@ DEFAULTS = {
     'lap_min_distance_m': 65., 'lap_min_time_s': 25.,
     'lap_min_abs_yaw_rad': 5.2, 'lap_max_abs_yaw_rad': 8.5,
     'learned_lap_speed_factor': 1.00,
+    'hold_safe_lane_mode': True, 'max_steer_rate_deg_s': 35.0,
+    'steer_smoothing_tau_s': .16, 'precorner_wall_range_m': 10.0,
+    'center_reached_tolerance_m': .12,
     'edge_caution_extra_m': .12, 'edge_caution_min_speed_mps': .45,
     'edge_caution_extra_speed_mps': 1.15,
 }
@@ -338,6 +341,10 @@ class Racer(Node):
                 f'track_points={len(learning.first_lap_features)} '
                 f'odom_v={self.actual_speed if now-self.odom_at<.6 else None} '
                 f'planner={self.planner.planner_type} curve={self.planner.preview_curve:.3f} '
+                f'recenter={self.planner.recenter_reason} '
+                f'hold_offset={self.planner.racing_line.held_lane_offset_m} '
+                f'front_wall_m={self.planner.static_wall_distance_m} '
+                f'front_wall_world_v={self.planner.front_wall_speed_mps} '
                 f'curb_ahead={self.planner.racing_line.last_distances.ahead_m:.2f} '
                 f'curb_confirm={self.planner.racing_line.confirmed_frames} '
                 f'curb_left={self.planner.racing_line.last_distances.left_m:.2f} '

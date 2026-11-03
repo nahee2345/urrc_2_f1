@@ -48,7 +48,7 @@ team01_control:
     corner_entry_length_m: 1.2
     corner_apex_length_m: 2.9
     corner_lateral_offset_m: 0.23
-    max_line_offset_change_mps: 0.55
+    max_line_offset_change_mps: 0.28
     # Provisional lap completion: white stripe + relative yaw + curb geometry.
     lap_min_distance_m: 65.0
     lap_min_time_s: 25.0
@@ -71,3 +71,10 @@ team01_control:
     disable_first_lap_racing_line: true
     enable_overtake: false
     second_lap_straight_speed_mps: 10.0
+
+    # v13 gentle steering and lane-holding first-lap behavior
+    hold_safe_lane_mode: true
+    max_steer_rate_deg_s: 35.0
+    steer_smoothing_tau_s: 0.16
+    precorner_wall_range_m: 10.0
+    center_reached_tolerance_m: 0.12
