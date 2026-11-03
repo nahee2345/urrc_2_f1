@@ -64,3 +64,11 @@ bash watch_v10.sh monaco
 | `Q` | 관전 종료 |
 
 맵 종료: 맵 실행 터미널에서 `Ctrl+C`.
+
+
+## TEAM 01 개발·검증 인수인계
+
+- [제작 변경사항·현재 구현 범위·검증 담당자 체크리스트](src/team_01/team01_race/docs/TEAM01_BUILDER_HANDOFF_KO.md)
+- [검증 결과 보고서 표준 양식](src/team_01/team01_race/docs/TEAM01_VALIDATION_REPORT_TEMPLATE_KO.md)
+
+제작 담당자는 **코드 구현·수정·GitHub 업로드**를 수행합니다. 별도 검증 담당자는 **실제 Gazebo 실행·측정·결과 보고**를 수행합니다. 문서에 기재된 목표와 제안 기준은 실주행 PASS를 의미하지 않습니다.
