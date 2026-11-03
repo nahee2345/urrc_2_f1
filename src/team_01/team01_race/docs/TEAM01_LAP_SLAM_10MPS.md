@@ -39,3 +39,14 @@ that a corridor is free when the live camera and LiDAR disagree.
 - Map loop confidence is currently geometric; check SLAM back-end loop-closure
   evidence before treating the map as fully certified.
 - No Gazebo lap completion or 10 m/s stability claim is made by this commit.
+
+## Included RTAB-Map ROS 2 launcher
+- Install: `sudo apt install ros-jazzy-rtabmap-ros ros-jazzy-tf2-ros`.
+- `race.launch.py` automatically enables the SLAM subsystem only if
+  `rtabmap_slam` is installed; override with `enable_slam:=false` for diagnostics.
+- `team01_rgbd_relay` pairs registered 424x240 RGB/depth frames and provides
+  camera intrinsics/extrinsics, while the LiDAR scan TF bridge declares its mount.
+- ICP Odometry provides continuous TF; RTAB-Map combines RGB-D imagery and
+  LiDAR for map loop closure and publishes `team01_map -> base_link` through TF.
+- Missing TF, poor loop closure, or map/live-corridor disagreement blocks
+  mapped 10 m/s mode. Run-time calibration and TF chain require Gazebo tests.

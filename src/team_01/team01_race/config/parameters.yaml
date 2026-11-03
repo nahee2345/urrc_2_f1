@@ -27,7 +27,7 @@ team01_control:
     sensor_pitch_down_deg: 11.0
     camera_hfov_deg: 92.0
     min_road_points: 45
-    front_max_range_m: 12.0
+    front_max_range_m: 15.5
     rear_defend_min_gap_m: 1.5
     traffic_light_min_red_blobs: 4
     traffic_light_ready_frames: 2

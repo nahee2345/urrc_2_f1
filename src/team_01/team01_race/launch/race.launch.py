@@ -2,6 +2,8 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
+from ament_index_python.packages import get_package_prefix
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from pathlib import Path
@@ -9,6 +11,13 @@ from pathlib import Path
 
 def generate_launch_description():
     share=Path(get_package_share_directory('team01_race'))
+    # Enable automatically when RTAB-Map is installed; missing dependency
+    # must not break the existing low-speed camera/LiDAR controller.
+    try:
+        get_package_prefix('rtabmap_slam')
+        slam_default='true'
+    except Exception:
+        slam_default='false'
     names={
         'race_start_mode':'camera',
         'race_start_topic':'/race/start/team01',
@@ -16,6 +25,7 @@ def generate_launch_description():
         'steering_topic':'/team01/steering',
         'lidar_topic':'/team01/front_scan',
         'use_sim_time':'true',
+        'enable_slam':slam_default,
     }
     args=[DeclareLaunchArgument(n,default_value=v) for n,v in names.items()]
     # Real ROS->GZ bridge must use ] for direction; prevent feedback loops.
@@ -37,4 +47,35 @@ def generate_launch_description():
                   parameters=[{n:LaunchConfiguration(n) for n in
                                ('race_start_topic','speed_topic','steering_topic','use_sim_time')}],
                   output='screen')]
+    slam_enabled=IfCondition(LaunchConfiguration('enable_slam'))
+    args += [Node(package='team01_race',executable='team01_scan_frame',
+                  name='team01_scan_frame',output='screen',condition=slam_enabled,
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}]),
+             Node(package='team01_race',executable='team01_rgbd_relay',
+                  name='team01_rgbd_relay',output='screen',condition=slam_enabled,
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}]),
+             Node(package='rtabmap_odom',executable='icp_odometry',
+                  name='team01_icp_odometry',output='screen',condition=slam_enabled,
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time'),
+                               'frame_id':'base_link','odom_frame_id':'team01_odom',
+                               'publish_tf':True,'Reg/Force3DoF':'true',
+                               'Odom/Strategy':'0'}],
+                  remappings=[('scan','/team01/front_scan'),
+                              ('odom','/team01/slam_odom')]),
+             Node(package='rtabmap_slam',executable='rtabmap',
+                  name='team01_rtabmap',output='screen',condition=slam_enabled,
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time'),
+                               'frame_id':'base_link','map_frame_id':'team01_map',
+                               'odom_frame_id':'team01_odom',
+                               'subscribe_rgb':True,'subscribe_depth':True,
+                               'subscribe_scan':True,'subscribe_rgbd':False,
+                               'approx_sync':True,'qos':2,
+                               'Reg/Strategy':'2',
+                               'Reg/Force3DoF':'true',
+                               'RGBD/NeighborLinkRefining':'true'}],
+                  remappings=[('rgb/image','/team01/slam/rgb'),
+                              ('depth/image','/team01/slam/depth'),
+                              ('rgb/camera_info','/team01/slam/camera_info'),
+                              ('scan','/team01/front_scan'),
+                              ('odom','/team01/slam_odom')])]
     return LaunchDescription(args)

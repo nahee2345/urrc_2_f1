@@ -23,7 +23,7 @@ def estimate_road_corridor(points, *, min_width=.65, max_width=5.5):
     pts=np.asarray(points,dtype=np.float64).reshape(-1,2)
     pts=pts[np.all(np.isfinite(pts),axis=1)]
     centers=[]
-    for x in np.arange(.75,7.0,.55):
+    for x in np.arange(.75,15.3,.55):
         p=pts[np.abs(pts[:,0]-x)<.40]
         l=p[(p[:,1]>.32)&(p[:,1]<4.0),1]
         r=p[(p[:,1]<-.32)&(p[:,1]>-4.0),1]
@@ -77,7 +77,7 @@ def fuse_verified_corridors(vision, lidar, *, max_center_error_m=.30,
             np.max(np.abs(vl-vr-2*float(lidar.half_width)))>max_width_error_m):
         return None
     extra=lc[lc[:,0]>v[-1,0]+.08]
-    extra=extra[extra[:,0]<=min(11.,v[-1,0]+8.)]
+    extra=extra[extra[:,0]<=min(15.0,v[-1,0]+12.)]
     if len(extra)<2:return None
     half=max(.30,float(lidar.half_width)-.06)
     additions=np.column_stack((extra[:,0],extra[:,1]-half,extra[:,1]+half))

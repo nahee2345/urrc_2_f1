@@ -192,6 +192,10 @@ class Racer(Node, DiagnosticsMixin):
         try:
             from rclpy.time import Time
             t=self.map_tf.lookup_transform('team01_map','base_link',Time())
+            stamp=t.header.stamp
+            now=self.get_clock().now().nanoseconds*1e-9
+            age=now-(stamp.sec+stamp.nanosec*1e-9)
+            if age>0.8 or age<-.5:return None
             q=t.transform.rotation
             yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
             return (float(t.transform.translation.x),float(t.transform.translation.y),yaw)
@@ -251,7 +255,7 @@ class Racer(Node, DiagnosticsMixin):
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
-                                 map_target=mapped,map_ready=self.track.complete)
+                                 map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None))
         if self.road_image is not None and now-self.road_at<self.p['road_rgb_timeout_s']:
             if now-self._road_last_save>5.:
                 self._save_road('latest')
@@ -273,6 +277,7 @@ class Racer(Node, DiagnosticsMixin):
                 self.track.save()
                 self.get_logger().info('SLAM track map closed; lap-2 mapped driving enabled')
             else:
+                learning.lap=1
                 self.get_logger().warning('Lap marker reached but SLAM map unverified; remain in exploration')
             self.get_logger().info('LAP 1 SENSOR-CANDIDATE COMPLETE; cautious learned lap 2 enabled')
             self._write_lap_record()

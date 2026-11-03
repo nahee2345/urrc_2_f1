@@ -62,14 +62,15 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
     if near_r+margin>=0 or near_l-margin<=0:
         return None
     last_x=float(b[-1,0])
-    limit=max(.5,min(float(horizon),last_x-.20,6.0))
+    limit=max(.5,min(float(horizon),last_x-.20,14.0))
     obs=np.asarray(obstacles,dtype=float).reshape((-1,2))
     obs=obs[np.all(np.isfinite(obs),axis=1)]
     off=float(desired_offset)+float(relative_offset)
     x=y=yaw=s=0.
     positions=[];lengths=[]
     first_steer=None;maxcurv=0.;min_edge=100.;first_hit=float('inf')
-    look=max(.75,min(2.6,.75+max(0.,float(speed))*.26))
+    look=max(1.2,min(6.0,1.5+max(0.,float(speed))*.38))
+    if abs(float(road.heading_deg))>8.:look=min(look,3.4)
     ds=.14
     n=int(limit/ds)
     for i in range(n):

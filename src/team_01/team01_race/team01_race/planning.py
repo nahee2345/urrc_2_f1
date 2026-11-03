@@ -22,7 +22,7 @@ class SafetyPlanner(PlannerGeometry):
         lidar_obstacles=np.asarray(lidar_obstacles).reshape((-1,2))
         pts=np.vstack((depth_obstacles,lidar_obstacles))
         # Reject self-returns near bumper and points far behind front axle.
-        pts=pts[(pts[:,0]>.28) & (pts[:,0]<12.) & (np.abs(pts[:,1])<5.)]
+        pts=pts[(pts[:,0]>.28) & (pts[:,0]<15.7) & (np.abs(pts[:,1])<5.)]
         lidar_road=estimate_road_corridor(lidar_obstacles)
         vision_road=self._visual_corridor(road_bounds)
         # F1TENTH-style adaptive local lookahead: RGB/Depth proves nearby
@@ -52,7 +52,7 @@ class SafetyPlanner(PlannerGeometry):
                        self.static_wall_distance_m is not None and
                        self.static_wall_distance_m<self.cfg.get('precorner_wall_range_m',10.))
         current_lane=self.racing_line.offset_m
-        risk_distance=max(4.,min(10.,observed*self.cfg['reaction_delay_s']+
+        risk_distance=max(4.,min(15.,observed*self.cfg['reaction_delay_s']+
                        observed*observed/(2*self.cfg['max_braking_mps2'])+3.0))
         obstruction=self._lane_obstacle_ahead(pts,self.road,current_lane,risk_distance)
         self.pre_corner_active=bending or wall_bend
@@ -95,7 +95,7 @@ class SafetyPlanner(PlannerGeometry):
             return Motion(0.,0.,'STOP','no verified black asphalt + depth corridor')
         # Prior v5 alternated left/right every 12 s. First-lap lane holding
         # must instead follow measured center and corner geometry.
-        horizon=min(10.0,max(3.6,2.8+self.speed*.95))
+        horizon=min(15.0,max(4.0,3.+self.speed*1.3))
         lead=self._lead(depth_obstacles,dt)
         self.lead_distance=lead
         self.overtake_start_distance_m=None
@@ -113,7 +113,7 @@ class SafetyPlanner(PlannerGeometry):
             # Regulated Pure Pursuit: measured-speed adaptive lookahead.
             pursuit_speed=(self.measured_speed if self.measured_speed is not None
                            else self.speed)
-            xgoal=float(np.clip(1.25+min(2.65,pursuit_speed*.38),
+            xgoal=float(np.clip(1.8+min(4.8,pursuit_speed*.44),
                                 self.road.centers[0,0],self.road.centers[-1,0]))
             ycenter=float(np.interp(xgoal,self.road.centers[:,0],self.road.centers[:,1]))
             ygoal=ycenter+self.target_lane_offset
@@ -206,7 +206,7 @@ class SafetyPlanner(PlannerGeometry):
                     self.measured_speed if self.measured_speed is not None else self.speed,
                     desired_offset=self.target_lane_offset,
                     relative_offset=shift,
-                    horizon=min(5.0,horizon))
+                    horizon=min(14.0,horizon))
                 if c is not None and (not startup_hold or
                                       abs(c.steer_rad)<=startup_limit):
                     adaptive.append(c)
