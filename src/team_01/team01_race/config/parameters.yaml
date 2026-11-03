@@ -45,9 +45,6 @@ team01_control:
     # Out -> in -> out with reduced side offset and live collision clearance.
     corner_prelook_heading_deg: 7.5
     corner_end_heading_deg: 3.5
-    corner_entry_length_m: 1.2
-    corner_apex_length_m: 2.9
-    corner_lateral_offset_m: 0.23
     max_line_offset_change_mps: 0.28
     # Provisional lap completion: white stripe + relative yaw + curb geometry.
     lap_min_distance_m: 65.0

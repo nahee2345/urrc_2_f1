@@ -62,8 +62,7 @@ class FieldCornerV8(unittest.TestCase):
         cand=adaptive_pursuit_candidate(road,np.empty((0,2)),CONFIG,1.8,horizon=2.)
         self.assertIsNone(cand)
 
-    def test_opposite_curve_restarts_entry_instead_of_old_exit(self):
-        p=SafetyPlanner(CONFIG)
+    def test_opposite_curve_does_not_flip_lateral_target(self):
         line=RacingLine(CONFIG)
         from team01_race.planning import RoadCorridor
         def road(heading):
@@ -71,27 +70,22 @@ class FieldCornerV8(unittest.TestCase):
             c=np.column_stack((b[:,0],np.zeros(len(b))))
             return RoadCorridor(c,.6,True,heading,b)
         for _ in range(50):line.update(road(0),.75,.1)
-        line.update(road(25),1.,.1)
-        for _ in range(45):line.update(road(25),1.,.1)
-        self.assertEqual(line.phase,'CORNER_EXIT')
-        line.update(road(-24),1.,.1)
-        self.assertEqual(line.phase,'CORNER_ENTRY')
-        self.assertEqual(line.corner_sign,-1)
+        values=[]
+        for heading in [25]*45+[-24]*45:
+            line.update(road(heading),1.,.1)
+            values.append(line.offset_m)
+        self.assertTrue(all(line.phase=='CENTER' for _ in [0]))
+        self.assertLess(max(abs(v) for v in values),.05)
 
-    def test_racing_line_offset_gives_way_to_edge(self):
+    def test_bend_does_not_generate_artificial_out_in_out(self):
         line=RacingLine(CONFIG)
         from team01_race.planning import RoadCorridor
-        for _ in range(50):
+        for heading in [0]*50+[20]*20+[-20]*20:
             b=near_curb(.6,.6,5.0)
-            line.update(RoadCorridor(np.column_stack((b[:,0],np.zeros(len(b)))),.6,True,0,b),1.0,.1)
-        for _ in range(15):
-            b=near_curb(.6,.6,5.0)
-            line.update(RoadCorridor(np.column_stack((b[:,0],np.zeros(len(b)))),.6,True,20,b),1.0,.1)
-        self.assertGreater(abs(line.offset_m),0.01)
-        b=near_curb(.29,.75,5.0)
-        road=RoadCorridor(np.column_stack((b[:,0],(b[:,1]+b[:,2])/2)),.52,True,20,b)
-        for _ in range(10):line.update(road,1.,.1)
-        self.assertAlmostEqual(line.offset_m,0.,delta=.02)
+            line.update(RoadCorridor(np.column_stack((b[:,0],np.zeros(len(b)))),.6,
+                                    True,heading,b),1.0,.1)
+        self.assertAlmostEqual(line.offset_m,0.,delta=.015)
+        self.assertEqual(line.phase,'CENTER')
 
     def test_no_outside_exit_line_while_bend_remains_steep(self):
         line=RacingLine(CONFIG)
@@ -102,7 +96,7 @@ class FieldCornerV8(unittest.TestCase):
             return RoadCorridor(c,.65,True,heading,b)
         for _ in range(50):line.update(road(0),.75,.1)
         for _ in range(45):line.update(road(25),1.,.1)
-        self.assertEqual(line.phase,'CORNER_EXIT')
+        self.assertEqual(line.phase,'CENTER')
         self.assertAlmostEqual(line.offset_m,0.,delta=.015)
 
     def test_signal_gate_unchanged(self):

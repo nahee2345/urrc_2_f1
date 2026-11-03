@@ -52,12 +52,8 @@ class RacingLine:
         self.traveled_m=0.0
         self.confirmed_frames=0
         self.lost_frames=0
-        self.corner_sign=0
-        self.corner_distance=0.0
-        self.straight_frames=0
         self.last_distances=RoadDistances(False)
         self.offset_m=0.0
-        self.corner_seen=False
         # Time begins only after the camera has authorized motion and the
         # planner calls update(). Do not infer road pose from a stored track.
         self.startup_elapsed_s=0.0

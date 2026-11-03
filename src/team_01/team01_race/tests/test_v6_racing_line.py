@@ -51,22 +51,18 @@ class RacingV6Tests(unittest.TestCase):
         s.update(missing,1.,.1)
         self.assertEqual(s.offset_m,0.)
 
-    def test_out_in_out_phase_respects_width_and_slew(self):
+    def test_curved_track_does_not_force_side_to_side_offsets(self):
         cfg={**CFG,'path_half_width_m':.18,'road_confirm_frames':6}
         s=RacingLine(cfg)
         for _ in range(25):s.update(road(),.65,.1)
         self.assertEqual(s.phase,'CENTER')
-        offsets=[];phases=[]
-        for _ in range(38):
-            s.update(road(curve=.085),1.5,.1)
-            offsets.append(s.offset_m); phases.append(s.phase)
-        self.assertIn('CORNER_ENTRY',phases)
-        self.assertIn('CORNER_APEX',phases)
-        self.assertIn('CORNER_EXIT',phases)
-        self.assertLess(min(offsets),-.06)
-        self.assertGreater(max(offsets),.06)
-        self.assertLessEqual(max(abs(v) for v in offsets),.24)
-        self.assertLessEqual(max(abs(b-a) for a,b in zip(offsets,offsets[1:])),.0551)
+        offsets=[]
+        for curve in ([.085]*25+[-.085]*25+[0.]*15):
+            s.update(road(curve=curve),1.5,.1)
+            offsets.append(s.offset_m)
+            self.assertEqual(s.phase,'CENTER')
+        self.assertLess(max(abs(v) for v in offsets),.06)
+        self.assertLess(max(abs(b-a) for a,b in zip(offsets,offsets[1:])),.0551)
 
     def test_no_unsafe_offset_when_road_narrow(self):
         s=RacingLine({**CFG,'path_half_width_m':.18})
@@ -95,7 +91,7 @@ class RacingV6Tests(unittest.TestCase):
         p=SafetyPlanner({**CFG,'require_visual_road':True})
         for _ in range(32):p.step(np.empty((0,2)),np.empty((0,2)),5.,.1,True,True,True,road_bounds())
         cmd=p.step(np.empty((0,2)),np.empty((0,2)),5.,.1,True,True,True,road_bounds(curve=.085))
-        self.assertTrue(p.racing_line.corner)
+        self.assertTrue(p.pre_corner_active)
         # Physical braking is bounded at 5 m/s²; do not instantaneously jump
         # from 4m/s to 1.5m/s in a single 0.1 s update.
         for _ in range(15):

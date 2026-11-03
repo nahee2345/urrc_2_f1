@@ -14,6 +14,7 @@ class SafetyPlanner(PlannerGeometry):
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
             self.prev_steer=0.
+            self.steer_limiter.reset()
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','gate or stale/missing forward sensor')
         dt=max(.01,min(dt,.25))
@@ -212,7 +213,7 @@ class SafetyPlanner(PlannerGeometry):
                     adaptive.append(c)
         use_adaptive=bool(adaptive) and (
             not records or abs(self.road.heading_deg)>=3. or
-            self.preview_curve>=.04 or self.racing_line.corner)
+            self.preview_curve>=.04 or self.pre_corner_active)
         if use_adaptive:
             choice=max(adaptive,key=lambda c:c.score-.40*abs(c.steer_rad-self.prev_steer))
             free,steer=choice.first_collision_m,choice.steer_rad
@@ -287,7 +288,7 @@ class SafetyPlanner(PlannerGeometry):
             # cautious exploration speed where unbounded open space occurs.
             v=min(v,self.cfg.get('unmapped_speed_mps',.75))
         if (abs(steer)>=math.radians(self.cfg['corner_threshold_deg'])
-                or self.racing_line.corner or self.lap_learner.learned_corner_ahead()
+                or self.pre_corner_active or self.lap_learner.learned_corner_ahead()
                 or self.pre_corner_active
                 or self.preview_curve >= self.cfg.get('preview_curvature_threshold',.08)):
             v=min(v,lap_target*lap_boost*
@@ -345,7 +346,7 @@ class SafetyPlanner(PlannerGeometry):
         self.speed=float(max(0.,v))
         self.prev_steer=float(steer)
         mode=('OVERTAKE' if self.overtake_side else 'GRID' if self.racing_line.grid
-              else 'CORNER' if self.racing_line.corner or
+              else 'CORNER' if self.pre_corner_active or
                    abs(steer)>=math.radians(self.cfg['corner_threshold_deg'])
               else 'DEFEND' if self.defend else 'STRAIGHT')
         self.last_mode=mode
