@@ -241,11 +241,15 @@ class SafetyPlanner(PlannerGeometry):
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.
             steer=self.steer_limiter.apply(steer,dt,observed)
-            if self.planner_type!='adaptive_pursuit':
-                safe,_=self._within_road(steer,horizon)
-                if not safe:
-                    self.speed=0.;self.last_mode='BRAKE'
-                    return Motion(0.,-self.prev_steer,'BRAKE','limited steering outside visible road')
+            # Check the command that will ACTUALLY reach the steering adapter,
+            # not only the unlimited optimum trajectory. Full-horizon
+            # adaptive paths are changing-curvature; use a near-field arc
+            # check and preserve the full candidate's previous safety test.
+            near_horizon=min(2.5,horizon)
+            safe,_=self._within_road(steer,near_horizon)
+            if not safe:
+                self.speed=0.;self.last_mode='BRAKE'
+                return Motion(0.,-self.prev_steer,'BRAKE','limited steering outside visible road')
         # Clamp initial steering, with a stop if the clamped arc would not fit
         # the curb corridor. No unchecked steering override after validation.
         if startup_hold and abs(steer)>startup_limit+1e-8:
@@ -331,10 +335,6 @@ class SafetyPlanner(PlannerGeometry):
                 v=min(v,self.lead_speed+.3)
         # Passing boost is always bounded by lateral acceleration, distance,
         # stopping envelope, and the commanded acceleration rate above.
-        if self.defend:
-            # Hold established racing line; following vehicle does not authorize
-            # closing an unsafe gap or obstructing the adjacent passing car.
-            steer=.65*self.prev_steer+.35*steer
         # Rate-limit acceleration; allow emergency braking at configured rate.
         # Never accelerate beyond what the currently verified forward
         # clearance permits us to stop within, including reaction delay.

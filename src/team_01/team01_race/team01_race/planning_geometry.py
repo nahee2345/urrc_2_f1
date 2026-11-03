@@ -190,14 +190,3 @@ class PlannerGeometry:
         center=np.interp(xs,corridor.centers[:,0],corridor.centers[:,1])+lane_offset
         return bool(np.any(abs(cloud[:,1]-center)<self.cfg['path_half_width_m']+.18))
 
-    def _soft_steer(self, desired, dt, measured_speed):
-        """Slow wheel response without modifying independent safety gates."""
-        v=max(0.,self.speed,float(measured_speed or 0.))
-        maxrate=float(self.cfg.get('max_steer_rate_deg_s',35.0))
-        if v>=5.:maxrate=min(maxrate,27.0)
-        delta=math.radians(maxrate)*dt
-        provisional=float(np.clip(desired,self.prev_steer-delta,self.prev_steer+delta))
-        tau=max(.001,float(self.cfg.get('steer_smoothing_tau_s',.16)))
-        alpha=dt/(tau+dt)
-        return self.prev_steer+alpha*(provisional-self.prev_steer)
-

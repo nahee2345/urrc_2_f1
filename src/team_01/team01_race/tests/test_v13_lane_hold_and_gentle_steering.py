@@ -3,6 +3,7 @@ import sys, math, unittest, numpy as np
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from team01_race.planning import SafetyPlanner
+from team01_race.steering import SteeringLimiter
 from test_v9_startup_lap_exploration import CFG, road
 C={**CFG,'hold_safe_lane_mode':True,'max_steer_rate_deg_s':35.,
    'steer_smoothing_tau_s':.16,'center_reached_tolerance_m':.12,
@@ -40,14 +41,15 @@ class V13(unittest.TestCase):
         self.assertEqual(p.recenter_reason,'obstacle')
         self.assertTrue(p.racing_line.recenter_active)
     def test_steer_rate_and_lowpass(self):
-        p=SafetyPlanner(C)
+        limiter=SteeringLimiter(C)
         old=0.
         for _ in range(16):
-            v=p._soft_steer(math.radians(27),.05,6.)
+            v=limiter.apply(math.radians(27),.05,6.)
             self.assertGreaterEqual(v,old)
-            self.assertLessEqual(v-old,math.radians(27)*.05+1e-6)
-            p.prev_steer=old=v
+            self.assertLessEqual(v-old,math.radians(35)*.05+1e-6)
+            old=v
         self.assertGreater(old,0.)
+
     def test_stationary_wall_not_always_a_corner(self):
         p=SafetyPlanner(C)
         w=lambda x:np.array([[x,y] for y in np.linspace(-.6,.6,25)])

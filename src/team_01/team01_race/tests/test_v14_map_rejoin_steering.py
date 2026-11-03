@@ -49,6 +49,17 @@ class V14(unittest.TestCase):
         self.assertAlmostEqual(offset,0.,places=2)
         self.assertLess(max(abs(a-b) for a,b in zip(positions,positions[1:])),.08)
 
+    def test_localization_dropout_holds_lateral_offset(self):
+        p=RejoinPlanner(CFG)
+        obstacle=np.array([[4.,0.]])
+        p.update(road(),obstacle,4.,2.,5.,.05,6.,True)
+        for _ in range(50):p.update(road(),obstacle,4.,2.,5.,.05,6.,True)
+        before=p.offset
+        _,side=p.update(road(),obstacle,4.,2.,5.,.05,6.,False)
+        self.assertEqual(p.phase,'HOLD')
+        self.assertNotEqual(side,0)
+        self.assertAlmostEqual(p.offset,before)
+
     def test_stale_rear_refuses_passing(self):
         p=RejoinPlanner(CFG)
         _,side=p.update(road(),np.array([[4.,0.]]),4.,2.,-1.,.05,6.,True)

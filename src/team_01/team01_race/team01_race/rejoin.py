@@ -41,9 +41,18 @@ class RejoinPlanner:
         dt=max(.01,min(.25,float(dt)))
         self.base_offset=float(base_offset)
         if not enabled or not road.valid:
-            # Invalid mapping/sensing: never initiate or continue a blind pass.
-            self.phase='CRUISE';self.side=0;self.offset=0.;self.elapsed=0.
+            # Localization dropout while alongside another car must NOT snap
+            # laterally back into that car. Hold the last safe offset; the
+            # independent speed supervisor will enforce a lower speed.
+            if self.phase!='CRUISE':
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
+            self.offset=0.
             return self.base_offset,0
+        if self.phase=='HOLD':
+            # Reacquired sensors: regain a safe passing offset before merging.
+            self.phase='PASS'
+            self.clear_time=0.
         front_limit=max(3.5,min(10.,speed*.7+2.))
         if self.phase=='CRUISE':
             self.offset=0.
