@@ -10,7 +10,7 @@ on:
       - 'scripts/qa_team01_*.sh'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -86,6 +86,39 @@ jobs:
           path: ci_artifacts/
           if-no-files-found: warn
           retention-days: 14
+      - name: Save per-run textual QA result to GitHub (not rosbag binaries)
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p reports/team01/runs
+          DEST="reports/team01/runs/${{ github.run_id }}-${{ github.sha }}.md"
+          if [[ -f ci_artifacts/qa_run_report.md ]]; then
+            cp ci_artifacts/qa_run_report.md "$DEST"
+          else
+            printf '# TEAM01 run %s\n\nReal Gazebo QA did not produce route metrics. See Actions logs.\n' '${{ github.run_id }}' > "$DEST"
+          fi
+          {
+            echo ""
+            echo "## Workflow verdict"
+            echo "- Offline regression: ${{ steps.offline.outcome }}"
+            echo "- Real Gazebo: ${{ steps.gazebo.outcome }}"
+            echo "- Code SHA: ${{ github.sha }}"
+            echo "- Raw rosbag and logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- Raw artifacts are stored by GitHub Actions, not committed to the Git tree."
+          } >> "$DEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "docs(qa): save drive verification summary for run ${{ github.run_id }}" || exit 0
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            git push origin HEAD:main && exit 0
+            sleep 2
+          done
+          echo "QA textual report push failed; Actions artifact remains available" >&2
+          exit 1
       - name: Final combined QA verdict
         if: always()
         shell: bash

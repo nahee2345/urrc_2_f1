@@ -18,7 +18,7 @@
 | lap.json 및 기존 *.log | 독립 완주/도로이탈 판정과 센서·모델·SLAM 실패 원인 |
 | ci_artifacts/state/urrc_team01/camera 및 road | 컨트롤러가 보존한 신호/도로 이미지 |
 
-바이너리 rosbag은 Git 이력에 직접 커밋하지 않습니다. Actions 아티팩트에 커밋 SHA 및 실행 ID별로 보관하고, 텍스트 QA 기준은 Git 저장소에서 공동 확인합니다. 보존 기간은 14일입니다. 기본 rosbag은 진단·라이다·Odometry 중심입니다. 카메라 전체 원본의 장시간 bag 저장은 고용량이므로 컨트롤러가 보존하는 프레임으로 보완합니다.
+개별 실행 텍스트 보고서는 reports/team01/runs/<run-id>-<commit>.md 에 자동으로 Git 커밋합니다(저장소 Actions의 쓰기 권한이 허용된 경우). 보고서 커밋은 QA 코드를 다시 실행하지 않습니다. 바이너리 rosbag은 Git 이력에 직접 커밋하지 않습니다. Actions 아티팩트에 커밋 SHA 및 실행 ID별로 보관하고, 텍스트 QA 기준은 Git 저장소에서 공동 확인합니다. 보존 기간은 14일입니다. 기본 rosbag은 진단·라이다·Odometry 중심입니다. 카메라 전체 원본의 장시간 bag 저장은 고용량이므로 컨트롤러가 보존하는 프레임으로 보완합니다.
 
 ## 정확도 계산 원칙
 1. 먼저 신호등 보정 준비, 실제 카메라 소등, permission, adapter의 양의 속도 송신, Gazebo Odometry 5m 이상 이동을 순서대로 확인합니다.
