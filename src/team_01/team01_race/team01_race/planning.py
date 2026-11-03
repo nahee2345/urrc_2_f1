@@ -241,11 +241,16 @@ class SafetyPlanner(PlannerGeometry):
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.
             steer=self.steer_limiter.apply(steer,dt,observed)
-            # Check the command that will ACTUALLY reach the steering adapter,
-            # not only the unlimited optimum trajectory. Full-horizon
-            # adaptive paths are changing-curvature; use a near-field arc
-            # check and preserve the full candidate's previous safety test.
-            near_horizon=min(2.5,horizon)
+            # The selected adaptive path has already passed a full rollout
+            # against the road and obstacles. A CONSTANT-arc projection of
+            # the *rate-limited first wheel command* over 2.5 m is not that
+            # trajectory: it falsely rejects bends where the wheel will keep
+            # turning on subsequent controller ticks. Check the bounded
+            # near-term response, and re-plan with fresh sensing every tick.
+            # Keep the conservative 2.5 m check for constant-arc control.
+            near_horizon=(min(2.5,horizon)
+                          if self.planner_type!='adaptive_pursuit'
+                          else min(horizon,max(1.25,min(2.5,observed*.25))))
             safe,_=self._within_road(steer,near_horizon)
             if not safe:
                 self.speed=0.;self.last_mode='BRAKE'
@@ -266,7 +271,10 @@ class SafetyPlanner(PlannerGeometry):
             return Motion(self.speed,-steer,'BRAKE','obstacle in stopping envelope')
         # Defensive strategy is *only* maintaining speed and a steady safe line.
         # Never swerve to block another car, especially in an adjacent lane.
-        self.defend=(passing_enabled and self.overtake_side==0 and rear_gap is not None and
+        # DEFEND is only a situational flag for lane holding and diagnostics.
+        # A nearby rear car is relevant even before SLAM map closure.
+        # It NEVER authorizes a swerve or overtaking without a valid map.
+        self.defend=(self.overtake_side==0 and rear_gap is not None and
                      rear_gap >= 0.0 and rear_gap<self.cfg['rear_defend_min_gap_m'])
         lap_boost=self.lap_learner.speed_multiplier(self.road.valid,self.last_mode,
                                                     self.speed>=0.)

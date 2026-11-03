@@ -66,6 +66,7 @@ class OfflineTests(unittest.TestCase):
         m=p.step(np.empty((0,2)),np.empty((0,2)),.7,.1,True,True,True)
         self.assertEqual(m.mode,'GRID')
         self.assertTrue(p.defend)
+        self.assertEqual(p.overtake_side,0)
         self.assertAlmostEqual(m.steering,0.,places=6)
 
     def test_grade_not_obstacle(self):

@@ -103,15 +103,19 @@ class V7Tests(unittest.TestCase):
         self.assertAlmostEqual(p.measured_speed,.2)
 
     def test_target_20_is_not_enabled_during_initial_test(self):
-        import ast
-        src=(Path(__file__).resolve().parents[1]/'team01_race/node.py').read_text()
-        defaults=ast.literal_eval(next(n.value for n in ast.parse(src).body
-                                   if isinstance(n,ast.Assign)
-                                   and any(isinstance(t,ast.Name) and t.id=='DEFAULTS'
-                                           for t in n.targets)))
-        self.assertEqual(defaults['target_straight_speed_mps'],20.)
-        self.assertEqual(defaults['straight_speed_mps'],8.)
-        self.assertEqual(defaults['grid_discovery_speed_mps'],1.25)
+        # Defaults were extracted from node.py into defaults.py. Verify the
+        # actual shared configuration and the first-lap safety speed cap.
+        from team01_race.defaults import DEFAULTS
+        self.assertEqual(DEFAULTS['target_straight_speed_mps'],20.)
+        self.assertEqual(DEFAULTS['straight_speed_mps'],10.)
+        self.assertEqual(DEFAULTS['mapping_lap_speed_mps'],5.)
+        self.assertEqual(DEFAULTS['mapped_lap_speed_mps'],10.)
+        self.assertEqual(DEFAULTS['grid_discovery_speed_mps'],1.25)
+        p=SafetyPlanner({**CONFIG,**DEFAULTS})
+        for _ in range(40):
+            m=p.step(np.empty((0,2)),np.empty((0,2)),4.,.1,
+                     True,True,True,bounds(xmax=5.))
+        self.assertLessEqual(m.speed,5.+1e-6)
 
     def test_closed_loop_27_degree_sweep_stays_centered(self):
         """Synthetic kinematic curved corridor: measured track, no world hints to planner."""

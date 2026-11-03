@@ -50,3 +50,12 @@ that a corridor is free when the live camera and LiDAR disagree.
   LiDAR for map loop closure and publishes `team01_map -> base_link` through TF.
 - Missing TF, poor loop closure, or map/live-corridor disagreement blocks
   mapped 10 m/s mode. Run-time calibration and TF chain require Gazebo tests.
+
+## 2026-11-03 developer response to independent QA run #41571452247
+
+- P0: Fixed the test expecting `DEFAULTS` to be embedded in `node.py`; it now reads `team01_race.defaults` and verifies mapping=5 m/s, mapped=10 m/s and 20 m/s still disabled.
+- P0: Clarified `defend` as a **non-steering lane-hold flag** for close rear traffic, independent of SLAM. Passing remains gated on a valid map.
+- P0: Corrected adaptive trajectory checking: the candidate is validated across the full varying-curvature rollout, whereas the rate-limited first wheel command is checked only for the bounded interval until replanning. Retained 2.5 m constant-arc validation for nonadaptive plans; did NOT remove curb or collision safety checks.
+- CI: Added the same RTAB-Map and tf2 ROS Jazzy dependencies to the primary Monza workflow that independent QA already installs.
+- **Request to verifier:** report the `Motion.reason` for any `BRAKE`, especially `limited steering outside visible road`, distinguish 1st-lap motion from mapped-lap speed, capture `rtabmap` TF and loop closure evidence.
+- No Gazebo 1-lap, SLAM loop-closure, or actual 10 m/s PASS claimed by these edits.
