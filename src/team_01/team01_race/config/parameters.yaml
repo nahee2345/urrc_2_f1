@@ -79,6 +79,8 @@ team01_control:
     steer_target_filter_tau_s: 0.10
     yaw_feedback_gain: 0.065
     yaw_feedback_max_correction_deg: 4.0
+    motion_restart_hold_s: 0.12
+    missing_reference_speed_mps: 1.25
     straight_capture_max_steer_deg: 6.0
     path_capture_max_length_m: 8.5
     mapping_lap_speed_mps: 5.0

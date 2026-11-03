@@ -19,6 +19,7 @@ from team01_race.road_surface import (dark_asphalt_bounds, transverse_start_mark
 from team01_race.signal_vision import SignalVision
 from team01_race.node_diagnostics import DiagnosticsMixin
 from team01_race.track_memory import TrackMemory
+from team01_race.mode_recovery import RecoveryGuard
 
 
 from team01_race.defaults import DEFAULTS
@@ -39,6 +40,7 @@ class Racer(Node, DiagnosticsMixin):
                               self.p['traffic_light_off_frames'])
         self.signal_vision=SignalVision()
         self.planner=SafetyPlanner(self.p)
+        self.motion_guard=RecoveryGuard(self.p)
         self.track=TrackMemory(self.p)
         self._setup_map_tf()
         self.depth_obstacles=np.empty((0,2))
@@ -96,6 +98,7 @@ class Racer(Node, DiagnosticsMixin):
                                   self.p['traffic_light_off_frames'])
             # Do not reuse an earlier course trace on a new race start.
             self.planner=SafetyPlanner(self.p)
+            self.motion_guard=RecoveryGuard(self.p)
             self.track=TrackMemory(self.p)
             self._lap_record_saved=False
             self._last_partial_record_distance=-10.
@@ -261,6 +264,9 @@ class Racer(Node, DiagnosticsMixin):
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
                                  actual_yaw_rate=(self.actual_yaw_rate if now-self.odom_at<.6 else None),
                                  map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None))
+        motion=self.motion_guard.update(motion,dt)
+        if motion.mode=='RECOVER':
+            self.planner.speed=0.
         if self.road_image is not None and now-self.road_at<self.p['road_rgb_timeout_s']:
             if now-self._road_last_save>5.:
                 self._save_road('latest')
@@ -303,6 +309,9 @@ class Racer(Node, DiagnosticsMixin):
                  'trajectory_generation':self.planner.reference_scheduler.count,
                  'trajectory_source':self.planner.reference_scheduler.source,
                  'planner':self.planner.planner_type,
+                 'fault_transitions':self.motion_guard.transitions,
+                 'recovery_hold':self.motion_guard.active,
+                 'last_fault':self.motion_guard.last_fault,
                  'cmd_speed':round(float(motion.speed),3),
                  'cmd_steer':round(float(motion.steering),5),
                  'odom_speed':self.actual_speed if now-self.odom_at<.6 else None,

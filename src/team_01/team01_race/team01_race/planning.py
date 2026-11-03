@@ -235,10 +235,11 @@ class SafetyPlanner(PlannerGeometry):
             self.prev_steer=0.
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','grid straight path is not verified safe')
-        if (not startup_hold and self.road.valid and
-                self.edge_alert=='NONE' and not self.overtake_side and
-                lead is None and abs(self.road.heading_deg)<4. and
-                self.preview_curve<.035):
+        shallow=self.capture_mode.update(
+            self.road.heading_deg,self.preview_curve,
+            hazard=(not self.road.valid or self.edge_alert!='NONE'
+                    or bool(self.overtake_side) or lead is not None))
+        if not startup_hold and shallow:
             # Straight-line acquisition is intentionally shallow. Allow full
             # steering on actual bends, hazards and when already near an edge.
             capture_limit=math.radians(float(
@@ -358,6 +359,9 @@ class SafetyPlanner(PlannerGeometry):
         delay=max(0.,float(self.cfg['reaction_delay_s']))
         v_visible=max(0.,math.sqrt((decel*delay)**2+2*decel*verified)-decel*delay)
         v=min(v,v_visible,10.0 if self.map_ready else 5.0)
+        if self.reference_geometry is None and self.road.valid:
+            # A fallback arc is not proof of a stable racing trajectory.
+            v=min(v,float(self.cfg.get('missing_reference_speed_mps',1.25)))
         v=np.clip(v,self.speed-decel*dt,self.speed+self.cfg['accel_mps2']*dt)
         self.speed=float(max(0.,v))
         self.prev_steer=float(steer)

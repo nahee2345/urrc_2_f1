@@ -37,6 +37,7 @@ DEFAULTS = {
     'max_steer_accel_deg_s2': 170.0,
     'steer_target_filter_tau_s': .10, 'straight_capture_max_steer_deg': 6.0,
     'yaw_feedback_gain': .065, 'yaw_feedback_max_correction_deg': 4.0,
+    'motion_restart_hold_s': .12, 'missing_reference_speed_mps': 1.25,
     'path_capture_max_length_m': 8.5,
     'mapping_lap_speed_mps': 5.0, 'mapped_lap_speed_mps': 10.0,
     'edge_caution_extra_m': .12, 'edge_caution_min_speed_mps': .45,
