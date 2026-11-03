@@ -112,8 +112,9 @@ class SafetyPlanner(PlannerGeometry):
         # heading at x=0. A distant straight line must not cause a snap turn.
         mapped_goal=(None if not self.map_ready or map_target is None else
                      (map_target[0],map_target[1]+self.target_lane_offset))
-        self.reference_geometry=self.reference_path.build(
-            self.road,self.target_lane_offset,observed,mapped_goal)
+        self.reference_geometry=self.reference_scheduler.update(
+            self.road,self.target_lane_offset,observed,actual_yaw_rate,
+            self.prev_steer,dt,mapped_goal)
         desired=0.
         if self.road.valid:
             pursuit_speed=(self.measured_speed if self.measured_speed is not None
