@@ -83,6 +83,8 @@ team01_control:
     stanley_heading_gain: 0.85
     stanley_cross_gain: 1.0
     stanley_speed_softening_mps: 1.5
+    enable_learned_gains: false
+    learned_gains_file: ''
     missing_reference_speed_mps: 1.25
     straight_capture_max_steer_deg: 6.0
     path_capture_max_length_m: 8.5
