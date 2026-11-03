@@ -1,0 +1,84 @@
+name: TEAM01 independent QA - offline and real Gazebo
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/team_01/**'
+      - 'scripts/ci_team01_monza.sh'
+      - '.github/workflows/team01-qa-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout track submodule and tested vehicle code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure ROS 2 Jazzy apt sources
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+      - name: Install Gazebo, ROS, RTAB-Map and QA dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ros-jazzy-ros-base ros-jazzy-ros-gz ros-jazzy-ros-gz-sim \
+            ros-jazzy-rtabmap-ros ros-jazzy-tf2-ros \
+            python3-colcon-common-extensions python3-numpy python3-opencv \
+            libgl1-mesa-dri mesa-utils
+      - name: Offline unit and static regression tests (independent verdict)
+        id: offline
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p ci_artifacts
+          set +e
+          bash src/team_01/team01_race/scripts/run_offline_tests.sh >ci_artifacts/offline_qa.log 2>&1
+          result=$?
+          set -e
+          cat ci_artifacts/offline_qa.log
+          echo "offline_exit=$result" >> "$GITHUB_OUTPUT"
+          exit "$result"
+      - name: Real Gazebo Monza run regardless of offline test result
+        id: gazebo
+        shell: bash
+        env:
+          TEAM01_QA_GAZEBO_ONLY: "1"
+        run: bash scripts/ci_team01_monza.sh
+      - name: Summarize QA evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci_artifacts
+          {
+            echo "# TEAM01 independent QA"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Offline tests: ${{ steps.offline.outcome }}"
+            echo "- Real Gazebo run: ${{ steps.gazebo.outcome }}"
+            echo "- RTAB-Map package installed; runtime SLAM/loop-closure must be proven by controller and TF logs."
+            echo "- A 1-lap run does NOT certify a 2nd-lap 10m/s target, overtaking or merge."
+            echo ""
+            echo "Artifacts: offline_qa.log, controller.log, gazebo.log, lap.json, verifier.log, and signal/sensor logs when created."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f ci_artifacts/controller.log ]]; then
+            grep -Ei '(rtabmap|icp_odometry|slam|map_ready|loop.closure|tf.*error|no.verified|road=False)' ci_artifacts/controller.log | tail -n 180 > ci_artifacts/slam_diagnostics.txt || true
+          fi
+      - name: Upload all QA logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team01-independent-qa-${{ github.run_id }}
+          path: ci_artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Final combined QA verdict
+        if: always()
+        shell: bash
+        run: |
+          echo "offline=${{ steps.offline.outcome }}, gazebo=${{ steps.gazebo.outcome }}"
+          [[ "${{ steps.offline.outcome }}" == "success" && "${{ steps.gazebo.outcome }}" == "success" ]]

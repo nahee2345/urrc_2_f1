@@ -29,7 +29,13 @@ colcon build --base-paths "$PKG" --packages-select team01_race --symlink-install
 set +u
 source "$ROOT/install/setup.bash"
 set -u
-(cd "$PKG" && bash scripts/run_offline_tests.sh) | tee "$STATE/offline.log"
+# QA-only separation: a regression failure must not suppress independent physical
+# Gazebo evidence. The dedicated QA workflow still fails overall if either stage fails.
+if [[ "${TEAM01_QA_GAZEBO_ONLY:-0}" == "1" ]]; then
+  echo '[QA] Offline test gate separated; see independent QA offline.log' | tee "$STATE/offline.log"
+else
+  (cd "$PKG" && bash scripts/run_offline_tests.sh) | tee "$STATE/offline.log"
+fi
 gz sdf -p "$PKG/models/team01_car/model.sdf" >/dev/null
 PIDS=()
 cleanup(){ for p in "${PIDS[@]}";do kill "$p" 2>/dev/null || true;done; wait 2>/dev/null || true; }
