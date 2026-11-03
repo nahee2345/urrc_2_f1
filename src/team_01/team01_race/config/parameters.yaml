@@ -1,0 +1,70 @@
+team01_control:
+  ros__parameters:
+    use_sim_time: true
+    straight_speed_mps: 7.0
+    corner_speed_factor: 0.30
+    require_visual_road: true
+    permit_lidar_verified_fallback: true
+    road_rgb_timeout_s: 0.65
+    corner_threshold_deg: 10.0
+    max_center_steer_deg: 29.8
+    wheel_base_m: 0.34
+    max_lateral_accel_mps2: 5.0
+    max_braking_mps2: 5.0
+    accel_mps2: 2.0
+    reaction_delay_s: 0.30
+    emergency_margin_m: 0.55
+    path_half_width_m: 0.18
+    overtake_offset_m: 0.48
+    overtake_advantage_mps: 0.8
+    depth_timeout_s: 0.45
+    lidar_timeout_s: 0.45
+    rgb_timeout_s: 0.7
+    sensor_mount_height_m: 0.112
+    sensor_pitch_down_deg: 11.0
+    camera_hfov_deg: 92.0
+    min_road_points: 45
+    front_max_range_m: 12.0
+    rear_defend_min_gap_m: 1.5
+    traffic_light_min_red_blobs: 4
+    traffic_light_ready_frames: 2
+    traffic_light_off_frames: 3
+    unmapped_speed_mps: 0.75
+    unsafe_allow_without_front_lidar: false
+    # First drive: short straight grid search, then centered curb-distance control.
+    grid_straight_m: 0.65
+    grid_discovery_speed_mps: 1.25
+    road_confirm_frames: 6
+    grid_min_ahead_m: 1.65
+    grid_min_width_m: 0.68
+    target_straight_speed_mps: 20.0
+    preview_curvature_threshold: 0.08
+    # Out -> in -> out with reduced side offset and live collision clearance.
+    corner_prelook_heading_deg: 7.5
+    corner_end_heading_deg: 3.5
+    corner_entry_length_m: 1.2
+    corner_apex_length_m: 2.9
+    corner_lateral_offset_m: 0.23
+    max_line_offset_change_mps: 0.55
+    # Provisional lap completion: white stripe + relative yaw + curb geometry.
+    lap_min_distance_m: 65.0
+    lap_min_time_s: 25.0
+    lap_min_abs_yaw_rad: 5.2
+    lap_max_abs_yaw_rad: 8.5
+    learned_lap_speed_factor: 1.00
+
+    # v8: base_link curb proximity requires early reduction / emergency stop.
+    edge_caution_extra_m: 0.12
+    edge_caution_min_speed_mps: 0.45
+    edge_caution_extra_speed_mps: 1.15
+
+    # v9 — Start with 3s right-curb hold; no overtakes / racing line lap 1.
+    startup_right_hold_s: 3.0
+    startup_max_steer_deg: 0.8
+    startup_gap_deadband_m: 0.07
+    startup_gap_kp_deg_per_m: 2.0
+    startup_verified_horizon_m: 2.0
+    center_transition_s: 2.0
+    disable_first_lap_racing_line: true
+    enable_overtake: false
+    second_lap_straight_speed_mps: 12.0
