@@ -60,6 +60,7 @@ class Racer(Node, DiagnosticsMixin):
         self.last_tick=time.monotonic()
         self.last_log=0.
         self.actual_speed=None
+        self.actual_yaw_rate=None
         self.odom_at=0.
         self.rgb_blobs=0
         self.rgb_strength=0.
@@ -217,6 +218,8 @@ class Racer(Node, DiagnosticsMixin):
             value=float(msg.twist.twist.linear.x)
             if math.isfinite(value):
                 self.actual_speed=abs(value)
+                yaw=float(msg.twist.twist.angular.z)
+                self.actual_yaw_rate=yaw if math.isfinite(yaw) else None
                 self.odom_at=time.monotonic()
         except (AttributeError,ValueError,TypeError):
             pass
@@ -255,6 +258,7 @@ class Racer(Node, DiagnosticsMixin):
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
+                                 actual_yaw_rate=(self.actual_yaw_rate if now-self.odom_at<.6 else None),
                                  map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None))
         if self.road_image is not None and now-self.road_at<self.p['road_rgb_timeout_s']:
             if now-self._road_last_save>5.:
@@ -320,6 +324,7 @@ class Racer(Node, DiagnosticsMixin):
                 f'passing={self.planner.rejoin.phase} map={self.track.complete} '
                 f'track_points={len(learning.first_lap_features)} '
                 f'odom_v={self.actual_speed if now-self.odom_at<.6 else None} '
+                f'odom_yaw_rate={self.actual_yaw_rate if now-self.odom_at<.6 else None} '
                 f'planner={self.planner.planner_type} curve={self.planner.preview_curve:.3f} '
                 f'recenter={self.planner.recenter_reason} '
                 f'hold_offset={self.planner.racing_line.held_lane_offset_m} '

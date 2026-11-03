@@ -9,7 +9,7 @@ from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvatur
 
 class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
-             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False):
+             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None):
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
@@ -244,6 +244,7 @@ class SafetyPlanner(PlannerGeometry):
                 self.cfg.get('straight_capture_max_steer_deg',6.)))
             steer=float(np.clip(steer,-capture_limit,capture_limit))
         if not startup_hold:
+            steer=self.yaw_feedback.correct(steer,observed,actual_yaw_rate)
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.
             steer=self.steer_limiter.apply(steer,dt,observed)
