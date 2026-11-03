@@ -69,7 +69,10 @@ python3 "$MAP/scripts/traffic_lights_v10.py" --track monza --skip-camera-check |
 grep -q 'LIGHTS OUT ' "$STATE/lights.log" || { echo '[CI] LIGHTS_OUT_MISSING'; exit 1; }
 touch "$STATE/lights_out.ready"
 # Deterministic final result: FAIL on timeout, sensor failure, offroad, no progress.
-for _ in $(seq 1 660);do
+for CHECK in $(seq 1 660);do
+  if ((CHECK >= 65)) && ! grep -q 'CAMERA LIGHTS OUT verified' "$STATE/controller.log";then
+    echo '[CI] SIGNAL_GATE_STALL: camera gate never authorised departure';exit 1
+  fi
   if [[ -f "$STATE/lap.json" ]];then
     S=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' "$STATE/lap.json" || true)
     case "$S" in

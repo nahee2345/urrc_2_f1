@@ -1,3 +1,5 @@
+> **v12 실제 주행 보정 사항:** [README_V12_REAL_MONZA_KO.md](README_V12_REAL_MONZA_KO.md)
+
 **v10 검증 후보: [README_V10_VALIDATION_KO.md](README_V10_VALIDATION_KO.md). 실제 Monza 1랩 미인증입니다.**
 
 # TEAM01 최신 버전 v9

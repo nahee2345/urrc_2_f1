@@ -42,6 +42,8 @@ class TrafficGate:
         self.first_bright_blobs=0
         self.armed_at=None
         self.maximum_blobs=0
+        # Slow headless cameras may see each light count just once.
+        self.progressive_red_counts=set()
         self.status='WAIT_RED'
 
     def observe(self, blobs, strength=None, timestamp=None):
@@ -88,6 +90,8 @@ class TrafficGate:
         delta_threshold=max(120.,self.baseline*.18)
         illuminated=excess>delta_threshold
         if illuminated:
+            if blobs>0:
+                self.progressive_red_counts.add(blobs)
             if self.first_bright_time is None:
                 self.first_bright_time=t
                 self.first_bright_blobs=blobs
@@ -95,7 +99,13 @@ class TrafficGate:
         if not self.saw_full_red:
             if illuminated and blobs>=self.required:
                 self.active_frames+=1
-                if self.active_frames>=self.on_frames:
+                # A real increasing 1->3->4 sequence can be trusted even
+                # when the 4-lamp image arrived only once. A solitary 4
+                # flash still requires the original multi-frame proof.
+                observed_ramp=(self.first_bright_time is not None and
+                    t-self.first_bright_time>=.6 and
+                    len([k for k in self.progressive_red_counts if 0<k<self.required])>=2)
+                if self.active_frames>=self.on_frames or observed_ramp:
                     self.saw_full_red=True
                     self.armed_at=t
                     self.status='ARMED'
@@ -476,7 +486,10 @@ class SafetyPlanner:
         # Smooth the commanded route through a local look-ahead point.
         desired=0.
         if self.road.valid:
-            xgoal=float(np.clip(1.2+min(1.4,self.speed*.24),
+            # Regulated Pure Pursuit: measured-speed adaptive lookahead.
+            pursuit_speed=(self.measured_speed if self.measured_speed is not None
+                           else self.speed)
+            xgoal=float(np.clip(1.25+min(2.65,pursuit_speed*.38),
                                 self.road.centers[0,0],self.road.centers[-1,0]))
             ycenter=float(np.interp(xgoal,self.road.centers[:,0],self.road.centers[:,1]))
             ygoal=ycenter+self.target_lane_offset
@@ -645,6 +658,10 @@ class SafetyPlanner:
                   self.cfg['corner_speed_factor'])
         curvature=max(abs(math.tan(steer))/self.cfg['wheel_base_m'],
                       self.preview_curve)
+        # Nav2 RPP-inspired curvature regulation is a speed cap, not a boost.
+        regulate_radius=float(self.cfg.get('regulated_min_turn_radius_m',2.0))
+        if curvature>1./max(.1,regulate_radius):
+            v=min(v, max(.60,lap_target * (1./(curvature*regulate_radius))))
         if curvature>1e-5:
             v=min(v,math.sqrt(self.cfg['max_lateral_accel_mps2']/curvature))
         # Speed bound from nearest forward collision and sensor/actuator delay.
@@ -653,6 +670,9 @@ class SafetyPlanner:
         if self.planner_type != 'adaptive_pursuit':
             free=self.clearance(pts,steer,horizon)
         d=max(0.,free-self.cfg['emergency_margin_m'])
+        # Limit commanded speed by forward time-to-collision as well as the
+        # independent braking-distance and lateral-acceleration envelopes.
+        v=min(v,d/max(.35,float(self.cfg.get('regulated_min_ttc_s',.8))))
         decel=self.cfg['max_braking_mps2']
         delay=self.cfg['reaction_delay_s']
         v_safe=max(0.,math.sqrt((decel*delay)**2+2*decel*d)-decel*delay)

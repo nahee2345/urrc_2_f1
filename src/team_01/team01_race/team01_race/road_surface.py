@@ -95,3 +95,13 @@ def transverse_start_marking(ground_xy, ground_uv, rgb, road_bounds):
             np.mean(dark[before])>.35 and np.mean(dark[after])>.35):
             return True
     return False
+
+def aligned_depth_rgb(depth_at, rgb_at, speed_mps, max_age_s=1.1):
+    """ROS software cameras arrive asynchronously; align within a speed-aware limit."""
+    if depth_at <= 0 or rgb_at <= 0:
+        return False
+    if not np.isfinite(speed_mps) or not np.isfinite(max_age_s):
+        return False
+    v=max(0.,float(speed_mps))
+    allowed=min(float(max_age_s),max(.20,1.1/(1.+v*.28)))
+    return abs(float(depth_at)-float(rgb_at))<=allowed

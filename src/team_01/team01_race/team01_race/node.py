@@ -14,7 +14,8 @@ from std_msgs.msg import Bool, Float32
 from team01_race.perception import (decode_depth, decode_rgb, depth_geometry,
                                     laser_to_xy)
 from team01_race.planning import TrafficGate, SafetyPlanner
-from team01_race.road_surface import dark_asphalt_bounds, transverse_start_marking
+from team01_race.road_surface import (dark_asphalt_bounds, transverse_start_marking,
+                                       aligned_depth_rgb)
 from team01_race.signal_vision import SignalVision
 
 
@@ -26,8 +27,8 @@ DEFAULTS = {
     'max_braking_mps2': 5.0, 'accel_mps2': 2.0,
     'reaction_delay_s': .3, 'emergency_margin_m': .55,
     'path_half_width_m': .18, 'overtake_offset_m': .48,
-    'overtake_advantage_mps': .8, 'depth_timeout_s': .45,
-    'lidar_timeout_s': .45, 'rgb_timeout_s': .7,
+    'overtake_advantage_mps': .8, 'depth_timeout_s': .85,
+    'lidar_timeout_s': .85, 'rgb_timeout_s': 1.4,
     'sensor_mount_height_m': .155, 'sensor_pitch_down_deg': 11.,
     'camera_hfov_deg': 92., 'min_road_points': 45,
     'front_max_range_m': 12., 'rear_defend_min_gap_m': 1.5,
@@ -36,6 +37,8 @@ DEFAULTS = {
     'unsafe_allow_without_front_lidar': False, 'unmapped_speed_mps': .75,
     'require_visual_road': True, 'road_rgb_timeout_s': .65,
     'permit_lidar_verified_fallback': True,
+    'road_sync_max_age_s': 1.1, 'regulated_min_turn_radius_m': 2.0,
+    'regulated_min_ttc_s': 0.8,
     'grid_straight_m': .65, 'grid_discovery_speed_mps': 1.25,
     'startup_right_hold_s': 3.0, 'startup_max_steer_deg': 3.0,
     'center_transition_s': 2.0,
@@ -74,6 +77,10 @@ class Racer(Node):
         self.depth_valid=False
         self.road_image=None
         self.road_at=0.
+        self.ground_xy=np.empty((0,2))
+        self.ground_uv=np.empty((0,2),dtype=int)
+        self.ground_at=0.
+        self.ground_count=0
         self.road_bounds=None
         self.asphalt_coverage=0.
         self.start_line_seen=False
@@ -137,20 +144,17 @@ class Racer(Node):
             self.depth_obstacles=scene.obstacles
             self.depth_valid=scene.valid
             self.slope=scene.slope_deg
-            if (scene.valid and self.road_image is not None and
-                    time.monotonic()-self.road_at<self.p['road_rgb_timeout_s']):
-                asphalt=dark_asphalt_bounds(scene.ground_xy,scene.ground_uv,self.road_image)
-                self.road_bounds=asphalt.bounds if asphalt.valid else None
-                self.asphalt_coverage=asphalt.coverage
-                self.start_line_seen=(transverse_start_marking(
-                    scene.ground_xy,scene.ground_uv,self.road_image,asphalt.bounds)
-                    if asphalt.valid else False)
-            else:
-                self.road_bounds=None
-                self.asphalt_coverage=0.
-                self.start_line_seen=False
+            self.ground_xy=scene.ground_xy
+            self.ground_uv=scene.ground_uv
+            self.ground_count=len(scene.ground_xy)
+            self.ground_at=time.monotonic()
+            self._refresh_road()
         except Exception as exc:
             self.depth_valid=False
+            self.ground_xy=np.empty((0,2))
+            self.ground_uv=np.empty((0,2),dtype=int)
+            self.ground_count=0
+            self.ground_at=0.
             self.road_bounds=None
             self.start_line_seen=False
             self.get_logger().warning(f'depth/road rejected: {exc}')
@@ -160,10 +164,31 @@ class Racer(Node):
         try:
             self.road_image=decode_rgb(msg)
             self.road_at=time.monotonic()
+            # Cameras arrive independently on software-rendered Gazebo.
+            self._refresh_road()
         except Exception as exc:
             self.road_image=None
             self.road_at=0.
             self.get_logger().warning(f'Road RGB rejected: {exc}')
+
+    def _refresh_road(self):
+        # Accept whichever of the aligned RGB/depth frames arrives second.
+        # At speed the maximum pairing interval shrinks automatically.
+        self.road_bounds=None
+        self.asphalt_coverage=0.
+        self.start_line_seen=False
+        if not self.depth_valid or self.road_image is None or not self.ground_count:
+            return
+        if not aligned_depth_rgb(self.ground_at,self.road_at,
+                float(self.actual_speed or 0.),
+                float(self.p['road_sync_max_age_s'])):
+            return
+        asphalt=dark_asphalt_bounds(self.ground_xy,self.ground_uv,self.road_image)
+        self.road_bounds=asphalt.bounds if asphalt.valid else None
+        self.asphalt_coverage=asphalt.coverage
+        if asphalt.valid:
+            self.start_line_seen=transverse_start_marking(
+                self.ground_xy,self.ground_uv,self.road_image,asphalt.bounds)
 
     def on_rgb(self,msg):
         try:
@@ -241,13 +266,17 @@ class Racer(Node):
         dt=now-self.last_tick
         self.last_tick=now
         rgb_fresh=now-self.rgb_at<self.p['rgb_timeout_s']
+        # Once CAMERA verified lights out, ongoing signal-camera FPS cannot
+        # repeatedly suppress motion; depth and lidar are still mandatory.
         enabled=(self.permission and (self.start_mode=='signal' or
-                 (self.gate.lights_out and rgb_fresh)))
+                 self.gate.lights_out))
         d_ok=self.depth_valid and now-self.depth_at<self.p['depth_timeout_s']
         l_ok=now-self.lidar_at<self.p['lidar_timeout_s']
         # Stale rear sensor forbids lane-change overtakes, not ordinary driving.
         rear_gap=self.rear_gap if now-self.rear_at<self.p['lidar_timeout_s'] else -1.0
-        visual_road=(self.road_bounds if now-self.road_at<self.p['road_rgb_timeout_s']
+        visual_road=(self.road_bounds
+                     if self.road_bounds is not None and
+                     now-max(self.road_at,self.ground_at)<self.p['road_rgb_timeout_s']
                      else None)
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
@@ -289,6 +318,10 @@ class Racer(Node):
                 f'dynamic_area={self.signal_vision.last_coverage:.4f} '
                 f'first_red_at={self.gate.first_bright_time} '
                 f'road={self.planner.road.valid} reason={motion.reason} '
+                f'depth_age={now-self.depth_at:.2f} lidar_age={now-self.lidar_at:.2f} '
+                f'road_age={now-self.road_at:.2f} rgb_age={now-self.rgb_at:.2f} '
+                f'ground_count={self.ground_count} lidar_points={len(self.lidar_obstacles)} '
+                f'vision_bounds={0 if self.road_bounds is None else len(self.road_bounds)} '
                 f'road_heading={self.planner.road.heading_deg:+.1f} '
                 f'source={self.planner.road_source} black={self.asphalt_coverage:.2f} '
                 f'lead={self.planner.lead_distance} lead_v={self.planner.lead_speed} '

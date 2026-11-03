@@ -5,7 +5,10 @@ team01_control:
     corner_speed_factor: 0.30
     require_visual_road: true
     permit_lidar_verified_fallback: true
-    road_rgb_timeout_s: 0.65
+    road_rgb_timeout_s: 0.95
+    road_sync_max_age_s: 1.1
+    regulated_min_turn_radius_m: 2.0
+    regulated_min_ttc_s: 0.8
     corner_threshold_deg: 10.0
     max_center_steer_deg: 29.8
     wheel_base_m: 0.34
@@ -17,9 +20,9 @@ team01_control:
     path_half_width_m: 0.18
     overtake_offset_m: 0.48
     overtake_advantage_mps: 0.8
-    depth_timeout_s: 0.45
-    lidar_timeout_s: 0.45
-    rgb_timeout_s: 0.7
+    depth_timeout_s: 0.85
+    lidar_timeout_s: 0.85
+    rgb_timeout_s: 1.4
     sensor_mount_height_m: 0.112
     sensor_pitch_down_deg: 11.0
     camera_hfov_deg: 92.0
