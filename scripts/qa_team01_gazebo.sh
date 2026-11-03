@@ -21,7 +21,7 @@ clean(){
   set +e
   [[ -n "$BAG" ]] && kill -INT "$BAG" 2>/dev/null
   [[ -n "$METRIC" ]] && kill -INT "$METRIC" 2>/dev/null
-  [[ -n "$SIM" ]] && kill -INT "$SIM" 2>/dev/null
+  [[ -n "$SIM" ]] && kill -TERM "$SIM" 2>/dev/null
   sleep 3
   [[ -n "$BAG" ]] && wait "$BAG" 2>/dev/null
   [[ -n "$METRIC" ]] && wait "$METRIC" 2>/dev/null
@@ -39,7 +39,7 @@ for i in $(seq 1 180);do
     set +u
     source "$ROOT/install/setup.bash"
     set -u
-    if ros2 topic info /team01/gz_odom 2>/dev/null | grep -q 'Publisher count: 1';then
+    if ros2 topic info /team01/gz_odom 2>/dev/null | grep -Eq 'Publisher count: [1-9][0-9]*';then
       READY=1;break
     fi
   fi
@@ -64,4 +64,16 @@ RESULT=$?
 set -e
 echo "[QA] Gazebo runner exit=$RESULT"
 tail -n 25 "$STATE/qa_runner.log" || true
+clean
+trap - EXIT
+if [[ "$READY" == 1 ]];then
+  if [[ ! -f "$STATE/rosbag_core/metadata.yaml" ]];then
+    echo "[QA] ERROR: rosbag metadata missing after real Gazebo run" >&2
+    RESULT=1
+  fi
+  if [[ ! -f "$STATE/drive_metrics.json" ]];then
+    echo "[QA] ERROR: independent trajectory metrics missing" >&2
+    RESULT=1
+  fi
+fi
 exit "$RESULT"
