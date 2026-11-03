@@ -46,6 +46,7 @@ class PlannerGeometry:
         from team01_race.reference_path import GradualReference
         from team01_race.reference_scheduler import ReferenceScheduler
         from team01_race.mode_recovery import CaptureMode
+        from team01_race.speed_stages import SpeedStages
         self.rejoin=RejoinPlanner(cfg)
         self.steer_limiter=SteeringLimiter(cfg)
         self.yaw_feedback=YawFeedback(cfg)
@@ -53,6 +54,7 @@ class PlannerGeometry:
         self.reference_scheduler=ReferenceScheduler(self.reference_path,cfg)
         self.reference_geometry=None
         self.capture_mode=CaptureMode()
+        self.speed_stage=SpeedStages(cfg)
         self.map_ready=False
 
     @staticmethod

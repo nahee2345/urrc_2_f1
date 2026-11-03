@@ -358,7 +358,7 @@ class SafetyPlanner(PlannerGeometry):
         verified=max(0.,float(free)-float(self.cfg['emergency_margin_m']))
         delay=max(0.,float(self.cfg['reaction_delay_s']))
         v_visible=max(0.,math.sqrt((decel*delay)**2+2*decel*verified)-decel*delay)
-        v=min(v,v_visible,10.0 if self.map_ready else 5.0)
+        v=min(v,v_visible,self.speed_stage.cap(self.map_ready))
         if self.reference_geometry is None and self.road.valid:
             # A fallback arc is not proof of a stable racing trajectory.
             v=min(v,float(self.cfg.get('missing_reference_speed_mps',1.25)))
