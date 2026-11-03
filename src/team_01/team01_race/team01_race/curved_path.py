@@ -9,6 +9,7 @@ Ackermann adapter and collision envelope.
 from dataclasses import dataclass
 import math
 import numpy as np
+from team01_race.stanley_control import stanley_steer
 
 
 @dataclass
@@ -89,7 +90,12 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
         dx=look_x-x;dy=target_y-y
         d2=max(.02,dx*dx+dy*dy)
         local_y=-math.sin(yaw)*dx+math.cos(yaw)*dy
-        steer=float(np.clip(math.atan(2*wb*local_y/d2),-max_steer,max_steer))
+        if ref is None:
+            steer=float(np.clip(math.atan(2*wb*local_y/d2),-max_steer,max_steer))
+        else:
+            # Kinematic Stanley predicts the SAME controller used at the
+            # first tick; no unverified post-planning steer overwrite.
+            steer=stanley_steer(ref,x,y,yaw,speed,wb,max_steer,cfg)
         if first_steer is None:first_steer=steer
         k=math.tan(steer)/wb
         maxcurv=max(maxcurv,abs(k))

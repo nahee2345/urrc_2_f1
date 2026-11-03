@@ -80,6 +80,9 @@ team01_control:
     yaw_feedback_gain: 0.065
     yaw_feedback_max_correction_deg: 4.0
     motion_restart_hold_s: 0.12
+    stanley_heading_gain: 0.85
+    stanley_cross_gain: 1.0
+    stanley_speed_softening_mps: 1.5
     missing_reference_speed_mps: 1.25
     straight_capture_max_steer_deg: 6.0
     path_capture_max_length_m: 8.5
