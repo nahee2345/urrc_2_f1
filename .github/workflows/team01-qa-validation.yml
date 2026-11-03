@@ -6,6 +6,8 @@ on:
       - 'src/team_01/**'
       - 'scripts/ci_team01_monza.sh'
       - '.github/workflows/team01-qa-validation.yml'
+      - 'scripts/qa_team01_*.py'
+      - 'scripts/qa_team01_*.sh'
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,7 +31,12 @@ jobs:
             ros-jazzy-ros-base ros-jazzy-ros-gz ros-jazzy-ros-gz-sim \
             ros-jazzy-rtabmap-ros ros-jazzy-tf2-ros \
             python3-colcon-common-extensions python3-numpy python3-opencv \
+            ros-jazzy-rosbag2 ros-jazzy-rosbag2-storage-default-plugins \
             libgl1-mesa-dri mesa-utils
+      - name: Validate independent QA code syntax
+        run: |
+          bash -n scripts/qa_team01_gazebo.sh
+          python3 -m py_compile scripts/qa_team01_metrics.py scripts/qa_team01_report.py
       - name: Offline unit and static regression tests (independent verdict)
         id: offline
         continue-on-error: true
@@ -48,7 +55,7 @@ jobs:
         shell: bash
         env:
           TEAM01_QA_GAZEBO_ONLY: "1"
-        run: bash scripts/ci_team01_monza.sh
+        run: bash scripts/qa_team01_gazebo.sh
       - name: Summarize QA evidence
         if: always()
         shell: bash
@@ -65,6 +72,9 @@ jobs:
             echo ""
             echo "Artifacts: offline_qa.log, controller.log, gazebo.log, lap.json, verifier.log, and signal/sensor logs when created."
           } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f ci_artifacts/qa_run_report.md ]]; then
+            cat ci_artifacts/qa_run_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [[ -f ci_artifacts/controller.log ]]; then
             grep -Ei '(rtabmap|icp_odometry|slam|map_ready|loop.closure|tf.*error|no.verified|road=False)' ci_artifacts/controller.log | tail -n 180 > ci_artifacts/slam_diagnostics.txt || true
           fi
