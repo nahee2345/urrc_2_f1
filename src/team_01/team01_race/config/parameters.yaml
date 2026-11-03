@@ -1,7 +1,7 @@
 team01_control:
   ros__parameters:
     use_sim_time: true
-    straight_speed_mps: 8.0
+    straight_speed_mps: 10.0
     corner_speed_factor: 0.30
     require_visual_road: true
     permit_lidar_verified_fallback: true
@@ -69,7 +69,7 @@ team01_control:
     startup_verified_horizon_m: 2.0
     center_transition_s: 2.0
     disable_first_lap_racing_line: true
-    enable_overtake: false
+    enable_overtake: true
     second_lap_straight_speed_mps: 10.0
 
     # v13 gentle steering and lane-holding first-lap behavior
@@ -78,3 +78,7 @@ team01_control:
     steer_smoothing_tau_s: 0.16
     precorner_wall_range_m: 10.0
     center_reached_tolerance_m: 0.12
+    max_steer_rate_deg_s: 35.0
+    max_steer_accel_deg_s2: 170.0
+    mapping_lap_speed_mps: 5.0
+    mapped_lap_speed_mps: 10.0

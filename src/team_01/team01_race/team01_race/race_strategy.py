@@ -159,61 +159,17 @@ class RacingLine:
             self.phase='CENTER'
             self.offset_m=transition_offset
             return
+        # Map lap / normal cruise: never impose periodic out-in-out lane flips.
+        # Follow the persistent lane until live risk explicitly requests center.
         if not usable:
-            # No speculative lane change when the sides have disappeared.
-            self.offset_m=0.
             return
-        heading=abs(road.heading_deg)
-        entering=heading>=self.cfg.get('corner_prelook_heading_deg',7.5)
-        straight=heading<self.cfg.get('corner_end_heading_deg',3.5)
-        # The old exit state could persist when a new opposite bend appeared.
-        # That kept an outside-line request active through the following turn.
-        sign=1 if road.heading_deg>0 else -1
-        if self.phase.startswith('CORNER') and entering and sign!=self.corner_sign:
-            self.corner_sign=sign
-            self.phase='CORNER_ENTRY'
-            self.corner_distance=0.
-            self.straight_frames=0
-        if self.phase=='CENTER' and entering and overtake_side==0:
-            self.corner_sign=1 if road.heading_deg>0 else -1
-            self.phase='CORNER_ENTRY'
-            self.corner_distance=0.
-            self.straight_frames=0
-            self.corner_seen=True
-        if self.phase.startswith('CORNER'):
-            self.corner_distance+=d
-            if straight:
-                self.straight_frames+=1
-            else:
-                self.straight_frames=0
-            if self.phase=='CORNER_ENTRY' and self.corner_distance>=self.cfg.get('corner_entry_length_m',1.2):
-                self.phase='CORNER_APEX'
-            if self.phase=='CORNER_APEX' and self.corner_distance>=self.cfg.get('corner_apex_length_m',2.9):
-                self.phase='CORNER_EXIT'
-            # Road straightens again; return to center rather than weaving.
-            if (self.phase=='CORNER_EXIT' and self.straight_frames>=6) or (self.straight_frames>=12):
-                self.phase='CENTER'
-                self.corner_distance=0.
-                self.straight_frames=0
-        # A reduced-width envelope keeps side offsets inside verified edges.
+        self.phase='CENTER'
         max_side=max(0.,info.width_m/2-self.cfg['path_half_width_m']-.16)
-        lateral=min(self.cfg.get('corner_lateral_offset_m',.23),max_side*.55)
-        if self.phase=='CORNER_ENTRY': target=-self.corner_sign*lateral
-        elif self.phase=='CORNER_APEX':target=self.corner_sign*lateral
-        elif self.phase=='CORNER_EXIT':
-            # Never move to the outside while the turn is still steep.
-            # v7 entered CORNER_EXIT after a fixed distance and then stayed
-            # there throughout the still-sharpening 30-degree field bend.
-            heading_limit=max(10.,1.5*self.cfg.get('corner_prelook_heading_deg',7.5))
-            target=0. if heading>=heading_limit else -self.corner_sign*lateral
-        else:target=transition_offset
-        if overtake_side:target=0.  # Safety planner owns passing lane.
-        # Race-line optimization must give way to curb clearance. Side offsets
-        # are zero when either measured side is close to the vehicle envelope.
-        if min(info.left_m,info.right_m)<self.cfg['path_half_width_m']+.20:
+        target=float(np.clip(self.offset_m,-max_side,max_side))
+        if (center_requested or min(info.left_m,info.right_m)<
+                self.cfg['path_half_width_m']+.20):
             target=0.
-        # Avoid instantaneous lateral target flips at the apex.
-        limit=self.cfg.get('max_line_offset_change_mps',.55)*max(.01,dt)
+        limit=self.cfg.get('max_line_offset_change_mps',.45)*max(.01,dt)
         self.offset_m=float(np.clip(target,self.offset_m-limit,self.offset_m+limit))
 
     @property

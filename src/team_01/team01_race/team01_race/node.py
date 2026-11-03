@@ -17,50 +17,13 @@ from team01_race.planning import TrafficGate, SafetyPlanner
 from team01_race.road_surface import (dark_asphalt_bounds, transverse_start_marking,
                                        aligned_depth_rgb)
 from team01_race.signal_vision import SignalVision
+from team01_race.node_diagnostics import DiagnosticsMixin
+from team01_race.track_memory import TrackMemory
 
 
-DEFAULTS = {
-    'straight_speed_mps': 8.0, 'corner_speed_factor': .30,
-    'target_straight_speed_mps': 20.0, 'preview_curvature_threshold': .08,
-    'corner_threshold_deg': 10., 'max_center_steer_deg': 29.8,
-    'wheel_base_m': .34, 'max_lateral_accel_mps2': 5.0,
-    'max_braking_mps2': 5.0, 'accel_mps2': 2.0,
-    'reaction_delay_s': .3, 'emergency_margin_m': .55,
-    'path_half_width_m': .18, 'overtake_offset_m': .48,
-    'overtake_advantage_mps': .8, 'depth_timeout_s': .85,
-    'lidar_timeout_s': .85, 'rgb_timeout_s': 1.4,
-    'sensor_mount_height_m': .155, 'sensor_pitch_down_deg': 11.,
-    'camera_hfov_deg': 92., 'min_road_points': 45,
-    'front_max_range_m': 12., 'rear_defend_min_gap_m': 1.5,
-    'traffic_light_min_red_blobs': 4, 'traffic_light_ready_frames': 2,
-    'traffic_light_off_frames': 3,
-    'unsafe_allow_without_front_lidar': False, 'unmapped_speed_mps': .75,
-    'require_visual_road': True, 'road_rgb_timeout_s': .65,
-    'permit_lidar_verified_fallback': True,
-    'road_sync_max_age_s': 1.1, 'regulated_min_turn_radius_m': 2.0,
-    'regulated_min_ttc_s': 0.8,
-    'grid_straight_m': .65, 'grid_discovery_speed_mps': 1.25,
-    'startup_right_hold_s': 3.0, 'startup_max_steer_deg': 3.0,
-    'center_transition_s': 2.0,
-    'disable_first_lap_racing_line': True, 'enable_overtake': False,
-    'second_lap_straight_speed_mps': 10.0,
-    'grid_min_ahead_m': 1.65, 'grid_min_width_m': .68,
-    'road_confirm_frames': 6, 'corner_prelook_heading_deg': 7.5,
-    'corner_end_heading_deg': 3.5, 'corner_entry_length_m': 1.2,
-    'corner_apex_length_m': 2.9, 'corner_lateral_offset_m': .23,
-    'max_line_offset_change_mps': .55,
-    'lap_min_distance_m': 65., 'lap_min_time_s': 25.,
-    'lap_min_abs_yaw_rad': 5.2, 'lap_max_abs_yaw_rad': 8.5,
-    'learned_lap_speed_factor': 1.00,
-    'hold_safe_lane_mode': True, 'max_steer_rate_deg_s': 35.0,
-    'steer_smoothing_tau_s': .16, 'precorner_wall_range_m': 10.0,
-    'center_reached_tolerance_m': .12,
-    'edge_caution_extra_m': .12, 'edge_caution_min_speed_mps': .45,
-    'edge_caution_extra_speed_mps': 1.15,
-}
+from team01_race.defaults import DEFAULTS
 
-
-class Racer(Node):
+class Racer(Node, DiagnosticsMixin):
     def __init__(self):
         super().__init__('team01_control')
         for k,v in DEFAULTS.items(): self.declare_parameter(k,v)
@@ -76,6 +39,8 @@ class Racer(Node):
                               self.p['traffic_light_off_frames'])
         self.signal_vision=SignalVision()
         self.planner=SafetyPlanner(self.p)
+        self.track=TrackMemory(self.p)
+        self._setup_map_tf()
         self.depth_obstacles=np.empty((0,2))
         self.depth_valid=False
         self.road_image=None
@@ -129,6 +94,7 @@ class Racer(Node):
                                   self.p['traffic_light_off_frames'])
             # Do not reuse an earlier course trace on a new race start.
             self.planner=SafetyPlanner(self.p)
+            self.track=TrackMemory(self.p)
             self._lap_record_saved=False
             self._last_partial_record_distance=-10.
         self.permission=bool(msg.data)
@@ -220,27 +186,26 @@ class Racer(Node):
         except Exception as exc:
             self.get_logger().warning(f'RGB rejected: {exc}')
 
-    def _save_rgb(self,rgb,stage):
+    def _map_pose(self):
+        """Use only an independently estimated map->base_link TF."""
+        if self.map_tf is None:return None
         try:
-            import cv2
-            self.camera_debug_dir.mkdir(parents=True,exist_ok=True)
-            out=self.camera_debug_dir/f'{stage}.png'
-            cv2.imwrite(str(out),cv2.cvtColor(rgb,cv2.COLOR_RGB2BGR))
-            self._snapshots.add(stage)
-        except Exception as exc:
-            self.get_logger().warning(f'Camera diagnostic PNG save failed: {exc}')
+            from rclpy.time import Time
+            t=self.map_tf.lookup_transform('team01_map','base_link',Time())
+            q=t.transform.rotation
+            yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
+            return (float(t.transform.translation.x),float(t.transform.translation.y),yaw)
+        except Exception:
+            return None
 
-    def _save_road(self,stage):
-        # Frame capture is diagnostic only; it must never authorize movement.
-        if self.road_image is None:return
+    def _setup_map_tf(self):
+        self.map_tf=None
         try:
-            import cv2
-            self.road_debug_dir.mkdir(parents=True,exist_ok=True)
-            cv2.imwrite(str(self.road_debug_dir/f'{stage}.png'),
-                        cv2.cvtColor(self.road_image,cv2.COLOR_RGB2BGR))
-            self._road_debug_saved.add(stage)
-        except Exception as exc:
-            self.get_logger().warning(f'Road diagnostic PNG failed: {exc}')
+            from tf2_ros import Buffer, TransformListener
+            self.map_tf=Buffer()
+            self.map_listener=TransformListener(self.map_tf,self)
+        except ImportError:
+            self.get_logger().warning('TF2 unavailable; mapped lap disabled')
 
     def on_odometry(self,msg):
         # Velocity only; NO world pose, no simulator track coordinates.
@@ -281,9 +246,12 @@ class Racer(Node):
                      if self.road_bounds is not None and
                      now-max(self.road_at,self.ground_at)<self.p['road_rgb_timeout_s']
                      else None)
+        pose=self._map_pose()
+        mapped=self.track.target(pose,max(2.5,min(6.,2.+(self.actual_speed or 0.)*.35)))
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
-                                 actual_speed=(self.actual_speed if now-self.odom_at<.6 else None))
+                                 actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
+                                 map_target=mapped,map_ready=self.track.complete)
         if self.road_image is not None and now-self.road_at<self.p['road_rgb_timeout_s']:
             if now-self._road_last_save>5.:
                 self._save_road('latest')
@@ -298,7 +266,14 @@ class Racer(Node):
         # Provisional lap learning needs independent sensor evidence of the
         # starting stripe, distance/heading closure and curb signature.
         learning=self.planner.lap_learner
+        if enabled and d_ok and motion.speed>0:
+            self.track.observe(pose,self.planner.road)
         if enabled and d_ok and learning.observe_line(self.start_line_seen,self.planner.road):
+            if self.track.try_close(pose):
+                self.track.save()
+                self.get_logger().info('SLAM track map closed; lap-2 mapped driving enabled')
+            else:
+                self.get_logger().warning('Lap marker reached but SLAM map unverified; remain in exploration')
             self.get_logger().info('LAP 1 SENSOR-CANDIDATE COMPLETE; cautious learned lap 2 enabled')
             self._write_lap_record()
         # Save newly observed features during the first lap, even if the car
@@ -337,7 +312,7 @@ class Racer(Node):
                 f'startup_s={self.planner.racing_line.startup_elapsed_s:.1f} '
                 f'right_ref={self.planner.racing_line.right_reference_m} '
                 f'right_error={self.planner.startup_right_error_m} '
-                f'passing=OFF '
+                f'passing={self.planner.rejoin.phase} map={self.track.complete} '
                 f'track_points={len(learning.first_lap_features)} '
                 f'odom_v={self.actual_speed if now-self.odom_at<.6 else None} '
                 f'planner={self.planner.planner_type} curve={self.planner.preview_curve:.3f} '
@@ -356,45 +331,6 @@ class Racer(Node):
                 f'lap_check={learning.last_confirmation}')
             self.last_log=now
 
-    def _write_learning_progress(self):
-        try:
-            learning=self.planner.lap_learner
-            folder=Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state'))) / 'urrc_team01' / 'learning'
-            folder.mkdir(parents=True,exist_ok=True)
-            dest=folder/'active_lap1.json'
-            tmp=folder/'active_lap1.json.tmp'
-            tmp.write_text(json.dumps({
-                'status':'IN_PROGRESS_NOT_A_COMPLETED_LAP',
-                'source':'on-board RGB+Depth, LiDAR, odometry velocity and commanded steering',
-                'preloaded_track_map':False,
-                'distance_m_est':learning.distance_m,
-                'features':learning.first_lap_features,
-                'note':'Odometry velocity + steering integration drifts; independent official lap proof is required.',
-            },ensure_ascii=False,indent=2),encoding='utf-8')
-            tmp.replace(dest)
-        except Exception as exc:
-            self.get_logger().warning(f'Live track learning snapshot failed: {exc}')
-
-    def _write_lap_record(self):
-        if self._lap_record_saved:return
-        try:
-            learning=self.planner.lap_learner
-            folder=Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state'))) / 'urrc_team01' / 'learning'
-            folder.mkdir(parents=True,exist_ok=True)
-            filename=folder/f'lap1_{int(time.time())}.json'
-            filename.write_text(json.dumps({
-                'status':learning.last_confirmation,
-                'note':'Approximate commanded-distance trace, NOT verified Gazebo lap timing',
-                'first_lap_distance_m_est':learning.first_lap_distance,
-                'first_lap_brake_ticks':learning.first_lap_brakes,
-                'records_distance_m_heading_deg_cmd_speed_mode':learning.first_lap_records,
-                'observed_track_features':learning.first_lap_features,
-                'preloaded_track_map':False,
-            },ensure_ascii=False,indent=2),encoding='utf-8')
-            self._lap_record_saved=True
-            self.get_logger().info(f'Estimated first-lap record saved: {filename}')
-        except Exception as exc:
-            self.get_logger().warning(f'First-lap record saving failed: {exc}')
 
 
 def main():

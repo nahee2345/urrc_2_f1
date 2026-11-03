@@ -1,429 +1,15 @@
-"""Conservative F1-like local trajectory sampling; no external track state."""
-from dataclasses import dataclass
+"""Safety-first controller; perception never bypasses collision checks."""
 import math
 import numpy as np
-from team01_race.race_strategy import RacingLine, LapLearner
+from team01_race.planning_gate import Motion, TrafficGate
+from team01_race.planning_road import RoadCorridor, estimate_road_corridor, fuse_verified_corridors
+from team01_race.planning_geometry import PlannerGeometry
 from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvature
 
 
-@dataclass
-class Motion:
-    speed: float
-    steering: float  # race contract: +right, -left, radians
-    mode: str
-    reason: str
-
-
-class TrafficGate:
-    """Arm only on real red-light observations; launch on stable all-off.
-
-    A partial camera field of view is permitted: 4 visible red LEDs may be
-    the peak of a physical 5-LED sequence. Count-only mode is for unit tests;
-    runtime mode also checks the change in intensity from a dark baseline.
-    Before any light is observed, a blank image can never authorize movement.
-    """
-    def __init__(self, required=4, on_frames=2, off_frames=3,
-                 min_sequence_s=3.0):
-        self.required=int(required)
-        self.on_frames=int(on_frames)
-        self.off_frames=int(off_frames)
-        self.min_sequence_s=float(min_sequence_s)
-        self.active_frames=0
-        self.dark_frames=0
-        self.saw_full_red=False
-        self.lights_out=False
-        self.frame_count=0
-        self.baseline_samples=[]
-        self.baseline=None
-        self.peak_strength=0.0
-        self.first_bright_time=None
-        self.last_blobs=0
-        self.last_strength=0.0
-        self.first_bright_blobs=0
-        self.armed_at=None
-        self.maximum_blobs=0
-        # Slow headless cameras may see each light count just once.
-        self.progressive_red_counts=set()
-        self.status='WAIT_RED'
-
-    def observe(self, blobs, strength=None, timestamp=None):
-        import time
-        t=time.monotonic() if timestamp is None else float(timestamp)
-        blobs=max(0,int(blobs))
-        self.last_blobs=blobs
-        self.maximum_blobs=max(blobs,self.maximum_blobs)
-        if self.lights_out:
-            return True
-        if strength is None:
-            # Test/diagnostic mode: no illumination measurements available.
-            if blobs>=self.required:
-                self.active_frames+=1
-                self.dark_frames=0
-                if self.active_frames>=self.on_frames:
-                    self.saw_full_red=True
-                    self.status='ARMED'
-            elif self.saw_full_red and blobs==0:
-                self.dark_frames+=1
-                self.status='VERIFY_OUT'
-                if self.dark_frames>=self.off_frames:
-                    self.lights_out=True
-                    self.status='LIGHTS_OUT'
-            else:
-                if not self.saw_full_red:self.active_frames=0
-                self.dark_frames=0
-            return self.lights_out
-
-        strength=max(0.,float(strength))
-        if not math.isfinite(strength):return False
-        self.last_strength=strength
-        self.frame_count+=1
-        if self.baseline is None:
-            # The launcher holds the lamps off until all ROS streams have
-            # initialized. Median suppresses an occasional noisy first frame.
-            self.baseline_samples.append(strength)
-            if len(self.baseline_samples)>=8:
-                self.baseline=float(np.median(self.baseline_samples))
-            return False
-        excess=strength-self.baseline
-        # Emissive overlays have a substantial energy difference relative
-        # to the unlit gantry. 4/5 visible lamps are sufficient to arm.
-        delta_threshold=max(120.,self.baseline*.18)
-        illuminated=excess>delta_threshold
-        if illuminated:
-            if blobs>0:
-                self.progressive_red_counts.add(blobs)
-            if self.first_bright_time is None:
-                self.first_bright_time=t
-                self.first_bright_blobs=blobs
-            self.peak_strength=max(self.peak_strength,strength)
-        if not self.saw_full_red:
-            if illuminated and blobs>=self.required:
-                self.active_frames+=1
-                # A real increasing 1->3->4 sequence can be trusted even
-                # when the 4-lamp image arrived only once. A solitary 4
-                # flash still requires the original multi-frame proof.
-                observed_ramp=(self.first_bright_time is not None and
-                    t-self.first_bright_time>=.6 and
-                    len([k for k in self.progressive_red_counts if 0<k<self.required])>=2)
-                if self.active_frames>=self.on_frames or observed_ramp:
-                    self.saw_full_red=True
-                    self.armed_at=t
-                    self.status='ARMED'
-            else:
-                self.active_frames=0
-            return False
-        # No movement before the physical red sequence can have ended.
-        # Total time measured from *first visible red* is >=3.0 s; thus
-        # a temporary black frame after lamp #4 cannot trigger departure.
-        if self.first_bright_time is None:
-            return False
-        # If the first three lamps were outside the FOV, the first clearly
-        # detected event may already be 4 reds. The sequence is still valid
-        # if four reds were held, then disappear stably after an arm delay.
-        elapsed=t-self.first_bright_time
-        last_four_only=(self.first_bright_blobs>=self.required and
-                        elapsed>=.65 and self.armed_at is not None and
-                        t-self.armed_at>=.45)
-        if elapsed<self.min_sequence_s-1e-6 and not last_four_only:
-            return False
-        observed_gain=max(0.,self.peak_strength-self.baseline)
-        returned_to_dark=strength<=self.baseline+max(delta_threshold*.5,observed_gain*.30)
-        # Use count=0 when visible lamps vanish. The fallback energy drop
-        # handles permanent red lens appearance after emissive model removal.
-        all_off=(blobs==0 or returned_to_dark)
-        if all_off:
-            self.dark_frames+=1
-            self.status='VERIFY_OUT'
-            if self.dark_frames>=self.off_frames:
-                self.lights_out=True
-                self.status='LIGHTS_OUT'
-        else:
-            self.dark_frames=0
-            self.status='ARMED'
-        return self.lights_out
-
-
-@dataclass
-class RoadCorridor:
-    centers: np.ndarray
-    half_width: float
-    valid: bool
-    heading_deg: float
-    bounds: np.ndarray = None   # optional local (x, right, left) from RGB+Depth
-
-
-def estimate_road_corridor(points, *, min_width=.65, max_width=5.5):
-    """Extract left/right guardrail clearance from local 2-D obstacles.
-
-    No global track/map coordinates are used. This is a geometric corridor,
-    not semantic road-surface segmentation: if walls are invisible it is
-    explicitly invalid. Vehicles inside the roadway are excluded from the
-    rail bands by multi-bin continuity checks.
-    """
-    pts=np.asarray(points,dtype=np.float64).reshape(-1,2)
-    pts=pts[np.all(np.isfinite(pts),axis=1)]
-    centers=[]
-    for x in np.arange(.75,7.0,.55):
-        p=pts[np.abs(pts[:,0]-x)<.40]
-        l=p[(p[:,1]>.32)&(p[:,1]<4.0),1]
-        r=p[(p[:,1]<-.32)&(p[:,1]>-4.0),1]
-        if len(l)<2 or len(r)<2:
-            continue
-        # The inside faces of the two walls are near y=0.
-        left=float(np.percentile(l,15));right=float(np.percentile(r,85))
-        width=left-right
-        if min_width<=width<=max_width:
-            centers.append((x,.5*(left+right),width))
-    if len(centers)<3:
-        return RoadCorridor(np.empty((0,2)),0.,False,0.)
-    a=np.asarray(centers)
-    # Require continuity. A nearby opponent is not a road boundary.
-    widths=a[:,2]
-    median=float(np.median(widths))
-    keep=np.abs(widths-median)<max(.35,median*.35)
-    a=a[keep]
-    if len(a)<3 or (a[-1,0]-a[0,0])<1.2:
-        return RoadCorridor(np.empty((0,2)),0.,False,0.)
-    centers=a[:,:2]
-    slopes=np.diff(centers[:,1])/np.maximum(.1,np.diff(centers[:,0]))
-    heading=math.degrees(math.atan(float(np.median(slopes))))
-    return RoadCorridor(centers,float(np.median(a[:,2])/2),True,heading)
-
-
-def fuse_verified_corridors(vision, lidar, *, max_center_error_m=.30,
-                            max_width_error_m=.65):
-    """Extend short aligned RGB/depth asphalt with independently sensed rails.
-
-    NEVER read a preloaded track, odometry pose, or map. Corridor extension is
-    permitted only where observed LiDAR and visual centres/widths agree across
-    a useful overlapping interval; fused boundary is deliberately shrunken
-    6 cm beyond vision to account for uncertain rail distance.
-    """
-    if vision is None or lidar is None or not vision.valid or not lidar.valid:
-        return None
-    if vision.bounds is None or len(vision.bounds)<4 or len(lidar.centers)<4:
-        return None
-    v=np.asarray(vision.bounds,dtype=float)
-    lc=np.asarray(lidar.centers,dtype=float)
-    lo=max(float(v[0,0]),float(lc[0,0]))
-    hi=min(float(v[-1,0]),float(lc[-1,0]))
-    if hi-lo<.75 or float(lc[-1,0])-float(v[-1,0])<.75:
-        return None
-    probes=np.linspace(lo+.10,hi-.10,5)
-    vr=np.interp(probes,v[:,0],v[:,1]);vl=np.interp(probes,v[:,0],v[:,2])
-    vc=.5*(vr+vl)
-    ll=np.interp(probes,lc[:,0],lc[:,1])
-    if (np.max(np.abs(vc-ll))>max_center_error_m or
-            np.max(np.abs(vl-vr-2*float(lidar.half_width)))>max_width_error_m):
-        return None
-    extra=lc[lc[:,0]>v[-1,0]+.08]
-    extra=extra[extra[:,0]<=min(11.,v[-1,0]+8.)]
-    if len(extra)<2:return None
-    half=max(.30,float(lidar.half_width)-.06)
-    additions=np.column_stack((extra[:,0],extra[:,1]-half,extra[:,1]+half))
-    fused=np.vstack((v,additions))
-    if np.any(np.diff(fused[:,0])<=0):return None
-    centers=np.column_stack((fused[:,0],(fused[:,1]+fused[:,2])*.5))
-    slope=np.diff(centers[:,1])/np.maximum(.05,np.diff(centers[:,0]))
-    heading=math.degrees(math.atan(float(np.median(slope))))
-    return RoadCorridor(centers,float(np.median((fused[:,2]-fused[:,1])/2)),
-                        True,heading,fused)
-
-
-class SafetyPlanner:
-    def __init__(self, cfg):
-        self.cfg=cfg
-        self.speed=0.0
-        self.prev_steer=0.0
-        self.last_lead=None
-        self.lead_speed=None
-        self.overtake_side=0  # 0 idle, +1 left, -1 right
-        self.overtake_hold=0.0
-        self.defend=False
-        self.road=RoadCorridor(np.empty((0,2)),0.,False,0.)
-        self.road_source='none'
-        self.cruise_side=1
-        self.cruise_elapsed=0.
-        self.overtake_start_distance_m=None
-        self.planned_pass_distance_m=None
-        self.lead_distance=None
-        self.last_overtake_seen=0.
-        self.target_lane_offset=0.
-        self.racing_line=RacingLine(cfg)
-        self.lap_learner=LapLearner(cfg)
-        self.last_mode="STOP"
-        self.preview_curve=0.
-        self.planner_type="constant_arc"
-        self.measured_speed=None
-        self.near_edge_m=None  # observed curb clearance from base_link
-        self.edge_speed_cap_mps=None
-        self.edge_alert='NONE'
-        self.startup_steer_limit_active=False
-        self.startup_right_error_m=None
-        self.static_wall_distance_m=None
-        self.front_wall_speed_mps=None
-        self._prev_wall_distance_m=None
-        self._wall_static_frames=0
-        self.pre_corner_active=False
-        self.recenter_reason='none'
-
-    @staticmethod
-    def _visual_corridor(bounds):
-        if bounds is None:
-            return None
-        a=np.asarray(bounds,dtype=float).reshape(-1,3)
-        a=a[np.all(np.isfinite(a),axis=1)]
-        if len(a)<4:
-            return None
-        a=a[np.argsort(a[:,0])]
-        if a[-1,0]-a[0,0]<1.0 or np.any(a[:,2]-a[:,1]<.5):
-            return None
-        centers=np.column_stack((a[:,0],.5*(a[:,1]+a[:,2])))
-        delta=np.diff(centers,axis=0)
-        slope=np.median(delta[:,1]/np.maximum(.05,delta[:,0]))
-        return RoadCorridor(centers,float(np.median((a[:,2]-a[:,1])/2)),
-                            True,math.degrees(math.atan(float(slope))),a)
-
-    def _within_road(self,steer,horizon):
-        if not self.road.valid:
-            return True,0.
-        ds,arc=self._path_samples(steer,min(5.,horizon))
-        centers=self.road.centers
-        applicable=(arc[:,0]>=centers[0,0])&(arc[:,0]<=centers[-1,0])
-        if np.count_nonzero(applicable)<3:
-            return False,1e6
-        x,y=arc[applicable,0],arc[applicable,1]
-        if self.road.bounds is not None:
-            right=np.interp(x,self.road.bounds[:,0],self.road.bounds[:,1])
-            left=np.interp(x,self.road.bounds[:,0],self.road.bounds[:,2])
-            margin=self.cfg['path_half_width_m']+.055
-            over=np.maximum(np.maximum(right+margin-y, y-(left-margin)),0.)
-            return bool(np.max(over)<.001),float(np.mean(over))
-        expected=np.interp(x,centers[:,0],centers[:,1])
-        deviation=np.abs(y-expected)
-        avail=self.road.half_width-self.cfg['path_half_width_m']-.08
-        return bool(avail>.05 and np.all(deviation<=avail)),float(np.mean(deviation))
-
-    def _path_samples(self, angle, horizon=8.0):
-        wheel_base=self.cfg['wheel_base_m']
-        curvature=math.tan(angle)/wheel_base
-        # Restrict predicted path to a single forward arc, not loops.
-        if abs(curvature) > 1e-6:
-            horizon=min(horizon,2.1/abs(curvature))
-        dist=np.arange(.25,max(.26,horizon)+.01,.20)
-        if abs(curvature)<1e-6:
-            x=dist
-            y=np.zeros_like(dist)
-        else:
-            x=np.sin(curvature*dist)/curvature
-            y=(1-np.cos(curvature*dist))/curvature
-        return dist, np.stack((x,y),axis=1)
-
-    def clearance(self, obstacles, angle, horizon=8.0):
-        """Distance to first projected collision, including full vehicle width + margin."""
-        if len(obstacles)==0:return horizon
-        ds, xy=self._path_samples(angle, horizon)
-        r=self.cfg['path_half_width_m']
-        # Locally choose every sample, not a straight ray, to avoid wall clipping.
-        for i in range(len(ds)):
-            candidates=obstacles[(np.abs(obstacles[:,0]-xy[i,0]) < r+.2)
-                                 & (np.abs(obstacles[:,1]-xy[i,1]) < r+.2)]
-            if len(candidates) and np.any(np.sum((candidates-xy[i])**2,axis=1)<r*r):
-                return float(ds[i])
-        return min(horizon,float(ds[-1]))
-
-    def _lead(self, depth_obstacles, dt):
-        # Candidate moving car in own corridor. A stationary wall can look similar;
-        # only label as possible lead, never use estimate as a clearance guarantee.
-        if len(depth_obstacles)==0:
-            self.last_lead=None
-            self.lead_speed=None
-            return None
-        pts=depth_obstacles
-        m=(pts[:,0]>.5)&(pts[:,0]<9)&(np.abs(pts[:,1])<.29)
-        # On bends, the inner curb sweeps across the vehicle's forward
-        # camera centerline. A curb is NOT a lead car: exclude any depth
-        # point adjacent to the measured left/right road boundary. It remains
-        # in the *obstacle cloud* and must still pass collision checks.
-        if self.road.valid and len(self.road.centers)>2:
-            xs=pts[:,0]
-            if self.road.bounds is not None:
-                b=np.asarray(self.road.bounds)
-                right=np.interp(xs,b[:,0],b[:,1])
-                left=np.interp(xs,b[:,0],b[:,2])
-            else:
-                c=np.interp(xs,self.road.centers[:,0],self.road.centers[:,1])
-                right=c-self.road.half_width
-                left=c+self.road.half_width
-            half=self.cfg['path_half_width_m']+.06
-            m &= (xs>=self.road.centers[0,0]) & (xs<=self.road.centers[-1,0])
-            m &= (pts[:,1]>right+half) & (pts[:,1]<left-half)
-        d=float(np.min(pts[m,0])) if np.any(m) else None
-        if d is None:
-            self.last_lead=None;self.lead_speed=None
-            return None
-        if self.last_lead is not None and .015<dt<.45 and abs(d-self.last_lead)<1.8:
-            est=max(0.,min(15., self.speed+(d-self.last_lead)/dt))
-            self.lead_speed=est if self.lead_speed is None else .65*self.lead_speed+.35*est
-        self.last_lead=d
-        return d
-
-    def _front_wall(self, points, measured_speed, dt):
-        """Detect a wide, stationary front LiDAR wall; not a bend by itself."""
-        cloud=np.asarray(points,dtype=float).reshape((-1,2))
-        self.static_wall_distance_m=None
-        self.front_wall_speed_mps=None
-        if len(cloud)<10:
-            self._prev_wall_distance_m=None
-            self._wall_static_frames=0
-            return False
-        front=cloud[(cloud[:,0]>1.0)&(cloud[:,0]<10.)&(abs(cloud[:,1])<1.8)]
-        distances=[]
-        for x in np.arange(1.0,10.,.35):
-            band=front[abs(front[:,0]-x)<.22]
-            if len(band)>=7 and np.ptp(band[:,1])>=.65:
-                distances.append(float(np.median(band[:,0])))
-        if not distances:
-            self._prev_wall_distance_m=None
-            self._wall_static_frames=0
-            return False
-        distance=min(distances)
-        self.static_wall_distance_m=distance
-        if (self._prev_wall_distance_m is not None and .015<dt<.25 and
-                measured_speed is not None):
-            world_speed=measured_speed+(distance-self._prev_wall_distance_m)/dt
-            if abs(world_speed)<1.5:
-                self._wall_static_frames+=1
-            else:
-                self._wall_static_frames=0
-            self.front_wall_speed_mps=world_speed
-        self._prev_wall_distance_m=distance
-        return self._wall_static_frames>=2
-
-    def _lane_obstacle_ahead(self, points, corridor, lane_offset, horizon):
-        if not corridor.valid:
-            return False
-        cloud=np.asarray(points,dtype=float).reshape((-1,2))
-        if len(cloud)==0:return False
-        cloud=cloud[(cloud[:,0]>.9)&(cloud[:,0]<horizon)]
-        if len(cloud)==0:return False
-        xs=np.clip(cloud[:,0],corridor.centers[0,0],corridor.centers[-1,0])
-        center=np.interp(xs,corridor.centers[:,0],corridor.centers[:,1])+lane_offset
-        return bool(np.any(abs(cloud[:,1]-center)<self.cfg['path_half_width_m']+.18))
-
-    def _soft_steer(self, desired, dt, measured_speed):
-        """Slow wheel response without modifying independent safety gates."""
-        v=max(0.,self.speed,float(measured_speed or 0.))
-        maxrate=float(self.cfg.get('max_steer_rate_deg_s',35.0))
-        if v>=5.:maxrate=min(maxrate,27.0)
-        delta=math.radians(maxrate)*dt
-        provisional=float(np.clip(desired,self.prev_steer-delta,self.prev_steer+delta))
-        tau=max(.001,float(self.cfg.get('steer_smoothing_tau_s',.16)))
-        alpha=dt/(tau+dt)
-        return self.prev_steer+alpha*(provisional-self.prev_steer)
-
+class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
-             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None):
+             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False):
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
@@ -431,6 +17,7 @@ class SafetyPlanner:
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','gate or stale/missing forward sensor')
         dt=max(.01,min(dt,.25))
+        self.map_ready=bool(map_ready)
         depth_obstacles=np.asarray(depth_obstacles).reshape((-1,2))
         lidar_obstacles=np.asarray(lidar_obstacles).reshape((-1,2))
         pts=np.vstack((depth_obstacles,lidar_obstacles))
@@ -513,55 +100,13 @@ class SafetyPlanner:
         self.lead_distance=lead
         self.overtake_start_distance_m=None
         self.planned_pass_distance_m=None
-        safety_side_clear=(rear_gap is None or rear_gap>2.5)
-        passing_enabled=bool(self.cfg.get('enable_overtake',True))
-        if not passing_enabled:
-            self.overtake_side=0
-            self.overtake_hold=0.
-        self.target_lane_offset=self.racing_line.offset_m
-        if self.road.valid:
-            width=self.road.half_width
-            max_offset=max(0.,width-self.cfg['path_half_width_m']-.11)
-            if passing_enabled and lead is not None and self.lead_speed is not None:
-                closing=max(0.,self.speed-self.lead_speed)
-                safe_deceleration=max(.5,self.cfg['max_braking_mps2'])
-                # TTC / braking-envelope aware initiation point. All dimensions m.
-                trigger=max(2.8,self.speed*self.cfg['reaction_delay_s']+
-                            closing*closing/(2*safe_deceleration)+2.0)
-                self.overtake_start_distance_m=trigger
-                # Distance car must travel to establish an ahead-of-lead gap.
-                gap_to_clear=lead+.55+1.2
-                desired_speed=self.cfg['straight_speed_mps']*1.15
-                rel=max(.05,desired_speed-self.lead_speed)
-                self.planned_pass_distance_m=desired_speed*gap_to_clear/rel
-            if (passing_enabled and not self.racing_line.grid and self.overtake_side==0 and lead is not None and
-                1.3<lead<max(4.0,self.overtake_start_distance_m or 4.) and
-                safety_side_clear and max_offset>=.42 and
-                (self.lead_speed is None or self.lead_speed<self.cfg['straight_speed_mps']*1.15-.35)):
-                # Select the side with more verified road width and fewer returns.
-                options=[]
-                xlook=min(float(self.road.centers[-1,0]),lead+.4)
-                if xlook>=self.road.centers[0,0]:
-                    mid=float(np.interp(xlook,self.road.centers[:,0],self.road.centers[:,1]))
-                    for side in (1,-1):
-                        if self.road.bounds is not None:
-                            bound=(np.interp(xlook,self.road.bounds[:,0],self.road.bounds[:,2]) if side>0 else
-                                   np.interp(xlook,self.road.bounds[:,0],self.road.bounds[:,1]))
-                            space=side*(bound-mid)
-                        else:
-                            space=width
-                        # A pass is forbidden when a side cannot fit the whole car.
-                        safe_space=space-self.cfg['path_half_width_m']-.12
-                        if safe_space<.42:continue
-                        nearby=pts[(pts[:,0]>.8)&(pts[:,0]<min(lead+2,8.)) &
-                                   (pts[:,1]*side>.28)]
-                        blocking=int(np.count_nonzero(nearby))
-                        options.append((safe_space-.015*blocking+.01*(side==self.cruise_side),side))
-                if options:
-                    self.overtake_side=max(options)[1]
-                    self.overtake_hold=0.
-            if self.overtake_side:
-                self.target_lane_offset=self.overtake_side*min(.62,max_offset*.93)
+        passing_enabled=bool(self.cfg.get('enable_overtake',True) and self.map_ready)
+        self.target_lane_offset,self.overtake_side=(
+            self.rejoin.update(self.road,pts,lead,self.lead_speed,
+                               rear_gap,dt,observed,passing_enabled,
+                               base_offset=self.racing_line.offset_m))
+        self.overtake_start_distance_m=lead
+        self.planned_pass_distance_m=self.rejoin.remaining_m
         # Smooth the commanded route through a local look-ahead point.
         desired=0.
         if self.road.valid:
@@ -572,6 +117,21 @@ class SafetyPlanner:
                                 self.road.centers[0,0],self.road.centers[-1,0]))
             ycenter=float(np.interp(xgoal,self.road.centers[:,0],self.road.centers[:,1]))
             ygoal=ycenter+self.target_lane_offset
+            # Map-derived target is used only where the live road independently
+            # confirms it; stale or mismatched SLAM cannot drive steering.
+            if self.map_ready and map_target is not None and not self.racing_line.grid:
+                mx,my=map_target
+                if (math.isfinite(mx) and math.isfinite(my) and
+                        1.0<=mx<=float(self.road.centers[-1,0])):
+                    if self.road.bounds is not None:
+                        rr=float(np.interp(mx,self.road.bounds[:,0],self.road.bounds[:,1]))
+                        ll=float(np.interp(mx,self.road.bounds[:,0],self.road.bounds[:,2]))
+                    else:
+                        mc=float(np.interp(mx,self.road.centers[:,0],self.road.centers[:,1]))
+                        rr,ll=mc-self.road.half_width,mc+self.road.half_width
+                    if rr+self.cfg['path_half_width_m']+.12 < my < ll-self.cfg['path_half_width_m']-.12:
+                        xgoal,ygoal=float(mx),float(my+self.rejoin.offset)
+
             if self.racing_line.grid:
                 # v10: The start straight is NOT a distant-centerline tracking
                 # problem.  Matching the right-wall gap means ZERO steer.  v9
@@ -676,10 +236,15 @@ class SafetyPlanner:
             self.prev_steer=0.
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','grid straight path is not verified safe')
-        if not startup_hold and self.cfg.get('hold_safe_lane_mode',False):
+        if not startup_hold:
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.
-            steer=self._soft_steer(steer,dt,self.measured_speed)
+            steer=self.steer_limiter.apply(steer,dt,observed)
+            if self.planner_type!='adaptive_pursuit':
+                safe,_=self._within_road(steer,horizon)
+                if not safe:
+                    self.speed=0.;self.last_mode='BRAKE'
+                    return Motion(0.,-self.prev_steer,'BRAKE','limited steering outside visible road')
         # Clamp initial steering, with a stop if the clamped arc would not fit
         # the curb corridor. No unchecked steering override after validation.
         if startup_hold and abs(steer)>startup_limit+1e-8:
@@ -694,19 +259,6 @@ class SafetyPlanner:
             if hard_gap<=.18:self.speed=0.
             self.last_mode='BRAKE'
             return Motion(self.speed,-steer,'BRAKE','obstacle in stopping envelope')
-        if self.overtake_side:
-            self.overtake_hold+=dt
-            # Do not abruptly return to centre after the opponent disappears.
-            if lead is not None:self.last_overtake_seen=0.
-            else:self.last_overtake_seen+=dt
-            if self.last_overtake_seen>2.0 and (rear_gap is None or rear_gap>4.):
-                self.cruise_side=self.overtake_side
-                self.overtake_side=0
-                self.overtake_hold=0.
-                self.last_overtake_seen=0.
-            elif self.overtake_hold>10.:
-                self.overtake_side=0
-                self.overtake_hold=0.
         # Defensive strategy is *only* maintaining speed and a steady safe line.
         # Never swerve to block another car, especially in an adjacent lane.
         self.defend=(passing_enabled and self.overtake_side==0 and rear_gap is not None and
@@ -783,6 +335,12 @@ class SafetyPlanner:
             # closing an unsafe gap or obstructing the adjacent passing car.
             steer=.65*self.prev_steer+.35*steer
         # Rate-limit acceleration; allow emergency braking at configured rate.
+        # Never accelerate beyond what the currently verified forward
+        # clearance permits us to stop within, including reaction delay.
+        verified=max(0.,float(free)-float(self.cfg['emergency_margin_m']))
+        delay=max(0.,float(self.cfg['reaction_delay_s']))
+        v_visible=max(0.,math.sqrt((decel*delay)**2+2*decel*verified)-decel*delay)
+        v=min(v,v_visible,10.0 if self.map_ready else 5.0)
         v=np.clip(v,self.speed-decel*dt,self.speed+self.cfg['accel_mps2']*dt)
         self.speed=float(max(0.,v))
         self.prev_steer=float(steer)
