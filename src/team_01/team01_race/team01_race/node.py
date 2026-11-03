@@ -333,6 +333,8 @@ class Racer(Node, DiagnosticsMixin):
                 f'edge_m={self.planner.near_edge_m} '
                 f'edge_vcap={self.planner.edge_speed_cap_mps} '
                 f'line_offset={self.planner.target_lane_offset:+.2f} '
+                f'join_length={self.planner.reference_path.last_capture_m:.2f} '
+                f'join_error={self.planner.reference_path.last_initial_error_m:+.2f} '
                 f'lap_check={learning.last_confirmation}')
             self.last_log=now
 

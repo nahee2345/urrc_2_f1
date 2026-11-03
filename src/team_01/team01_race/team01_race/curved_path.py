@@ -40,7 +40,7 @@ def _road_arrays(road):
 
 
 def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
-                               relative_offset=0., horizon=5.):
+                               relative_offset=0., horizon=5., reference=None):
     """Return only an edge- and obstacle-safe, varying-steer candidate.
 
     The local target is sampled repeatedly as the simulated Ackermann bicycle
@@ -66,6 +66,11 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
     obs=np.asarray(obstacles,dtype=float).reshape((-1,2))
     obs=obs[np.all(np.isfinite(obs),axis=1)]
     off=float(desired_offset)+float(relative_offset)
+    ref=None if reference is None else np.asarray(reference,dtype=float)
+    if ref is not None and (ref.ndim!=2 or ref.shape[1]!=2 or
+                            len(ref)<4 or not np.all(np.isfinite(ref)) or
+                            np.any(np.diff(ref[:,0])<=0)):
+        return None
     x=y=yaw=s=0.
     positions=[];lengths=[]
     first_steer=None;maxcurv=0.;min_edge=100.;first_hit=float('inf')
@@ -77,7 +82,8 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
         look_x=min(last_x-.08,max(float(b[0,0]), x+look))
         right=float(np.interp(look_x,b[:,0],b[:,1]))
         left=float(np.interp(look_x,b[:,0],b[:,2]))
-        target_y=(left+right)*.5+off
+        target_y=(float(np.interp(look_x,ref[:,0],ref[:,1]))+float(relative_offset)
+                  if ref is not None else (left+right)*.5+off)
         # Clip target into observed road envelope with footprint clearance.
         target_y=max(right+margin,min(left-margin,target_y))
         dx=look_x-x;dy=target_y-y

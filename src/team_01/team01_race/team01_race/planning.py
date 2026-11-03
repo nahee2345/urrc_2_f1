@@ -108,31 +108,24 @@ class SafetyPlanner(PlannerGeometry):
                                base_offset=self.racing_line.offset_m))
         self.overtake_start_distance_m=lead
         self.planned_pass_distance_m=self.rejoin.remaining_m
-        # Smooth the commanded route through a local look-ahead point.
+        # Acquire the selected lane over several metres, preserving vehicle
+        # heading at x=0. A distant straight line must not cause a snap turn.
+        mapped_goal=(None if not self.map_ready or map_target is None else
+                     (map_target[0],map_target[1]+self.target_lane_offset))
+        self.reference_geometry=self.reference_path.build(
+            self.road,self.target_lane_offset,observed,mapped_goal)
         desired=0.
         if self.road.valid:
-            # Regulated Pure Pursuit: measured-speed adaptive lookahead.
             pursuit_speed=(self.measured_speed if self.measured_speed is not None
                            else self.speed)
             xgoal=float(np.clip(1.8+min(4.8,pursuit_speed*.44),
                                 self.road.centers[0,0],self.road.centers[-1,0]))
-            ycenter=float(np.interp(xgoal,self.road.centers[:,0],self.road.centers[:,1]))
-            ygoal=ycenter+self.target_lane_offset
-            # Map-derived target is used only where the live road independently
-            # confirms it; stale or mismatched SLAM cannot drive steering.
-            if self.map_ready and map_target is not None and not self.racing_line.grid:
-                mx,my=map_target
-                if (math.isfinite(mx) and math.isfinite(my) and
-                        1.0<=mx<=float(self.road.centers[-1,0])):
-                    if self.road.bounds is not None:
-                        rr=float(np.interp(mx,self.road.bounds[:,0],self.road.bounds[:,1]))
-                        ll=float(np.interp(mx,self.road.bounds[:,0],self.road.bounds[:,2]))
-                    else:
-                        mc=float(np.interp(mx,self.road.centers[:,0],self.road.centers[:,1]))
-                        rr,ll=mc-self.road.half_width,mc+self.road.half_width
-                    if rr+self.cfg['path_half_width_m']+.12 < my < ll-self.cfg['path_half_width_m']-.12:
-                        xgoal,ygoal=float(mx),float(my+self.rejoin.offset)
-
+            if self.reference_geometry is not None:
+                ygoal=float(np.interp(xgoal,self.reference_geometry[:,0],
+                                      self.reference_geometry[:,1]))
+            else:
+                ygoal=float(np.interp(xgoal,self.road.centers[:,0],
+                                      self.road.centers[:,1])+self.target_lane_offset)
             if self.racing_line.grid:
                 # v10: The start straight is NOT a distant-centerline tracking
                 # problem.  Matching the right-wall gap means ZERO steer.  v9
@@ -168,8 +161,9 @@ class SafetyPlanner(PlannerGeometry):
         if self.road.valid:
             # Pure-pursuit candidate adds sub-degree steering on gentle bends;
             # a coarse fixed steering grid otherwise treats them as straight.
-            path=self.road.centers
-            look_x=float(np.clip(min(path[-1,0],3.0),path[0,0],3.0))
+            path=(self.reference_geometry if self.reference_geometry is not None
+                  else self.road.centers)
+            look_x=float(np.clip(min(path[-1,0],3.0),max(.7,path[0,0]),3.0))
             look_y=float(np.interp(look_x,path[:,0],path[:,1]))
             pure=math.atan2(2*self.cfg['wheel_base_m']*look_y,
                             look_x*look_x+look_y*look_y)
@@ -201,19 +195,22 @@ class SafetyPlanner(PlannerGeometry):
         # observed RGB+Depth road at every predicted 14cm of progress.
         adaptive=[]
         if self.road.valid and not startup_hold:
-            for shift in (0., -.11, +.11):
+            # One continuous path reference: eliminate per-tick left/right
+            # candidate switching that previously caused zigzag steering.
+            for shift in (0.,):
                 c=adaptive_pursuit_candidate(
                     self.road, pts, self.cfg,
                     self.measured_speed if self.measured_speed is not None else self.speed,
                     desired_offset=self.target_lane_offset,
                     relative_offset=shift,
-                    horizon=min(14.0,horizon))
+                    horizon=min(14.0,horizon),
+                    reference=self.reference_geometry)
                 if c is not None and (not startup_hold or
                                       abs(c.steer_rad)<=startup_limit):
                     adaptive.append(c)
-        use_adaptive=bool(adaptive) and (
-            not records or abs(self.road.heading_deg)>=3. or
-            self.preview_curve>=.04 or self.pre_corner_active)
+        # Keep a single controller for straight and bend when the full
+        # collision-checked adaptive rollout is available.
+        use_adaptive=bool(adaptive) and not startup_hold
         if use_adaptive:
             choice=max(adaptive,key=lambda c:c.score-.40*abs(c.steer_rad-self.prev_steer))
             free,steer=choice.first_collision_m,choice.steer_rad
@@ -237,6 +234,15 @@ class SafetyPlanner(PlannerGeometry):
             self.prev_steer=0.
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','grid straight path is not verified safe')
+        if (not startup_hold and self.road.valid and
+                self.edge_alert=='NONE' and not self.overtake_side and
+                lead is None and abs(self.road.heading_deg)<4. and
+                self.preview_curve<.035):
+            # Straight-line acquisition is intentionally shallow. Allow full
+            # steering on actual bends, hazards and when already near an edge.
+            capture_limit=math.radians(float(
+                self.cfg.get('straight_capture_max_steer_deg',6.)))
+            steer=float(np.clip(steer,-capture_limit,capture_limit))
         if not startup_hold:
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.

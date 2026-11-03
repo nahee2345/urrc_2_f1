@@ -42,7 +42,7 @@ team01_control:
     grid_min_width_m: 0.68
     target_straight_speed_mps: 20.0
     preview_curvature_threshold: 0.08
-    # Out -> in -> out with reduced side offset and live collision clearance.
+    # No forced side-to-side corner sweep; hold a continuous safe reference.
     corner_prelook_heading_deg: 7.5
     corner_end_heading_deg: 3.5
     max_line_offset_change_mps: 0.28
@@ -75,7 +75,9 @@ team01_control:
     steer_smoothing_tau_s: 0.16
     precorner_wall_range_m: 10.0
     center_reached_tolerance_m: 0.12
-    max_steer_rate_deg_s: 35.0
     max_steer_accel_deg_s2: 170.0
+    steer_target_filter_tau_s: 0.10
+    straight_capture_max_steer_deg: 6.0
+    path_capture_max_length_m: 8.5
     mapping_lap_speed_mps: 5.0
     mapped_lap_speed_mps: 10.0

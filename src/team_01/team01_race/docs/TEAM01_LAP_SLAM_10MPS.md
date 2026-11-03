@@ -59,3 +59,23 @@ that a corridor is free when the live camera and LiDAR disagree.
 - CI: Added the same RTAB-Map and tf2 ROS Jazzy dependencies to the primary Monza workflow that independent QA already installs.
 - **Request to verifier:** report the `Motion.reason` for any `BRAKE`, especially `limited steering outside visible road`, distinguish 1st-lap motion from mapped-lap speed, capture `rtabmap` TF and loop closure evidence.
 - No Gazebo 1-lap, SLAM loop-closure, or actual 10 m/s PASS claimed by these edits.
+
+## Gradual straight-line capture / anti-oscillation update
+
+- `reference_path.py`: quintic Hermite acquisition path starts at the
+  vehicle's present position and heading, then smoothly enters the selected
+  sensed road center/offset over approximately 3–8.5 m.
+- The reference keeps the observed road curvature and never acts as a
+  drivable-area authorization; the original measured bounds remain mandatory.
+- `curved_path.py` accepts this reference. The controller uses one continuous
+  adaptive path, removing arbitrary ±0.11 m choices that could flip each tick.
+- `steering.py`: target low-pass, steering rate/acceleration limit and
+  braking-rate arrival stop target-angle overshoot.
+- In verified unobstructed straight sections, wheel command is limited to
+  ±6 degrees during capture; curve/obstacle/edge cases are exempt.
+- `node.py` logs `join_length` and `join_error`.
+- Test `tests/test_v15_gradual_capture.py` defines gradual-join invariants.
+- **Verification handoff:** Record commanded steering vs. yaw, path switching,
+  peak lateral error, sign reversals per 10 m, `Motion.reason` for BRAKE,
+  and actual distance/lap count in Gazebo. This change is not an actual
+  10 m/s or full-lap PASS.

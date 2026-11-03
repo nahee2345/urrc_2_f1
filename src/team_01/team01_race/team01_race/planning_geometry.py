@@ -42,8 +42,11 @@ class PlannerGeometry:
         self.recenter_reason='none'
         from team01_race.rejoin import RejoinPlanner
         from team01_race.steering import SteeringLimiter
+        from team01_race.reference_path import GradualReference
         self.rejoin=RejoinPlanner(cfg)
         self.steer_limiter=SteeringLimiter(cfg)
+        self.reference_path=GradualReference(cfg)
+        self.reference_geometry=None
         self.map_ready=False
 
     @staticmethod

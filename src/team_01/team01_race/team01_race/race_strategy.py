@@ -1,4 +1,4 @@
-"""Local curb-centric first lap, bounded out-in-out and cautious lap learning.
+"""Local curb-centric first lap, steady-lane capture and cautious lap learning.
 
 Uses only on-vehicle sensing and *command-integrated* distance/yaw (not world pose).
 Distance / lap verification is approximate, never competition timing authority.
@@ -45,7 +45,7 @@ def base_link_road_distances(corridor, at_x=0.75):
 
 
 class RacingLine:
-    """Start grid -> road center -> outside/apex/outside without world map."""
+    """Start-grid acquisition -> stable road-following without forced apex flips."""
     def __init__(self, cfg):
         self.cfg=cfg
         self.phase='GRID'
