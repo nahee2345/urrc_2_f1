@@ -56,6 +56,11 @@ echo "[CI] corrected grid spawn: ($SPX,$SPY), yaw=$SPYAW" | tee "$STATE/spawn.lo
 ros2 run ros_gz_sim create --world monza --file "$PKG/models/team01_car/model.sdf" --name team01 --x "$SPX" --y "$SPY" --z 1.243527 -Y "$SPYAW" | tee -a "$STATE/spawn.log"
 ros2 run ros_gz_bridge parameter_bridge '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' >"$STATE/clock.log" 2>&1 & PIDS+=("$!")
 ros2 launch team01_race race.launch.py race_start_mode:=camera >"$STATE/controller.log" 2>&1 & PIDS+=("$!")
+# Retain independent gate and adapter evidence even if the Gazebo vehicle
+# fails to move. They distinguish recognition, authorization, commanding,
+# and drivetrain/physics stalls.
+timeout 780s ros2 topic echo /team01/debug/start --field data >"$STATE/start_status.log" 2>&1 & PIDS+=("$!")
+timeout 780s ros2 topic echo /team01/debug/adapter --field data >"$STATE/adapter_status.log" 2>&1 & PIDS+=("$!")
 python3 "$PKG/scripts/verify_monza_lap.py" --reference "$MAP/tracks/processed/monza_centerline.csv" --report "$STATE/lap.json" --max-seconds 660 --motion-start-file "$STATE/lights_out.ready" >"$STATE/verifier.log" 2>&1 & PIDS+=("$!")
 READY=0
 for _ in $(seq 1 120);do
