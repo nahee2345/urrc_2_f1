@@ -199,16 +199,21 @@ class SafetyPlanner(PlannerGeometry):
             # One continuous path reference: eliminate per-tick left/right
             # candidate switching that previously caused zigzag steering.
             for shift in (0.,):
-                c=adaptive_pursuit_candidate(
-                    self.road, pts, self.cfg,
-                    self.measured_speed if self.measured_speed is not None else self.speed,
-                    desired_offset=self.target_lane_offset,
-                    relative_offset=shift,
-                    horizon=min(14.0,horizon),
-                    reference=self.reference_geometry)
-                if c is not None and (not startup_hold or
-                                      abs(c.steer_rad)<=startup_limit):
-                    adaptive.append(c)
+                # If the far end of a newly visible curve is out of the safe
+                # envelope, attempt a SHORTER fully checked trajectory.
+                # Its short free distance is then used by the braking
+                # supervisor: no assertion that the unseen road is clear.
+                for trial in (min(14.,horizon),min(4.,horizon),
+                              min(2.3,horizon)):
+                    c=adaptive_pursuit_candidate(
+                        self.road,pts,self.cfg,
+                        self.measured_speed if self.measured_speed is not None else self.speed,
+                        desired_offset=self.target_lane_offset,
+                        relative_offset=shift,horizon=trial,
+                        reference=self.reference_geometry)
+                    if c is not None:
+                        adaptive.append(c)
+                        break
         # Keep a single controller for straight and bend when the full
         # collision-checked adaptive rollout is available.
         use_adaptive=bool(adaptive) and not startup_hold

@@ -47,6 +47,17 @@ class ReferenceScheduler:
         self.elapsed+=dt
         force=(self.path is None or self.offset is None or
                abs(float(offset)-self.offset)>.20)
+        if self.path is not None and len(road.centers)>3:
+            # A fresh sensor observation can introduce a previously invisible
+            # corner. Do not follow yesterday's straight prediction through it.
+            probe=min(3.5,float(road.centers[-1,0]),float(self.path[-1,0]))
+            if probe>1.:
+                observed=float(np.interp(probe,road.centers[:,0],
+                                         road.centers[:,1]))+float(offset)
+                held=float(np.interp(probe,self.path[:,0],self.path[:,1]))
+                if abs(observed-held)>.27:
+                    force=True
+                    self.path=None
         if force or self.elapsed>=self.period:
             created=self.builder.build(road,offset,speed,map_target)
             self.elapsed=0.
