@@ -5,7 +5,11 @@ set -euo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 MODEL="$HERE/../models/team01_car/model.sdf"
-MAP_DIR="$ROOT/src/urrc_track_gazebo"
+# Use the same official submodule world as CI, with old layout as fallback.
+MAP_DIR="${TEAM01_MAP_DIR:-$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo}"
+if [[ ! -d "$MAP_DIR" && -d "$ROOT/src/urrc_track_gazebo" ]]; then
+  MAP_DIR="$ROOT/src/urrc_track_gazebo"
+fi
 
 set +u
 source /opt/ros/jazzy/setup.bash
@@ -65,8 +69,13 @@ if [[ "$READY" != 1 ]]; then
 fi
 
 echo '[TEAM01] 1번 그리드에 노란색 team01 생성...'
+REF="$MAP_DIR/tracks/processed/monza_centerline.csv"
+SPAWN_REPORT="${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/local_spawn_clearance.json"
+read SPX SPY SPYAW < <(python3 "$HERE/safe_grid_spawn.py" \
+  --reference "$REF" --report "$SPAWN_REPORT")
+echo "[TEAM01] start pose x=$SPX y=$SPY yaw=$SPYAW (inspection: $SPAWN_REPORT)"
 ros2 run ros_gz_sim create --world monza --file "$MODEL" --name team01 \
-  --x 0.378672 --y -2.056035 --z 1.243527 -Y 1.457384
+  --x "$SPX" --y "$SPY" --z 1.243527 -Y "$SPYAW"
 FOUND=0
 for i in $(seq 1 20); do
   MODELS=$(timeout 3s gz model --list 2>&1 || true)
@@ -123,8 +132,22 @@ for topic in front_rgb road_rgb front_depth front_scan rear_scan; do
   fi
 done
 
-# Guarantee a dark baseline for the camera before the first red LED.
-sleep 1.3
+# Both the vision background and gate intensity baseline MUST be ready.
+# Starting the lamps before that calibration can make the actual reds part of
+# the "dark" reference, preventing any true light-out detection.
+CALIBRATED=0
+for i in $(seq 1 30); do
+  READY_CAMERA=$(timeout 3s ros2 topic echo /team01/ready_for_lights \
+    --once --field data 2>/dev/null || true)
+  if [[ "$READY_CAMERA" == *true* ]]; then CALIBRATED=1;break;fi
+  sleep .5
+done
+if [[ "$CALIBRATED" != 1 ]]; then
+  echo '[TEAM01] Camera baseline/sensors not calibrated; no unsafe light-start' >&2
+  echo 'Inspect: ros2 topic echo /team01/debug/start' >&2
+  exit 2
+fi
+echo '[TEAM01] Camera background calibrated; camera-based lights may start.'
 ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
 echo '[TEAM01] 카메라 준비 후 빨간불 1~5 점등을 시작합니다.'
 python3 "$MAP_DIR/scripts/traffic_lights_v10.py" --track monza & LIGHTS_PID=$!

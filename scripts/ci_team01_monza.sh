@@ -69,7 +69,20 @@ for TOP in front_rgb road_rgb front_depth front_scan rear_scan;do
   echo "SENSOR $TOP"
   timeout 50s ros2 topic echo "/team01/$TOP" --once --field "$FIELD" --qos-reliability best_effort >/dev/null || { echo "ERROR: $TOP no rendered data";exit 2; }
 done
-sleep 2
+# Wait for an actual dark camera calibration, not just ROS topic existence.
+CALIBRATED=0
+for i in $(seq 1 40);do
+  SEEN=$(timeout 4s ros2 topic echo /team01/ready_for_lights --once \
+    --field data 2>/dev/null || true)
+  if [[ "$SEEN" == *true* ]];then CALIBRATED=1;break;fi
+  sleep .5
+done
+[[ "$CALIBRATED" == 1 ]] || {
+  echo '[CI] START_CALIBRATION_FAILED: camera baseline not ready' | tee "$STATE/start_failure.txt"
+  timeout 3s ros2 topic echo /team01/debug/start --once | tee "$STATE/start_debug.txt" || true
+  exit 1
+}
+echo '[CI] CAMERA_START_BASELINE_READY' | tee "$STATE/camera_ready.log"
 ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}' | tee "$STATE/permission.log"
 python3 "$MAP/scripts/traffic_lights_v10.py" --track monza --skip-camera-check | tee "$STATE/lights.log"
 grep -q 'LIGHTS OUT ' "$STATE/lights.log" || { echo '[CI] LIGHTS_OUT_MISSING'; exit 1; }

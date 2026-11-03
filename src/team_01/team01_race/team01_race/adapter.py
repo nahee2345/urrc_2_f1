@@ -1,9 +1,10 @@
 """Hard independent race gate + command timeout: Float32 -> Gazebo Twist."""
+import json
 import math
 import time
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, String
 from geometry_msgs.msg import Twist
 
 
@@ -26,6 +27,7 @@ class Adapter(Node):
         self.create_subscription(Float32,self.get_parameter('steering_topic').value,
                                  self.on_steer,10)
         self.pub=self.create_publisher(Twist,self.get_parameter('command_topic').value,10)
+        self.pub_debug=self.create_publisher(String,'/team01/debug/adapter',10)
         self.create_timer(.04,self.tick)
 
     def on_gate(self,m):
@@ -52,6 +54,16 @@ class Adapter(Node):
             m.linear.x=self.speed
             m.angular.z=-self.speed*math.tan(self.steer)/.34
         self.pub.publish(m)
+        # ROS command-side evidence: distinguishes camera gate from missing
+        # adapter permission, command timeout and Gazebo drivetrain issues.
+        self.pub_debug.publish(String(data=json.dumps({
+            'allowed':self.allowed,'fresh_speed':now-self.ts<.3,
+            'fresh_steer':now-self.tt<.3,'send_enabled':safe,
+            'received_speed_mps':round(self.speed,3),
+            'received_steer_rad':round(self.steer,4),
+            'sent_linear_mps':round(float(m.linear.x),3),
+            'sent_yaw_rad_s':round(float(m.angular.z),4),
+        },separators=(',',':'))))
 
 
 def main():

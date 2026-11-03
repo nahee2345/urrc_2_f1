@@ -20,11 +20,12 @@ from team01_race.signal_vision import SignalVision
 from team01_race.node_diagnostics import DiagnosticsMixin
 from team01_race.track_memory import TrackMemory
 from team01_race.mode_recovery import RecoveryGuard
+from team01_race.start_diagnostics import StartDiagnosticsMixin
 
 
 from team01_race.defaults import DEFAULTS
 
-class Racer(Node, DiagnosticsMixin):
+class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
     def __init__(self):
         super().__init__('team01_control')
         for k,v in DEFAULTS.items(): self.declare_parameter(k,v)
@@ -77,6 +78,7 @@ class Racer(Node, DiagnosticsMixin):
         self.pub_speed=self.create_publisher(Float32,self.get_parameter('speed_topic').value,10)
         self.pub_steer=self.create_publisher(Float32,self.get_parameter('steering_topic').value,10)
         self.pub_path=self.create_publisher(String,'/team01/debug/path',10)
+        self.init_start_diagnostics()
         self.sub_start=self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                                 self.on_start,10)
         self.create_subscription(Image,'/team01/front_depth',self.on_depth,qos_profile_sensor_data)
@@ -103,6 +105,7 @@ class Racer(Node, DiagnosticsMixin):
             self._lap_record_saved=False
             self._last_partial_record_distance=-10.
         self.permission=bool(msg.data)
+        self.get_logger().info(f'RACE_PERMISSION={self.permission}')
         if not self.permission:
             self.planner.speed=0.
             self.pub_speed.publish(Float32(data=0.))
@@ -301,6 +304,7 @@ class Racer(Node, DiagnosticsMixin):
         # No early movement: speed repeatedly 0 while gate is unfulfilled.
         self.pub_speed.publish(Float32(data=float(motion.speed)))
         self.pub_steer.publish(Float32(data=float(motion.steering)))
+        self.publish_start_diagnostics(now,motion,d_ok,l_ok)
         # High-rate evidence: whether a trajectory EXISTS and is selected.
         path=self.planner.reference_geometry
         payload={'mode':motion.mode,'reason':motion.reason,
