@@ -1,6 +1,5 @@
 """Independent start diagnostics; neither this module nor readiness starts the car."""
 import json
-from std_msgs.msg import Bool, String
 
 
 def camera_ready(vision_ready, gate_baseline, first_bright_time, rgb_age,
@@ -13,6 +12,9 @@ def camera_ready(vision_ready, gate_baseline, first_bright_time, rgb_age,
 
 class StartDiagnosticsMixin:
     def init_start_diagnostics(self):
+        from std_msgs.msg import Bool, String
+        self._StartBool=Bool
+        self._StartString=String
         self.pub_start_ready=self.create_publisher(
             Bool,'/team01/ready_for_lights',10)
         self.pub_start_status=self.create_publisher(
@@ -45,6 +47,6 @@ class StartDiagnosticsMixin:
         status['ready_for_lights']=camera_ready(
             self.signal_vision.ready,self.gate.baseline,
             self.gate.first_bright_time,age,depth_good,lidar_good)
-        self.pub_start_ready.publish(Bool(data=status['ready_for_lights']))
+        self.pub_start_ready.publish(self._StartBool(data=status['ready_for_lights']))
         self.pub_start_status.publish(
-            String(data=json.dumps(status,separators=(',',':'))))
+            self._StartString(data=json.dumps(status,separators=(',',':'))))
