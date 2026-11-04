@@ -10,6 +10,10 @@ class BEVPublisher:
         self.pub_bev=self.create_publisher(
             OccupancyGrid,'/team01/debug/bev',2)
         self.last_bev_at=0.
+        from std_msgs.msg import String
+        self._MPCString=String
+        self.pub_shadow_mpc=self.create_publisher(
+            String,'/team01/debug/mpc_shadow',2)
 
     def publish_bev(self,now):
         if now-self.last_bev_at<.10:return
@@ -25,4 +29,23 @@ class BEVPublisher:
         msg.info.origin.orientation.w=1.0
         msg.data=grid.flatten().astype(int).tolist()
         self.pub_bev.publish(msg)
+        if self.p.get('enable_shadow_mpc',False):
+            from team01_race.sampled_mpc import search_shadow_mpc
+            import json
+            proposal=search_shadow_mpc(
+                self.planner.road,self.planner.reference_geometry,
+                np.vstack((self.depth_obstacles,self.lidar_obstacles)),
+                self.actual_speed if self.actual_speed is not None
+                else self.planner.speed,
+                self.planner.prev_steer,self.p)
+            payload={'feasible':proposal is not None,
+                     'steer_rad':None if proposal is None else
+                                  round(proposal.steer_rad,5),
+                     'clearance_m':None if proposal is None else
+                                   round(proposal.min_clearance_m,3),
+                     'cost':None if proposal is None else
+                            round(proposal.cost,4),
+                     'actuator_enabled':False}
+            self.pub_shadow_mpc.publish(self._MPCString(
+                data=json.dumps(payload,separators=(',',':'))))
         self.last_bev_at=now

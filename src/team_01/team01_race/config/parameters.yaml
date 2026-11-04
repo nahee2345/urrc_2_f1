@@ -87,6 +87,8 @@ team01_control:
     straight_deadband_cross_m: 0.10
     straight_deadband_heading_deg: 2.0
     straight_deadband_curvature: 0.012
+    # Debug-only sampling MPC; no actuator control until Gazebo validation.
+    enable_shadow_mpc: false
     enable_learned_gains: false
     learned_gains_file: ''
     missing_reference_speed_mps: 1.25

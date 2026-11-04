@@ -44,6 +44,7 @@ DEFAULTS = {
     'straight_deadband_cross_m': .10,
     'straight_deadband_heading_deg': 2.0,
     'straight_deadband_curvature': .012,
+    'enable_shadow_mpc': False,
     'enable_learned_gains': False, 'learned_gains_file': '',
     'path_capture_max_length_m': 8.5,
     'mapping_lap_speed_mps': 5.0, 'mapped_lap_speed_mps': 10.0,
