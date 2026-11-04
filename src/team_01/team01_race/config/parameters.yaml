@@ -26,6 +26,7 @@ team01_control:
     sensor_mount_height_m: 0.112
     sensor_pitch_down_deg: 11.0
     camera_hfov_deg: 92.0
+    road_rgb_hfov_deg: 105.0
     min_road_points: 45
     front_max_range_m: 15.5
     rear_defend_min_gap_m: 1.5

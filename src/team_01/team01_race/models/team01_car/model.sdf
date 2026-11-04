@@ -129,7 +129,8 @@
         <update_rate>20</update_rate>
         <topic>/team01/road_rgb</topic>
         <camera>
-          <horizontal_fov>1.6057</horizontal_fov>
+          <!-- 105 deg wide road-view: depth stays 92 deg and needs reprojection. -->
+          <horizontal_fov>1.832596</horizontal_fov>
           <image>
             <width>424</width>
             <height>240</height>

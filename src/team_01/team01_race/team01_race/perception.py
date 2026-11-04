@@ -13,6 +13,8 @@ class DepthScene:
     valid: bool
     ground_xy: np.ndarray = field(default_factory=lambda: np.empty((0,2)))
     ground_uv: np.ndarray = field(default_factory=lambda: np.empty((0,2),dtype=int))
+    obstacle_uv: np.ndarray = field(default_factory=lambda: np.empty((0,2),dtype=int))
+    obstacle_height: np.ndarray = field(default_factory=lambda: np.empty(0,dtype=float))
 
 
 def decode_depth(msg):
@@ -101,7 +103,9 @@ def depth_geometry(depth, horizontal_fov_deg=92., pitch_deg=11., mount_x=.214,
     return DepthScene(points, float(np.rad2deg(np.arctan(coef[0]))),
                       len(best), count, True,
                       np.column_stack((x[ground],y[ground])),
-                      np.column_stack((sampled_v[ground],sampled_u[ground])).astype(int))
+                      np.column_stack((sampled_v[ground],sampled_u[ground])).astype(int),
+                      np.column_stack((sampled_v[obs],sampled_u[obs])).astype(int),
+                      np.asarray(resid[obs],dtype=float))
 
 
 def laser_to_xy(ranges, angle_min, angle_increment, low=.14, high=15.8,

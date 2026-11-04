@@ -1,6 +1,7 @@
 """Aligned road RGB + depth-ground projection: no map or global pose access."""
 from dataclasses import dataclass
 import numpy as np
+from team01_race.rgb_depth_projection import depth_uv_in_rgb
 
 
 @dataclass
@@ -10,7 +11,9 @@ class AsphaltRoad:
     valid: bool
 
 
-def dark_asphalt_bounds(ground_xy, ground_uv, rgb):
+def dark_asphalt_bounds(ground_xy, ground_uv, rgb, *,
+                        depth_shape=None,depth_hfov_deg=92.,
+                        rgb_hfov_deg=92.):
     """Use black/neutral pixels ONLY where depth confirms physical ground.
 
     Empty or ambiguous camera images never grant drivable-space authority.
@@ -23,7 +26,13 @@ def dark_asphalt_bounds(ground_xy, ground_uv, rgb):
     if frame.ndim!=3 or frame.shape[2]<3 or len(xy)<80 or len(uv)!=len(xy):
         return empty
     h,w=frame.shape[:2]
-    if np.any(uv[:,0]<0) or np.any(uv[:,0]>=h) or np.any(uv[:,1]<0) or np.any(uv[:,1]>=w):
+    if depth_shape is not None:
+        mapped,inside=depth_uv_in_rgb(uv,depth_shape,frame.shape,
+                                      depth_hfov_deg,rgb_hfov_deg)
+        xy=xy[inside]
+        uv=mapped[inside]
+        if len(xy)<80:return empty
+    elif np.any(uv[:,0]<0) or np.any(uv[:,0]>=h) or np.any(uv[:,1]<0) or np.any(uv[:,1]>=w):
         return empty
     c=frame[uv[:,0],uv[:,1],:3].astype(np.float32)
     bright=c.mean(axis=1)
@@ -58,7 +67,9 @@ def dark_asphalt_bounds(ground_xy, ground_uv, rgb):
     return AsphaltRoad(a,coverage,True)
 
 
-def transverse_start_marking(ground_xy, ground_uv, rgb, road_bounds):
+def transverse_start_marking(ground_xy, ground_uv, rgb, road_bounds, *,
+                             depth_shape=None,depth_hfov_deg=92.,
+                             rgb_hfov_deg=92.):
     """Detect a broad, bright transverse road stripe under depth-confirmed ground.
 
     Do not use other vehicles, bright sky or texture-only pixels as a lap marker.
@@ -70,7 +81,12 @@ def transverse_start_marking(ground_xy, ground_uv, rgb, road_bounds):
     if len(xy)<90 or len(uv)!=len(xy) or im.ndim!=3 or im.shape[2]<3 or road_bounds is None:
         return False
     h,w=im.shape[:2]
-    if np.any(uv<0) or np.any(uv[:,0]>=h) or np.any(uv[:,1]>=w):return False
+    if depth_shape is not None:
+        mapped,inside=depth_uv_in_rgb(uv,depth_shape,im.shape,
+                                      depth_hfov_deg,rgb_hfov_deg)
+        xy=xy[inside];uv=mapped[inside]
+        if len(xy)<90:return False
+    elif np.any(uv<0) or np.any(uv[:,0]>=h) or np.any(uv[:,1]>=w):return False
     bounds=np.asarray(road_bounds,dtype=float).reshape(-1,3)
     if len(bounds)<4:return False
     val=im[uv[:,0],uv[:,1],:3].astype(float)
