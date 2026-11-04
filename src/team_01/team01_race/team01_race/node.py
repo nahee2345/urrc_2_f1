@@ -22,6 +22,7 @@ from team01_race.track_memory import TrackMemory
 from team01_race.mode_recovery import RecoveryGuard
 from team01_race.road_node import RoadPerception
 from team01_race.bev_node import BEVPublisher
+from team01_race.road_roi import road_roi_metrics
 from team01_race.start_diagnostics import StartDiagnosticsMixin
 
 
@@ -311,6 +312,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'trajectory_source':self.planner.reference_scheduler.source,
                  'planner':self.planner.planner_type,
                  'painted_wall_matches':self.wall_color_matches,
+                 'road_roi':road_roi_metrics(self.planner.road),
                  'fault_transitions':self.motion_guard.transitions,
                  'recovery_hold':self.motion_guard.active,
                  'last_fault':self.motion_guard.last_fault,
