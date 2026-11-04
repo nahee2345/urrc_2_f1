@@ -26,6 +26,13 @@ class V25(unittest.TestCase):
         self.assertEqual(b.source,'rgb_depth')
         self.assertLess(b.disagreement_m,.05)
 
+    def test_initial_sensor_conflict_rejects_road(self):
+        b=RoadBelief()
+        result=b.update(road(.55),road(-.55))
+        self.assertFalse(result.valid)
+        self.assertTrue(b.rejected)
+        self.assertEqual(b.reason,'INITIAL_SENSOR_CONFLICT')
+
     def test_single_lidar_glitch_not_followed(self):
         b=RoadBelief()
         b.update(road(0.),road(0.))

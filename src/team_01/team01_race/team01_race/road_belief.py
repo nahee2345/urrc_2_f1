@@ -56,6 +56,15 @@ class RoadBelief:
         if merged is not None:
             chosen=merged;name='rgb_depth+lidar'
         elif v is not None and l is not None:
+            # No historic vote on first acquisition. A large disagreement
+            # must not silently resolve to RGB without independent proof.
+            if (old is None and self.disagreement_m is not None and
+                    self.disagreement_m>.35):
+                self.rejected=True
+                self.reason='INITIAL_SENSOR_CONFLICT'
+                self.source='unverified_sensor_conflict'
+                self.previous=None
+                return RoadCorridor(np.empty((0,2)),0.,False,0.)
             vd=self._difference(v.centers,old)
             ld=self._difference(l.centers,old)
             # If both currently measured corridors contradict the previous

@@ -75,6 +75,12 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
                             len(ref)<4 or not np.all(np.isfinite(ref)) or
                             np.any(np.diff(ref[:,0])<=0)):
         return reject('invalid_reference_geometry')
+    if ref is not None and relative_offset:
+        # Keep x=0 and the entry tangent continuous. Shift the whole
+        # Stanley path, not only the unused pure-pursuit target pixel.
+        ref=ref.copy()
+        t=np.clip(ref[:,0]/1.35,0.,1.)
+        ref[:,1]+=float(relative_offset)*t*t*(3.-2.*t)
     x=y=yaw=s=0.
     positions=[];lengths=[]
     first_steer=None;maxcurv=0.;min_edge=100.;first_hit=float('inf')
