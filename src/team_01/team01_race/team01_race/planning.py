@@ -30,11 +30,10 @@ class SafetyPlanner(PlannerGeometry):
         # asphalt; continuous, cross-checked LiDAR barriers extend the *same*
         # drivable corridor for high-speed braking and corner anticipation.
         # A disagreement is NOT fused into a permissive drivable polygon.
-        fused=fuse_verified_corridors(vision_road, lidar_road)
-        self.road=fused if fused is not None else (vision_road if vision_road is not None else lidar_road)
-        self.road_source=('rgb_depth+lidar' if fused is not None else
-                          'rgb_depth' if vision_road is not None else
-                          'lidar' if lidar_road.valid else 'none')
+        self.road=self.road_belief.update(
+            vision_road,lidar_road,speed=(actual_speed or self.speed),
+            yaw_rate=actual_yaw_rate,dt=dt)
+        self.road_source=self.road_belief.source
         # Optional Gazebo wheel odometry is a diagnostic and corrects the
         # commanded-distance dead reckoning; never use world pose or map XY.
         self.measured_speed=(float(actual_speed) if actual_speed is not None and

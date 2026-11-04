@@ -15,6 +15,7 @@ class PlannerGeometry:
         self.overtake_hold=0.0
         self.defend=False
         self.road=RoadCorridor(np.empty((0,2)),0.,False,0.)
+        self.road_belief=RoadBelief()
         self.road_source='none'
         self.cruise_side=1
         self.cruise_elapsed=0.
@@ -47,6 +48,7 @@ class PlannerGeometry:
         from team01_race.reference_scheduler import ReferenceScheduler
         from team01_race.mode_recovery import CaptureMode
         from team01_race.speed_stages import SpeedStages
+        from team01_race.road_belief import RoadBelief
         self.rejoin=RejoinPlanner(cfg)
         self.steer_limiter=SteeringLimiter(cfg)
         self.yaw_feedback=YawFeedback(cfg)
