@@ -22,8 +22,9 @@ class DiagnosticsMixin:
         try:
             import cv2
             self.road_debug_dir.mkdir(parents=True,exist_ok=True)
-            cv2.imwrite(str(self.road_debug_dir/f'{stage}.png'),
-                        cv2.cvtColor(self.road_image,cv2.COLOR_RGB2BGR))
+            from team01_race.road_debug_overlay import overlay_camera
+            annotated=overlay_camera(self.road_image,self)
+            cv2.imwrite(str(self.road_debug_dir/f'{stage}.png'),annotated)
             self._road_debug_saved.add(stage)
         except Exception as exc:
             self.get_logger().warning(f'Road diagnostic PNG failed: {exc}')

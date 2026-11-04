@@ -21,12 +21,13 @@ from team01_race.node_diagnostics import DiagnosticsMixin
 from team01_race.track_memory import TrackMemory
 from team01_race.mode_recovery import RecoveryGuard
 from team01_race.road_node import RoadPerception
+from team01_race.bev_node import BEVPublisher
 from team01_race.start_diagnostics import StartDiagnosticsMixin
 
 
 from team01_race.defaults import DEFAULTS
 
-class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
+class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
     def __init__(self):
         super().__init__('team01_control')
         for k,v in DEFAULTS.items(): self.declare_parameter(k,v)
@@ -86,6 +87,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
         self.pub_steer=self.create_publisher(Float32,self.get_parameter('steering_topic').value,10)
         self.pub_path=self.create_publisher(String,'/team01/debug/path',10)
         self.init_start_diagnostics()
+        self.init_bev()
         self.sub_start=self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                                 self.on_start,10)
         self.create_subscription(Image,'/team01/front_depth',self.on_depth,qos_profile_sensor_data)
@@ -319,6 +321,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
                  'reference_xy':([] if path is None else
                                  np.round(path[::max(1,len(path)//24)],3).tolist())}
         self.pub_path.publish(String(data=json.dumps(payload,separators=(',',':'))))
+        self.publish_bev(now)
         if now-self.last_log>1.:
             self.get_logger().info(f'{motion.mode} v={motion.speed:.2f} '
                 f'steer={math.degrees(motion.steering):+.1f}deg '
