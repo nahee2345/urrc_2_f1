@@ -48,6 +48,19 @@ class GradualReference:
         base=np.interp(xs,x,yy)
         front=xs<x[0]
         base[front]=at_zero+slope*xs[front]
+        # A rapid new corner often causes the heading controller to
+        # overshoot the *inside* wall before recovering. Bias the target
+        # <=10cm toward the outside of that measured turn, still inside
+        # the current measured corridor; collision validation is unchanged.
+        if len(x)>=5:
+            first=np.gradient(yy,x)
+            second=np.gradient(first,x)
+            curve=second/(1.+first*first)**1.5
+            magnitude=float(self.cfg.get('corner_center_bias_gain',.45))
+            bound=float(self.cfg.get('corner_center_bias_max_m',.10))
+            correction=-np.clip(curve*magnitude,-bound,bound)
+            base+=np.interp(xs,x,correction,left=correction[0],
+                            right=correction[-1])
         if map_target is not None:
             mx,my=(float(v) for v in map_target)
             if np.isfinite(mx) and np.isfinite(my) and x[0]<=mx<=x[-1]:

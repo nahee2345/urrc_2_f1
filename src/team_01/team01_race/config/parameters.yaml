@@ -95,6 +95,8 @@ team01_control:
     missing_reference_speed_mps: 1.25
     straight_capture_max_steer_deg: 6.0
     path_capture_max_length_m: 8.5
+    corner_center_bias_gain: 0.45
+    corner_center_bias_max_m: 0.10
     mapping_lap_speed_mps: 5.0
     mapped_lap_speed_mps: 10.0
     # Advance only after independent Gazebo validation of preceding stage.

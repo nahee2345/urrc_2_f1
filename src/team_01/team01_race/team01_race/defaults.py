@@ -48,6 +48,7 @@ DEFAULTS = {
     'enable_shadow_mpc': False,
     'enable_learned_gains': False, 'learned_gains_file': '',
     'path_capture_max_length_m': 8.5,
+    'corner_center_bias_gain': .45, 'corner_center_bias_max_m': .10,
     'mapping_lap_speed_mps': 5.0, 'mapped_lap_speed_mps': 10.0,
     'validated_speed_stage_mps': 5.0,
     'edge_caution_extra_m': .12, 'edge_caution_min_speed_mps': .45,
