@@ -41,16 +41,19 @@ def _road_arrays(road):
 
 
 def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
-                               relative_offset=0., horizon=5., reference=None):
+                               relative_offset=0., horizon=5., reference=None, diagnostics=None):
     """Return only an edge- and obstacle-safe, varying-steer candidate.
 
     The local target is sampled repeatedly as the simulated Ackermann bicycle
     advances. Always include the vehicle footprint in edge tests. Unknown
     stretches beyond the observed road are never treated as drivable.
     """
+    def reject(reason):
+        if diagnostics is not None:diagnostics.append(reason)
+        return None
     b=_road_arrays(road)
     if b is None or b[0,0]>1.25 or b[-1,0]<1.35:
-        return None
+        return reject('invalid_or_short_road_envelope')
     wb=float(cfg['wheel_base_m'])
     max_steer=math.radians(float(cfg['max_center_steer_deg']))
     margin=float(cfg['path_half_width_m'])+.07
@@ -61,7 +64,7 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
     near_r=float(np.interp(near_x,b[:,0],b[:,1]))
     near_l=float(np.interp(near_x,b[:,0],b[:,2]))
     if near_r+margin>=0 or near_l-margin<=0:
-        return None
+        return reject('body_already_close_to_road_edge')
     last_x=float(b[-1,0])
     limit=max(.5,min(float(horizon),last_x-.20,14.0))
     obs=np.asarray(obstacles,dtype=float).reshape((-1,2))
@@ -71,7 +74,7 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
     if ref is not None and (ref.ndim!=2 or ref.shape[1]!=2 or
                             len(ref)<4 or not np.all(np.isfinite(ref)) or
                             np.any(np.diff(ref[:,0])<=0)):
-        return None
+        return reject('invalid_reference_geometry')
     x=y=yaw=s=0.
     positions=[];lengths=[]
     first_steer=None;maxcurv=0.;min_edge=100.;first_hit=float('inf')
@@ -112,15 +115,17 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
             footprint=margin + .275*abs(math.sin(nyaw))
             edge=min(ny-rr-footprint,ll-ny-footprint)
             min_edge=min(min_edge,edge)
-            if edge<-.005:return None
+            if edge<-.005:return reject('rollout_would_cross_road_edge')
         if len(obs):
             # Inflated footprint; reject candidate near any actual obstacle.
             close=np.any((obs[:,0]-nx)**2+(obs[:,1]-ny)**2<(.25)**2)
             if close and first_hit==float('inf'):first_hit=s+ds
         x,y,yaw=nx,ny,nyaw;s+=ds
         positions.append((x,y));lengths.append(s)
-    if not positions or s<.65 or first_steer is None:return None
-    if first_hit<max(1.,s-.1):return None
+    if not positions or s<.65 or first_steer is None:
+        return reject('insufficient_verified_rollout')
+    if first_hit<max(1.,s-.1):
+        return reject('physical_obstacle_in_rollout')
     # Favor the desired path and generous clearance; discourage large wheel
     # corrections. Off-center trajectories are allowed when boundaries permit.
     score=(s+.10*min(2.,min_edge)-.70*abs(relative_offset)

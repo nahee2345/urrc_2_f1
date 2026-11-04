@@ -73,7 +73,8 @@ class V7Tests(unittest.TestCase):
                    True,True,True,bounds(xmax=5.))
         m=p.step(np.empty((0,2)),np.empty((0,2)),4.,.1,
                    True,True,True,bounds(xmax=5.,curve=.12,width=.6))
-        self.assertEqual(p.planner_type,'adaptive_pursuit')
+        self.assertEqual(p.planner_type,'adaptive_pursuit',
+                         getattr(p,'candidate_rejections',[]))
         self.assertEqual(m.mode,'CORNER')
         self.assertNotEqual(m.mode,'BRAKE')
 
@@ -91,7 +92,8 @@ class V7Tests(unittest.TestCase):
             m=p.step(wall,wall,4.,.1,True,True,True,b)
         self.assertIsNone(p.lead_distance,
                           'nearby roadside curb must not look like opponent')
-        self.assertEqual(p.planner_type,'adaptive_pursuit')
+        self.assertEqual(p.planner_type,'adaptive_pursuit',
+                         getattr(p,'candidate_rejections',[]))
         self.assertNotEqual(m.mode,'BRAKE')
 
     def test_odom_integrates_distance_not_commanded_speed(self):

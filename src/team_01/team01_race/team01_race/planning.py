@@ -195,6 +195,7 @@ class SafetyPlanner(PlannerGeometry):
         # Generate local trajectories by *recalculating* pure pursuit along the
         # observed RGB+Depth road at every predicted 14cm of progress.
         adaptive=[]
+        self.candidate_rejections=[]
         if self.road.valid and not startup_hold:
             # One continuous path reference: eliminate per-tick left/right
             # candidate switching that previously caused zigzag steering.
@@ -210,7 +211,8 @@ class SafetyPlanner(PlannerGeometry):
                         self.measured_speed if self.measured_speed is not None else self.speed,
                         desired_offset=self.target_lane_offset,
                         relative_offset=shift,horizon=trial,
-                        reference=self.reference_geometry)
+                        reference=self.reference_geometry,
+                        diagnostics=self.candidate_rejections)
                     if c is not None:
                         adaptive.append(c)
                         break

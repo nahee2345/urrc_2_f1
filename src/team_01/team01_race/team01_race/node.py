@@ -313,6 +313,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'planner':self.planner.planner_type,
                  'painted_wall_matches':self.wall_color_matches,
                  'road_roi':road_roi_metrics(self.planner.road),
+                 'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'fault_transitions':self.motion_guard.transitions,
                  'recovery_hold':self.motion_guard.active,
                  'last_fault':self.motion_guard.last_fault,
