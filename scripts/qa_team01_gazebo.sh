@@ -3,9 +3,13 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+set +u
 source /opt/ros/jazzy/setup.bash
+set -u
 LOCAL=0
-[[ "${1:-}" == "--local" ]] && LOCAL=1
+if [[ "${1:-}" == "--local" ]]; then
+  LOCAL=1
+fi
 MAP="$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo"
 REF="$MAP/tracks/processed/monza_centerline.csv"
 if ((LOCAL));then
