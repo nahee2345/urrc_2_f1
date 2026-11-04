@@ -11,6 +11,8 @@ class RoadBelief:
         self.innovation_m=None
         self.disagreement_m=None
         self.smoothed=False
+        self.rejected=False
+        self.reason='NONE'
 
     @staticmethod
     def _transform(prior,dx,yaw):
@@ -38,6 +40,8 @@ class RoadBelief:
         self.innovation_m=None
         self.disagreement_m=None
         self.smoothed=False
+        self.rejected=False
+        self.reason='NONE'
         v=visual if visual is not None and visual.valid else None
         l=lidar if lidar is not None and lidar.valid else None
         merged=fuse_verified_corridors(v,l)
@@ -54,6 +58,17 @@ class RoadBelief:
         elif v is not None and l is not None:
             vd=self._difference(v.centers,old)
             ld=self._difference(l.centers,old)
+            # If both currently measured corridors contradict the previous
+            # pose-compensated road AND each other, neither one is trusted.
+            # A real corner reported by both sensors is accepted normally.
+            conflict=(self.disagreement_m is not None and
+                      self.disagreement_m>.35)
+            if old is not None and conflict and vd>.35 and ld>.35:
+                self.rejected=True
+                self.reason='SENSOR_CONFLICT_NO_CONSENSUS'
+                self.source='unverified_sensor_conflict'
+                self.previous=None
+                return RoadCorridor(np.empty((0,2)),0.,False,0.)
             if ld<.24 and ld+.14<vd:
                 chosen=l;name='lidar_temporal_consensus'
             else:

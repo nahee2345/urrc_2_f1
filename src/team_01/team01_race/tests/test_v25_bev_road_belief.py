@@ -39,6 +39,23 @@ class V25(unittest.TestCase):
         result=b.update(road(.55),road(.55))
         self.assertGreater(float(np.median(result.centers[:,1])),.50)
 
+    def test_both_sensor_jump_differently_means_no_safe_corridor(self):
+        b=RoadBelief()
+        b.update(road(0.),road(0.))
+        result=b.update(road(.65),road(-.65))
+        self.assertFalse(result.valid)
+        self.assertTrue(b.rejected)
+        self.assertEqual(b.source,'unverified_sensor_conflict')
+        self.assertIsNone(b.previous)
+
+    def test_one_credible_sensor_beats_other_glitch(self):
+        b=RoadBelief()
+        b.update(road(0.),road(0.))
+        result=b.update(road(.58),road(.02))
+        self.assertTrue(result.valid)
+        self.assertEqual(b.source,'lidar_temporal_consensus')
+        self.assertLess(abs(float(np.median(result.centers[:,1]))),.1)
+
     def test_previous_path_not_permission_to_drive(self):
         b=RoadBelief()
         b.update(road(0.),road(0.))

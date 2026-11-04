@@ -35,6 +35,16 @@ class SafetyPlanner(PlannerGeometry):
             speed=(actual_speed if actual_speed is not None else self.speed),
             yaw_rate=actual_yaw_rate,dt=dt)
         self.road_source=self.road_belief.source
+        if self.road_belief.rejected:
+            # No arbitrarily chosen sensor may authorize a path when both
+            # independent current corridors disagree with the recent road.
+            self.reference_scheduler.reset()
+            self.reference_geometry=None
+            self.speed=0.
+            self.prev_steer=0.
+            self.steer_limiter.reset()
+            self.last_mode='STOP'
+            return Motion(0.,0.,'STOP','sensor disagreement: no verified road')
         # Optional Gazebo wheel odometry is a diagnostic and corrects the
         # commanded-distance dead reckoning; never use world pose or map XY.
         self.measured_speed=(float(actual_speed) if actual_speed is not None and
