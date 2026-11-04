@@ -67,7 +67,11 @@ class LapVerifier:
         nearest=self.points+t[:,None]*self.seg
         d_sq=np.sum((nearest-p)**2,axis=1)
         idx=int(np.argmin(d_sq))
-        signed=float(np.cross(self.seg[idx],p-nearest[idx])/self.seg_len[idx])
+        # Explicit 2-D signed determinant works on NumPy 1.x and 2.x.
+        tangent=self.seg[idx]
+        delta=p-nearest[idx]
+        signed=float((tangent[0]*delta[1]-tangent[1]*delta[0])/
+                     self.seg_len[idx])
         s=float((self.start_len[idx]+t[idx]*self.seg_len[idx])%self.length)
         w=float(self.widths[idx]*(1-t[idx])+self.widths[(idx+1)%len(self.widths)]*t[idx])
         return s, signed, w, math.sqrt(float(d_sq[idx]))
