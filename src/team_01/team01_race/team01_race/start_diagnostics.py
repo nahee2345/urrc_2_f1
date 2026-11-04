@@ -4,10 +4,15 @@ import json
 
 def camera_ready(vision_ready, gate_baseline, first_bright_time, rgb_age,
                  depth_good, lidar_good):
-    """Requires dark image calibration and healthy sensing BEFORE lights start."""
+    """Only the camera's dark baseline is needed to begin the red sequence.
+
+    Missing Depth/LiDAR does NOT authorize motion: the independent SafetyPlanner
+    still refuses commands after LIGHTS_OUT unless both forward sensors are
+    fresh and valid. This prevents a deadlock when headless sensor streams
+    temporarily do not overlap in time during the light countdown.
+    """
     return bool(vision_ready and gate_baseline is not None and
-                first_bright_time is None and 0.<=rgb_age<1.5 and
-                depth_good and lidar_good)
+                first_bright_time is None and 0.<=rgb_age<1.5)
 
 
 class StartDiagnosticsMixin:

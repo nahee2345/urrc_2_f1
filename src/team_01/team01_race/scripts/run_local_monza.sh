@@ -28,7 +28,18 @@ if ! gz sdf -p "$MODEL" >/dev/null; then
   echo "[TEAM01] 차량 SDF 검사 실패" >&2
   exit 2
 fi
-# The public URRC runner generated these on the previous successful run.
+# Generate missing textured track assets on a clean checkout, exactly as CI.
+if [[ ! -f "$MAP_DIR/worlds/monza_signal_active.sdf" ||
+      ! -f "$MAP_DIR/models/urrc_monza/meshes/road_textured.obj" ]]; then
+  python3 - "$MAP_DIR" <<'PY'
+from pathlib import Path
+import sys
+track=Path(sys.argv[1])
+sys.path.insert(0,str(track))
+from urrc_tracks.v10_assets import enhance_track
+enhance_track(track,'monza')
+PY
+fi
 for file in "$MAP_DIR/worlds/monza_race.sdf" \
             "$MAP_DIR/worlds/monza_signal_active.sdf" \
             "$MAP_DIR/worlds/monza_grid.gui.config"; do
@@ -135,18 +146,11 @@ done
 # Both the vision background and gate intensity baseline MUST be ready.
 # Starting the lamps before that calibration can make the actual reds part of
 # the "dark" reference, preventing any true light-out detection.
-CALIBRATED=0
-for i in $(seq 1 30); do
-  READY_CAMERA=$(timeout 3s ros2 topic echo /team01/ready_for_lights \
-    --once --field data 2>/dev/null || true)
-  if [[ "$READY_CAMERA" == *true* ]]; then CALIBRATED=1;break;fi
-  sleep .5
-done
-if [[ "$CALIBRATED" != 1 ]]; then
-  echo '[TEAM01] Camera baseline/sensors not calibrated; no unsafe light-start' >&2
-  echo 'Inspect: ros2 topic echo /team01/debug/start' >&2
+python3 "$HERE/wait_camera_ready.py" --timeout 70 \
+  --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json" || {
+  echo '[TEAM01] Camera calibration failed; see /team01/debug/start' >&2
   exit 2
-fi
+}
 echo '[TEAM01] Camera background calibrated; camera-based lights may start.'
 ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
 echo '[TEAM01] 카메라 준비 후 빨간불 1~5 점등을 시작합니다.'
