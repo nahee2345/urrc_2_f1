@@ -22,11 +22,20 @@ def main():
        '- 도로 경계 최소 여유: '+value('road_clearance_min_m')+' m',
        '- 실측 최대속도/P95: '+value('actual_speed_max_mps')+'/'+value('actual_speed_p95_mps')+' m/s',
        '- 2° 이상 좌우 조향 반전 횟수: '+value('steering_reversals_over_2deg'),
+       '- 누적 조향 변화량/실주행 거리: '+value('steering_variation_deg_per_m')+' °/m',
+       '- 안전한 직선 평균 실측속도: '+value('safe_straight_speed_mean_mps')+' m/s',
+       '- 안전한 직선 절대조향 평균/P95: '+value('safe_straight_abs_steer_mean_deg')+'/'+value('safe_straight_abs_steer_p95_deg')+' °',
+       '- 안전한 직선 실측/명령 속도비: '+value('safe_straight_actual_over_cmd_ratio'),
        '- 카메라 준비/소등/권한/어댑터 전진: '+ '/'.join(str(d.get(k,'미검증')) for k in ('camera_ready','camera_lights_out','permission','adapter_nonzero')),
        '- ROS bag: '+('기록 확인' if (s/'rosbag_core'/'metadata.yaml').exists() else '자료 없음'), '',
        '## 안전 제동·정지 사유']
     lines.extend('- '+k+': '+str(v)+'회' for k,v in sorted((d.get('fault_reasons') or {}).items(),key=lambda x:-x[1])[:15])
-    lines+=['','도로 중심선 편차는 의도된 차선 유지와 구분합니다. 5m 미만 이동 시 경로 정확도는 미검증입니다.']
+    lines+=['','도로 중심선 편차는 의도된 차선 유지와 구분합니다. 5m 미만 이동 시 경로 정확도는 미검증입니다.',
+            '직선 구간에서는 강제 중앙복귀를 성능 향상으로 간주하지 않으며, 안전여유·조향·속도를 함께 비교합니다.']
+    size=get(s/'source_line_limits.json')
+    lines+=['','## 파일당 400줄 제한','- 판정: '+str(size.get('status','미검증'))]
+    for item in size.get('violations',[]):
+        lines.append('- '+item['path']+': '+str(item['lines'])+'줄 (초과 '+str(item['excess'])+'줄)')
     (s/'qa_run_report.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     try:
         from team01_race.lap_validation import load_reference

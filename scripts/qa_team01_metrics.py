@@ -35,6 +35,8 @@ class Metrics(Node):
         self.mode=None;self.debug={};self.start={};self.adapter={}
         self.ready=self.lights=self.permission=self.sent=False
         self.sign=0;self.sign_at=0.;self.reversals=0
+        self.prev_wheel_rad=None;self.steer_change_deg=0.;self.measured_v=0.
+        self.straight_abs_steer=[];self.straight_actual_speed=[];self.straight_speed_ratio=[]
         self.create_subscription(Odometry,'/team01/gz_odom',self.odom,qos_profile_sensor_data)
         self.create_subscription(String,'/team01/debug/path',self.path,20)
         self.create_subscription(String,'/team01/debug/start',self.start_cb,20)
@@ -63,6 +65,9 @@ class Metrics(Node):
         v=float(m.data)
         if not math.isfinite(v):return
         self.steering.append(v)
+        if self.prev_wheel_rad is not None and self.measured_v>.5:
+            self.steer_change_deg+=abs(math.degrees(v-self.prev_wheel_rad))
+        self.prev_wheel_rad=v
         s=1 if v>math.radians(2) else -1 if v<-math.radians(2) else 0
         t=time.monotonic()
         if s and self.sign and s!=self.sign and t-self.sign_at>.20:
@@ -103,9 +108,19 @@ class Metrics(Node):
         v=float(m.twist.twist.linear.x)
         if not math.isfinite(v):v=0.
         self.speed.append(abs(v))
+        self.measured_v=abs(v)
         _,lat,width,_=self.verifier.project((x,y))
         clearance=width/2-abs(lat)-self.verifier.edge_margin
         self.offset.append(abs(lat));self.clear.append(clearance)
+        d=self.debug
+        if d.get('mode')=='STRAIGHT' and d.get('reference_valid') and clearance>.10 and abs(v)>.4:
+            self.straight_actual_speed.append(abs(v))
+            if self.prev_wheel_rad is not None:
+                self.straight_abs_steer.append(abs(math.degrees(self.prev_wheel_rad)))
+            try:
+                cmd=float(d.get('cmd_speed') or 0.)
+                if cmd>.5:self.straight_speed_ratio.append(min(1.5,abs(v)/cmd))
+            except (TypeError,ValueError):pass
         error=None
         # Don't use current base_link path starting at (0,0): compare an old,
         # frozen plan (0.6-1.5s old) with later actual Gazebo position instead.
@@ -139,6 +154,12 @@ class Metrics(Node):
               'actual_speed_max_mps':round(max(self.speed),3) if self.speed else None,
               'actual_speed_p95_mps':p95(self.speed),
               'steering_reversals_over_2deg':self.reversals,
+              'steering_variation_deg_per_m':round(self.steer_change_deg/self.distance,3) if self.distance>=5 else None,
+              'safe_straight_samples':len(self.straight_actual_speed),
+              'safe_straight_speed_mean_mps':round(statistics.mean(self.straight_actual_speed),3) if len(self.straight_actual_speed)>=15 else None,
+              'safe_straight_abs_steer_mean_deg':round(statistics.mean(self.straight_abs_steer),3) if len(self.straight_abs_steer)>=15 else None,
+              'safe_straight_abs_steer_p95_deg':p95(self.straight_abs_steer) if len(self.straight_abs_steer)>=15 else None,
+              'safe_straight_actual_over_cmd_ratio':round(statistics.mean(self.straight_speed_ratio),3) if len(self.straight_speed_ratio)>=15 else None,
               'modes':dict(self.states),'fault_reasons':dict(self.reasons),
               'mode_transitions':dict(self.transitions),
               'camera_ready':self.ready,'camera_lights_out':self.lights,

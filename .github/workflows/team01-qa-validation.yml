@@ -36,7 +36,12 @@ jobs:
       - name: Validate independent QA code syntax
         run: |
           bash -n scripts/qa_team01_gazebo.sh
-          python3 -m py_compile scripts/qa_team01_metrics.py scripts/qa_team01_report.py
+          python3 -m py_compile scripts/qa_team01_metrics.py scripts/qa_team01_report.py scripts/qa_team01_source_limits.py
+      - name: Enforce 400-line maximum in source and model configuration
+        id: size_gate
+        continue-on-error: true
+        shell: bash
+        run: python3 scripts/qa_team01_source_limits.py --limit 400 --report ci_artifacts/source_line_limits.json
       - name: Offline unit and static regression tests (independent verdict)
         id: offline
         continue-on-error: true
@@ -65,6 +70,7 @@ jobs:
             echo "# TEAM01 independent QA"
             echo ""
             echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Source <=400 lines: ${{ steps.size_gate.outcome }}"
             echo "- Offline tests: ${{ steps.offline.outcome }}"
             echo "- Real Gazebo run: ${{ steps.gazebo.outcome }}"
             echo "- RTAB-Map package installed; runtime SLAM/loop-closure must be proven by controller and TF logs."
@@ -101,6 +107,7 @@ jobs:
           {
             echo ""
             echo "## Workflow verdict"
+            echo "- Source <=400 lines: ${{ steps.size_gate.outcome }}"
             echo "- Offline regression: ${{ steps.offline.outcome }}"
             echo "- Real Gazebo: ${{ steps.gazebo.outcome }}"
             echo "- Code SHA: ${{ github.sha }}"
@@ -123,5 +130,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "offline=${{ steps.offline.outcome }}, gazebo=${{ steps.gazebo.outcome }}"
-          [[ "${{ steps.offline.outcome }}" == "success" && "${{ steps.gazebo.outcome }}" == "success" ]]
+          echo "source_size=${{ steps.size_gate.outcome }}, offline=${{ steps.offline.outcome }}, gazebo=${{ steps.gazebo.outcome }}"
+          [[ "${{ steps.size_gate.outcome }}" == "success" && "${{ steps.offline.outcome }}" == "success" && "${{ steps.gazebo.outcome }}" == "success" ]]

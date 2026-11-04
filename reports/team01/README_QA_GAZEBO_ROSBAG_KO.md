@@ -65,3 +65,9 @@ bash scripts/qa_team01_gazebo.sh --local
 - 저장 위치: ~/team01_qa/날짜_시각/
 - ros2 bag info 경로/rosbag_core 로 녹화를 확인하고 ros2 bag play 경로/rosbag_core 로 재생합니다.
 - QA 시각화·요약은 같은 폴더의 trajectory_overlay.svg 및 qa_run_report.md입니다.
+
+## 추가 필수 기준: 400줄 제한 및 주행 효율
+- TEAM01 자체 Python, Bash, SDF, YAML/XML, QA 스크립트 및 워크플로 파일은 각 파일 **400줄 이하(주석·빈 줄 포함)**를 원칙으로 합니다. 외부 upstream 서브모듈은 제외합니다.
+- 검증 스크립트: scripts/qa_team01_source_limits.py, 결과: ci_artifacts/source_line_limits.json. 위반 시 최종 QA FAIL이지만 실제 Gazebo는 독립 검증합니다. 차량 파일은 검증팀이 고치지 않고 제작팀 Issue로 요청합니다.
+- **도로 중앙은 주행 목표 자체가 아닙니다.** 안전한 기존 경로가 유지 가능하면 편차를 줄이려고 조향하지 않습니다. 안전한 직선의 평균·P95 절대 조향각, 좌우 조향 진동, 누적 조향변화량, 실측 평균속도 및 명령 대비 속도비를 비교해야 합니다.
+- 코너·정지 장애물·도로 경계에서 필요한 조향·감속은 정상입니다. 최소 조향을 위해 안전 회피나 감속을 생략할 수 없습니다. 안전성과 속도를 동시 평가합니다.
