@@ -31,7 +31,8 @@ class SafetyPlanner(PlannerGeometry):
         # drivable corridor for high-speed braking and corner anticipation.
         # A disagreement is NOT fused into a permissive drivable polygon.
         self.road=self.road_belief.update(
-            vision_road,lidar_road,speed=(actual_speed or self.speed),
+            vision_road,lidar_road,
+            speed=(actual_speed if actual_speed is not None else self.speed),
             yaw_rate=actual_yaw_rate,dt=dt)
         self.road_source=self.road_belief.source
         # Optional Gazebo wheel odometry is a diagnostic and corrects the
