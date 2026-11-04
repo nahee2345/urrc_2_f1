@@ -256,7 +256,9 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         rear_gap=self.rear_gap if now-self.rear_at<self.p['lidar_timeout_s'] else -1.0
         visual_road=(self.road_bounds
                      if self.road_bounds is not None and
-                     now-max(self.road_at,self.ground_at)<self.p['road_rgb_timeout_s']
+                     now-self.road_at<self.p['road_rgb_timeout_s'] and
+                     now-self.ground_at<self.p['depth_timeout_s'] and
+                     abs(self.road_at-self.ground_at)<=self.p['road_sync_max_age_s']
                      else None)
         pose=self._map_pose()
         mapped=self.track.target(pose,max(2.5,min(6.,2.+(self.actual_speed or 0.)*.35)))
@@ -313,6 +315,9 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'planner':self.planner.planner_type,
                  'painted_wall_matches':self.wall_color_matches,
                  'road_roi':road_roi_metrics(self.planner.road),
+                 'road_disagreement_m':self.planner.road_belief.disagreement_m,
+                 'road_innovation_m':self.planner.road_belief.innovation_m,
+                 'road_conflict_reason':self.planner.road_belief.reason,
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'fault_transitions':self.motion_guard.transitions,
                  'recovery_hold':self.motion_guard.active,
