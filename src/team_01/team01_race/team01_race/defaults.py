@@ -39,7 +39,7 @@ DEFAULTS = {
     'steer_target_filter_tau_s': .10, 'straight_capture_max_steer_deg': 6.0,
     'yaw_feedback_gain': .065, 'yaw_feedback_max_correction_deg': 4.0,
     'motion_restart_hold_s': .12, 'missing_reference_speed_mps': 1.25,
-    'stanley_heading_gain': .85, 'stanley_cross_gain': 1.0,
+    'stanley_heading_gain': .75, 'stanley_cross_gain': 1.0,
     'stanley_speed_softening_mps': 1.5,
     'stanley_heading_preview_m': 1.0,
     'straight_deadband_cross_m': .10,

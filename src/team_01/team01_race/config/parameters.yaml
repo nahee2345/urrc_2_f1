@@ -81,7 +81,7 @@ team01_control:
     yaw_feedback_gain: 0.065
     yaw_feedback_max_correction_deg: 4.0
     motion_restart_hold_s: 0.12
-    stanley_heading_gain: 0.85
+    stanley_heading_gain: 0.75
     stanley_cross_gain: 1.0
     stanley_speed_softening_mps: 1.5
     stanley_heading_preview_m: 1.0

@@ -70,7 +70,7 @@ def stanley_steer(reference,x,y,yaw,speed,wheelbase,max_steer,cfg):
             and abs(cross)<float(cfg.get('straight_deadband_cross_m',.10))):
         cross=0.
         eheading=0.
-    kheading=float(gains[1]) if gains is not None else float(cfg.get('stanley_heading_gain',.85))
+    kheading=float(gains[1]) if gains is not None else float(cfg.get('stanley_heading_gain',.75))
     kcross=float(gains[2]) if gains is not None else float(cfg.get('stanley_cross_gain',1.0))
     soft=float(cfg.get('stanley_speed_softening_mps',1.5))
     raw=(feedforward+kheading*eheading+
