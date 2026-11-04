@@ -38,7 +38,18 @@ else
 fi
 gz sdf -p "$PKG/models/team01_car/model.sdf" >/dev/null
 PIDS=()
-cleanup(){ for p in "${PIDS[@]}";do kill "$p" 2>/dev/null || true;done; wait 2>/dev/null || true; }
+cleanup(){
+  set +e
+  for p in "${PIDS[@]}"; do kill -TERM "$p" 2>/dev/null || true; done
+  for ((i=0;i<40;i++)); do
+    still=0
+    for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && still=1; done
+    [[ "$still" == 0 ]] && break
+    sleep .25
+  done
+  for p in "${PIDS[@]}"; do kill -KILL "$p" 2>/dev/null || true; done
+  for p in "${PIDS[@]}"; do wait "$p" 2>/dev/null || true; done
+}
 trap cleanup EXIT
 # Gazebo real physics + RGB/Depth rendering, not a synthetic test.
 gz sim -r -s --headless-rendering -v 3 "$MAP/worlds/monza_race.sdf" >"$STATE/gazebo.log" 2>&1 & PIDS+=("$!")
@@ -61,7 +72,8 @@ ros2 launch team01_race race.launch.py race_start_mode:=camera >"$STATE/controll
 # and drivetrain/physics stalls.
 timeout 780s ros2 topic echo /team01/debug/start --field data >"$STATE/start_status.log" 2>&1 & PIDS+=("$!")
 timeout 780s ros2 topic echo /team01/debug/adapter --field data >"$STATE/adapter_status.log" 2>&1 & PIDS+=("$!")
-python3 "$PKG/scripts/verify_monza_lap.py" --reference "$MAP/tracks/processed/monza_centerline.csv" --report "$STATE/lap.json" --max-seconds 660 --motion-start-file "$STATE/lights_out.ready" >"$STATE/verifier.log" 2>&1 & PIDS+=("$!")
+python3 "$PKG/scripts/verify_monza_lap.py" --reference "$MAP/tracks/processed/monza_centerline.csv" --report "$STATE/lap.json" --max-seconds 660 --motion-start-file "$STATE/lights_out.ready" \
+  --spawn-report "$STATE/spawn_clearance.json" >"$STATE/verifier.log" 2>&1 & PIDS+=("$!")
 READY=0
 for _ in $(seq 1 120);do
   COUNT=$(ros2 topic info /race/start/team01 2>/dev/null | sed -n 's/.*Subscription count: //p' | tail -1 || true)
@@ -80,7 +92,8 @@ python3 "$PKG/scripts/wait_camera_ready.py" --timeout 100 \
     echo '[CI] START_CALIBRATION_FAILED' | tee "$STATE/start_failure.txt"
     exit 1
 }
-ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}' | tee "$STATE/permission.log"
+python3 "$ROOT/scripts/qa_team01_permission.py" --timeout 35 \
+  --out "$STATE/permission_validation.json" | tee "$STATE/permission.log"
 python3 "$MAP/scripts/traffic_lights_v10.py" --track monza --skip-camera-check | tee "$STATE/lights.log"
 grep -q 'LIGHTS OUT ' "$STATE/lights.log" || { echo '[CI] LIGHTS_OUT_MISSING'; exit 1; }
 touch "$STATE/lights_out.ready"
@@ -93,7 +106,7 @@ for CHECK in $(seq 1 660);do
     S=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["status"])' "$STATE/lap.json" || true)
     case "$S" in
       GEOMETRIC_LAP_PASS) echo '[CI] GEOMETRIC_LAP_PASS'; exit 0;;
-      NO_ODOM|STALE_ODOM|DRIVE_STALL|LAP_TIMEOUT|OFF_TRACK|WRONG_DIRECTION_OR_REVERSAL|POSE_JUMP|INVALID_ODOM|START_OFF_TRACK) echo "[CI] LAP FAIL: $S"; exit 1;;
+      NO_ODOM|STALE_ODOM|DRIVE_STALL|LAP_TIMEOUT|OFF_TRACK|WRONG_DIRECTION_OR_REVERSAL|POSE_JUMP|INVALID_ODOM|START_OFF_TRACK|ODOM_FRAME_UNVERIFIED) echo "[CI] LAP FAIL: $S"; exit 1;;
     esac
   fi
   sleep 1

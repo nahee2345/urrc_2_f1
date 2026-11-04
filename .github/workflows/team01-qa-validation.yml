@@ -36,7 +36,8 @@ jobs:
       - name: Validate independent QA code syntax
         run: |
           bash -n scripts/qa_team01_gazebo.sh
-          python3 -m py_compile scripts/qa_team01_metrics.py scripts/qa_team01_report.py scripts/qa_team01_source_limits.py
+          python3 -m py_compile scripts/qa_team01_metrics.py scripts/qa_team01_report.py scripts/qa_team01_source_limits.py scripts/qa_team01_permission.py src/team_01/team01_race/team01_race/qa_lap_frame.py src/team_01/team01_race/scripts/verify_monza_lap.py
+          PYTHONPATH=src/team_01/team01_race python3 scripts/qa_team01_frame_test.py
       - name: Enforce 400-line maximum in source and model configuration
         id: size_gate
         continue-on-error: true

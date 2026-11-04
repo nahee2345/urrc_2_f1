@@ -10,6 +10,8 @@ from rclpy.qos import qos_profile_sensor_data
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool,Float32,String
 from team01_race.lap_validation import LapVerifier,load_reference
+from team01_race.qa_lap_frame import OdomWorld
+from rclpy.executors import ExternalShutdownException
 
 def p95(a):return round(float(np.percentile(a,95)),4) if a else None
 def path_error(p,ref):
@@ -19,8 +21,9 @@ def path_error(p,ref):
     return float(np.min(np.linalg.norm(p-(a+t[:,None]*v),axis=1)))
 
 class Metrics(Node):
-    def __init__(self,reference,out):
+    def __init__(self,reference,out,spawn_report):
         super().__init__('team01_independent_metrics')
+        self.frame=OdomWorld(spawn_report)
         self.out=Path(out);self.out.mkdir(parents=True,exist_ok=True)
         self.verifier=LapVerifier(*load_reference(reference))
         self.log=(self.out/'qa_events.jsonl').open('w',encoding='utf-8')
@@ -100,7 +103,10 @@ class Metrics(Node):
         p=m.pose.pose.position;q=m.pose.pose.orientation
         x,y=float(p.x),float(p.y)
         yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
-        if not all(math.isfinite(z) for z in (x,y,yaw)):return
+        try:x,y,yaw=self.frame.transform(x,y,yaw)
+        except ValueError:
+            self.event('odom_frame_unverified',{'x':x,'y':y})
+            return
         if self.lastpose is not None:
             dist=math.hypot(x-self.lastpose[0],y-self.lastpose[1])
             if dist<3:self.distance+=dist
@@ -145,6 +151,7 @@ class Metrics(Node):
         centered=self.distance>=5 and len(self.offset)>=15
         data={'actual_distance_m':round(self.distance,3),
               'odom_sample_count':len(self.speed),
+              'odom_frame_mode':self.frame.mode,
               'planned_path_source':'selected_adaptive_candidate_xy',
               'planned_path_tracking_evaluable':bool(valid),
               'planned_path_error_mean_m':round(statistics.mean(self.err),4) if valid else None,
@@ -178,8 +185,11 @@ class Metrics(Node):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--reference',required=True);p.add_argument('--out',required=True)
-    a=p.parse_args();rclpy.init();n=Metrics(a.reference,a.out)
+    p.add_argument('--spawn-report',required=True)
+    a=p.parse_args();rclpy.init();n=Metrics(a.reference,a.out,a.spawn_report)
     try:rclpy.spin(n)
-    except KeyboardInterrupt:pass
-    finally:n.close();n.destroy_node();rclpy.shutdown()
+    except (KeyboardInterrupt,ExternalShutdownException):pass
+    finally:
+        n.close();n.destroy_node()
+        if rclpy.ok():rclpy.shutdown()
 if __name__=='__main__':main()

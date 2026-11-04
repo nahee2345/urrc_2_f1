@@ -14,6 +14,7 @@ MAP="$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo"
 REF="$MAP/tracks/processed/monza_centerline.csv"
 if ((LOCAL));then
   STATE="$HOME/team01_qa/$(date +%Y%m%d_%H%M%S)"
+  export XDG_STATE_HOME="$STATE/state"
   RUNNER="$ROOT/src/team_01/team01_race/scripts/run_local_monza.sh"
 else
   STATE="$ROOT/ci_artifacts"
@@ -23,19 +24,35 @@ mkdir -p "$STATE"
 SIM='';BAG='';METRIC=''
 clean(){
   set +e
-  [[ -n "$BAG" ]] && kill -INT "$BAG" 2>/dev/null
-  [[ -n "$METRIC" ]] && kill -INT "$METRIC" 2>/dev/null
-  [[ -n "$SIM" ]] && kill -TERM "$SIM" 2>/dev/null
-  sleep 3
-  [[ -n "$BAG" ]] && wait "$BAG" 2>/dev/null
-  [[ -n "$METRIC" ]] && wait "$METRIC" 2>/dev/null
+  for p in "$BAG" "$METRIC" "$SIM"; do
+    [[ -n "$p" ]] && kill -TERM "$p" 2>/dev/null || true
+  done
+  for ((i=0;i<60;i++));do
+    live=0
+    for p in "$BAG" "$METRIC" "$SIM"; do
+      [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && live=1
+    done
+    [[ "$live" == 0 ]] && break
+    sleep .25
+  done
+  for p in "$BAG" "$METRIC" "$SIM"; do
+    if [[ -n "$p" ]];then
+      kill -KILL "$p" 2>/dev/null || true
+      wait "$p" 2>/dev/null || true
+    fi
+  done
+  if [[ -d "$STATE/rosbag_core" && ! -f "$STATE/rosbag_core/metadata.yaml" ]];then
+    timeout 35s ros2 bag reindex "$STATE/rosbag_core" --storage sqlite3 \
+      >>"$STATE/rosbag.log" 2>&1 || true
+  fi
   python3 "$ROOT/scripts/qa_team01_report.py" --state "$STATE" --reference "$REF" \
     >"$STATE/qa_reporter.log" 2>&1 || true
   echo "[QA] Artifacts: $STATE"
 }
 trap clean EXIT
 echo "[QA] running real Gazebo via $RUNNER; artifacts=$STATE"
-bash "$RUNNER" >"$STATE/qa_runner.log" 2>&1 & SIM=$!
+timeout --signal=TERM --kill-after=15s 1050s bash "$RUNNER" \
+  >"$STATE/qa_runner.log" 2>&1 & SIM=$!
 READY=0
 for i in $(seq 1 180);do
   if ! kill -0 "$SIM" 2>/dev/null;then break;fi
@@ -49,6 +66,15 @@ for i in $(seq 1 180);do
   fi
   sleep 1
 done
+if [[ "$READY" == 1 && "$LOCAL" == 1 ]];then
+  local_spawn="$STATE/state/urrc_team01/qa/local_spawn_clearance.json"
+  if [[ -f "$local_spawn" ]];then
+    cp "$local_spawn" "$STATE/spawn_clearance.json"
+  else
+    echo "[QA] ERROR: local spawn report missing" >&2
+    READY=0
+  fi
+fi
 if [[ "$READY" == 1 ]];then
   ros2 bag record --storage sqlite3 --compression-mode file --compression-format zstd \
     -o "$STATE/rosbag_core" \
@@ -56,7 +82,7 @@ if [[ "$READY" == 1 ]];then
     /team01/debug/adapter /team01/ready_for_lights \
     /team01/speed /team01/steering /team01/front_scan /team01/rear_scan \
     /race/start/team01 >"$STATE/rosbag.log" 2>&1 & BAG=$!
-  python3 "$ROOT/scripts/qa_team01_metrics.py" --reference "$REF" --out "$STATE" \
+  python3 "$ROOT/scripts/qa_team01_metrics.py" --reference "$REF" --out "$STATE" --spawn-report "$STATE/spawn_clearance.json" \
     >"$STATE/qa_metrics.log" 2>&1 & METRIC=$!
   echo "[QA] rosbag and independent trajectory metrics started"
 else
