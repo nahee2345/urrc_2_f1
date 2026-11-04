@@ -84,9 +84,12 @@ class Metrics(Node):
             self.transitions[self.mode+'->'+mode]+=1
             self.event('mode_change',{'old':self.mode,'new':mode,'reason':reason})
         self.mode=mode
-        if not d.get('reference_valid') or self.odom_pose is None:return
+        # Measure the SELECTED, collision-checked adaptive rollout, not a
+        # nominal reference which can be shifted by +/-0.08m or +/-0.16m.
+        # Without a selected rollout (constant_arc/STOP), accuracy is UNVERIFIED.
+        if d.get('planner')!='adaptive_pursuit' or self.odom_pose is None:return
         try:
-            ref=np.asarray(d.get('reference_xy') or [],dtype=float).reshape((-1,2))
+            ref=np.asarray(d.get('candidate_xy') or [],dtype=float).reshape((-1,2))
             if len(ref)<3 or not np.isfinite(ref).all():return
             x,y,yaw=self.odom_pose;c=math.cos(yaw);s=math.sin(yaw)
             transformed=np.column_stack((x+c*ref[:,0]-s*ref[:,1],
@@ -142,6 +145,7 @@ class Metrics(Node):
         centered=self.distance>=5 and len(self.offset)>=15
         data={'actual_distance_m':round(self.distance,3),
               'odom_sample_count':len(self.speed),
+              'planned_path_source':'selected_adaptive_candidate_xy',
               'planned_path_tracking_evaluable':bool(valid),
               'planned_path_error_mean_m':round(statistics.mean(self.err),4) if valid else None,
               'planned_path_error_p95_m':p95(self.err) if valid else None,
@@ -165,7 +169,7 @@ class Metrics(Node):
               'camera_ready':self.ready,'camera_lights_out':self.lights,
               'permission':self.permission,'adapter_nonzero':self.sent,
               'last_start_status':self.start,'last_adapter_status':self.adapter,
-              'disclaimer':'QA only. Centerline offset is not tracking failure if driving off-center safely. Path error uses a 0.6-1.5s frozen planned path transformed into Gazebo odom world frame; needs >=5m travel and >=15 samples. No track coordinates fed to controller.'}
+              'disclaimer':'QA only. Centerline offset is not tracking failure. Path error uses a 0.6-1.5s frozen selected adaptive rollout (candidate_xy) in Gazebo odom world frame; no valid path-score for constant_arc. Needs >=5m and >=15 samples. No track coordinates fed to controller.'}
         f=self.out/'drive_metrics.json';tmp=f.with_suffix('.tmp')
         tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         tmp.replace(f)
