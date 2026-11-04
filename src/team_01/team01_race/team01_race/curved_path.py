@@ -115,7 +115,11 @@ def adaptive_pursuit_candidate(road, obstacles, cfg, speed, desired_offset=0.,
             footprint=margin + .275*abs(math.sin(nyaw))
             edge=min(ny-rr-footprint,ll-ny-footprint)
             min_edge=min(min_edge,edge)
-            if edge<-.005:return reject('rollout_would_cross_road_edge')
+            if edge<-.005:
+                return reject(
+                    f'edge_cross:x={nx:.2f},y={ny:.2f},'
+                    f'R={rr:.2f},L={ll:.2f},yaw={nyaw:.2f},'
+                    f'foot={footprint:.2f},shortfall={-edge:.3f}')
         if len(obs):
             # Inflated footprint; reject candidate near any actual obstacle.
             close=np.any((obs[:,0]-nx)**2+(obs[:,1]-ny)**2<(.25)**2)
