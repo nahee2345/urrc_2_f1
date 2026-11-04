@@ -1,0 +1,25 @@
+name: TEAM01 fast offline regression (no Gazebo)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/team_01/team01_race/**'
+      - '.github/workflows/team01-fast-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pure-Python offline test requirements
+        run: python -m pip install --disable-pip-version-check numpy opencv-python-headless PyYAML
+      - name: Run unit and static regression tests (no simulator)
+        run: bash src/team_01/team01_race/scripts/run_offline_tests.sh
