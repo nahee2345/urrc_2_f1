@@ -3,6 +3,7 @@ import math
 import numpy as np
 from team01_race.planning_road import RoadCorridor
 from team01_race.race_strategy import RacingLine, LapLearner
+from team01_race.road_belief import RoadBelief
 
 class PlannerGeometry:
     def __init__(self, cfg):
@@ -48,7 +49,6 @@ class PlannerGeometry:
         from team01_race.reference_scheduler import ReferenceScheduler
         from team01_race.mode_recovery import CaptureMode
         from team01_race.speed_stages import SpeedStages
-        from team01_race.road_belief import RoadBelief
         self.rejoin=RejoinPlanner(cfg)
         self.steer_limiter=SteeringLimiter(cfg)
         self.yaw_feedback=YawFeedback(cfg)

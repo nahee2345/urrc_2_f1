@@ -21,7 +21,10 @@ class V25(unittest.TestCase):
         b=RoadBelief()
         result=b.update(road(.03),road(.04))
         self.assertTrue(result.valid)
-        self.assertEqual(b.source,'rgb_depth+lidar')
+        # Shared overlap alone is not enough for an extended fusion path;
+        # the present visual road remains authoritative within its range.
+        self.assertEqual(b.source,'rgb_depth')
+        self.assertLess(b.disagreement_m,.05)
 
     def test_single_lidar_glitch_not_followed(self):
         b=RoadBelief()
