@@ -20,6 +20,7 @@ from team01_race.signal_vision import SignalVision
 from team01_race.node_diagnostics import DiagnosticsMixin
 from team01_race.track_memory import TrackMemory
 from team01_race.mode_recovery import RecoveryGuard
+from team01_race.road_node import RoadPerception
 from team01_race.start_diagnostics import StartDiagnosticsMixin
 
 
@@ -51,6 +52,12 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
         self.ground_xy=np.empty((0,2))
         self.ground_uv=np.empty((0,2),dtype=int)
         self.ground_at=0.
+        self.depth_shape=None
+        self.obstacle_uv=np.empty((0,2),dtype=int)
+        self.obstacle_height=np.empty(0,dtype=float)
+        self.colored_wall_xy=np.empty((0,2),dtype=float)
+        self.wall_color_matches=0
+        self.road_perception=RoadPerception()
         self.ground_count=0
         self.road_bounds=None
         self.asphalt_coverage=0.
@@ -119,6 +126,9 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
                                  mount_z=self.p['sensor_mount_height_m'],
                                  min_road_points=self.p['min_road_points'])
             self.depth_obstacles=scene.obstacles
+            self.depth_shape=d.shape
+            self.obstacle_uv=scene.obstacle_uv
+            self.obstacle_height=scene.obstacle_height
             self.depth_valid=scene.valid
             self.slope=scene.slope_deg
             self.ground_xy=scene.ground_xy
@@ -132,6 +142,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
             self.ground_uv=np.empty((0,2),dtype=int)
             self.ground_count=0
             self.ground_at=0.
+            self.depth_shape=None
             self.road_bounds=None
             self.start_line_seen=False
             self.get_logger().warning(f'depth/road rejected: {exc}')
@@ -149,23 +160,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
             self.get_logger().warning(f'Road RGB rejected: {exc}')
 
     def _refresh_road(self):
-        # Accept whichever of the aligned RGB/depth frames arrives second.
-        # At speed the maximum pairing interval shrinks automatically.
-        self.road_bounds=None
-        self.asphalt_coverage=0.
-        self.start_line_seen=False
-        if not self.depth_valid or self.road_image is None or not self.ground_count:
-            return
-        if not aligned_depth_rgb(self.ground_at,self.road_at,
-                float(self.actual_speed or 0.),
-                float(self.p['road_sync_max_age_s'])):
-            return
-        asphalt=dark_asphalt_bounds(self.ground_xy,self.ground_uv,self.road_image)
-        self.road_bounds=asphalt.bounds if asphalt.valid else None
-        self.asphalt_coverage=asphalt.coverage
-        if asphalt.valid:
-            self.start_line_seen=transverse_start_marking(
-                self.ground_xy,self.ground_uv,self.road_image,asphalt.bounds)
+        self.road_perception.refresh(self)
 
     def on_rgb(self,msg):
         try:
@@ -313,6 +308,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin):
                  'trajectory_generation':self.planner.reference_scheduler.count,
                  'trajectory_source':self.planner.reference_scheduler.source,
                  'planner':self.planner.planner_type,
+                 'painted_wall_matches':self.wall_color_matches,
                  'fault_transitions':self.motion_guard.transitions,
                  'recovery_hold':self.motion_guard.active,
                  'last_fault':self.motion_guard.last_fault,
