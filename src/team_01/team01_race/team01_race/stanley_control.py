@@ -38,11 +38,31 @@ def stanley_steer(reference,x,y,yaw,speed,wheelbase,max_steer,cfg):
         eheading=math.atan2(math.sin(math.atan(slope)-yaw),
                             math.cos(math.atan(slope)-yaw))
     # Curvature feedforward is limited independently of feedback.
-    d0=float(np.interp(max(px[0],q-.5),px,py))
+    # Nonuniform 2nd derivative: the old raw d2-2*d1+d0 omitted the
+    # sample-spacing denominator and understeered a verified corner.
+    q0=max(float(px[0]),q-.50)
+    q2=min(float(px[-1]),q+.50)
+    d0=float(np.interp(q0,px,py))
     d1=float(np.interp(q,px,py))
-    d2=float(np.interp(min(px[-1],q+.5),px,py))
-    curvature=float(np.clip((d2-2*d1+d0),-.25,.25))
+    d2=float(np.interp(q2,px,py))
+    h0=q-q0;h2=q2-q
+    curvature=0.
+    if h0>.05 and h2>.05:
+        slope0=(d1-d0)/h0
+        slope2=(d2-d1)/h2
+        curvature=(2.*(slope2-slope0)/(h0+h2)) / (
+            1.+(.5*(slope0+slope2))**2)**1.5
+    curvature=float(np.clip(curvature,-.75,.75))
     feedforward=math.atan(float(wheelbase)*curvature)
+    # A straight, centered car must not chase 3-5cm of perceived road
+    # jitter. The hysteresis is applied only when heading AND curvature
+    # independently confirm a straight path.
+    if (abs(curvature)<float(cfg.get('straight_deadband_curvature',.012))
+            and abs(eheading)<math.radians(float(cfg.get(
+                'straight_deadband_heading_deg',2.0)))
+            and abs(cross)<float(cfg.get('straight_deadband_cross_m',.10))):
+        cross=0.
+        eheading=0.
     kheading=float(gains[1]) if gains is not None else float(cfg.get('stanley_heading_gain',.85))
     kcross=float(gains[2]) if gains is not None else float(cfg.get('stanley_cross_gain',1.0))
     soft=float(cfg.get('stanley_speed_softening_mps',1.5))
