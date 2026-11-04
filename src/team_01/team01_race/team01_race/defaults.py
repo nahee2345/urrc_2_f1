@@ -41,6 +41,7 @@ DEFAULTS = {
     'motion_restart_hold_s': .12, 'missing_reference_speed_mps': 1.25,
     'stanley_heading_gain': .85, 'stanley_cross_gain': 1.0,
     'stanley_speed_softening_mps': 1.5,
+    'stanley_heading_preview_m': 1.0,
     'straight_deadband_cross_m': .10,
     'straight_deadband_heading_deg': 2.0,
     'straight_deadband_curvature': .012,
