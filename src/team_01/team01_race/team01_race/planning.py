@@ -10,6 +10,7 @@ from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvatur
 class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
              depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None):
+        self.adaptive_points=None
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
@@ -230,6 +231,7 @@ class SafetyPlanner(PlannerGeometry):
         use_adaptive=bool(adaptive) and not startup_hold
         if use_adaptive:
             self.adaptive_shift_m,choice=adaptive[0]
+            self.adaptive_points=choice.points
             free,steer=choice.first_collision_m,choice.steer_rad
             self.planner_type='adaptive_pursuit'
         else:
