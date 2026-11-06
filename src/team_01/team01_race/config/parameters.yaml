@@ -33,6 +33,7 @@ team01_control:
     traffic_light_min_red_blobs: 4
     traffic_light_ready_frames: 2
     traffic_light_off_frames: 3
+    start_fallback_delay_s: 7.0
     unmapped_speed_mps: 0.75
     unsafe_allow_without_front_lidar: false
     # First drive: short straight grid search, then centered curb-distance control.

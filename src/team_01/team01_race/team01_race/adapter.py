@@ -16,12 +16,15 @@ class Adapter(Node):
                     ('command_topic','/team01/cmd_vel'),('use_sim_time',True)]:
             if not self.has_parameter(k):self.declare_parameter(k,v)
         self.allowed=False
+        self.race_allowed=False
+        self.fallback_allowed=False
         self.speed=0.
         self.steer=0.
         self.ts=0.
         self.tt=0.
         self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                  self.on_gate,10)
+        self.create_subscription(Bool,'/team01/start_fallback',self.on_fallback,10)
         self.create_subscription(Float32,self.get_parameter('speed_topic').value,
                                  self.on_speed,10)
         self.create_subscription(Float32,self.get_parameter('steering_topic').value,
@@ -31,7 +34,15 @@ class Adapter(Node):
         self.create_timer(.04,self.tick)
 
     def on_gate(self,m):
-        self.allowed=bool(m.data)
+        self.race_allowed=bool(m.data)
+        self.allowed=self.race_allowed or self.fallback_allowed
+        if not self.allowed:
+            self.speed=self.steer=0.
+            self.pub.publish(Twist())
+
+    def on_fallback(self,m):
+        self.fallback_allowed=bool(m.data)
+        self.allowed=self.race_allowed or self.fallback_allowed
         if not self.allowed:
             self.speed=self.steer=0.
             self.pub.publish(Twist())
@@ -57,7 +68,9 @@ class Adapter(Node):
         # ROS command-side evidence: distinguishes camera gate from missing
         # adapter permission, command timeout and Gazebo drivetrain issues.
         self.pub_debug.publish(String(data=json.dumps({
-            'allowed':self.allowed,'fresh_speed':now-self.ts<.3,
+            'allowed':self.allowed,'race_allowed':self.race_allowed,
+            'fallback_allowed':self.fallback_allowed,
+            'fresh_speed':now-self.ts<.3,
             'fresh_steer':now-self.tt<.3,'send_enabled':safe,
             'received_speed_mps':round(self.speed,3),
             'received_steer_rad':round(self.steer,4),

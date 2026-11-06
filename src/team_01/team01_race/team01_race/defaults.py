@@ -15,6 +15,7 @@ DEFAULTS = {
     'front_max_range_m': 12., 'rear_defend_min_gap_m': 1.5,
     'traffic_light_min_red_blobs': 4, 'traffic_light_ready_frames': 2,
     'traffic_light_off_frames': 3,
+    'start_fallback_delay_s': 7.0,
     'unsafe_allow_without_front_lidar': False, 'unmapped_speed_mps': .75,
     'require_visual_road': True, 'road_rgb_timeout_s': .65,
     'permit_lidar_verified_fallback': True,
