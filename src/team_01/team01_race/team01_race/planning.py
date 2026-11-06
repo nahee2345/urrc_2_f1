@@ -9,7 +9,7 @@ from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvatur
 
 class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
-             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None):
+             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None, distance_dt=None):
         self.adaptive_points=None
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
@@ -19,6 +19,8 @@ class SafetyPlanner(PlannerGeometry):
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','gate or stale/missing forward sensor')
         dt=max(.01,min(dt,.25))
+        # Use Gazebo physics seconds for accumulated travelled distance.
+        physics_dt=dt if distance_dt is None else max(0.,min(.25,float(distance_dt)))
         self.map_ready=bool(map_ready)
         depth_obstacles=np.asarray(depth_obstacles).reshape((-1,2))
         lidar_obstacles=np.asarray(lidar_obstacles).reshape((-1,2))
@@ -34,7 +36,7 @@ class SafetyPlanner(PlannerGeometry):
         self.road=self.road_belief.update(
             vision_road,lidar_road,
             speed=(actual_speed if actual_speed is not None else self.speed),
-            yaw_rate=actual_yaw_rate,dt=dt)
+            yaw_rate=actual_yaw_rate,dt=physics_dt)
         self.road_source=self.road_belief.source
         if self.road_belief.rejected:
             # No arbitrarily chosen sensor may authorize a path when both
@@ -51,7 +53,9 @@ class SafetyPlanner(PlannerGeometry):
         self.measured_speed=(float(actual_speed) if actual_speed is not None and
                              math.isfinite(float(actual_speed)) and float(actual_speed)>=0 else None)
         observed=self.measured_speed if self.measured_speed is not None else self.speed
-        self.lap_learner.integrate(observed,self.prev_steer,dt,
+        measured_motion=(observed if distance_dt is None
+                         else self.measured_speed or 0.)
+        self.lap_learner.integrate(measured_motion,self.prev_steer,physics_dt,
                                    self.cfg['wheel_base_m'],self.road,self.last_mode)
         # A stationary car is not evidence of a corner: require independently
         # observed curvature in addition to a broad stationary front wall.
@@ -71,7 +75,7 @@ class SafetyPlanner(PlannerGeometry):
         self.recenter_reason=('corner_wall' if wall_bend else
                               'corner' if bending else
                               'obstacle' if obstruction else 'none')
-        self.racing_line.update(self.road,observed,dt,self.overtake_side,
+        self.racing_line.update(self.road,observed,physics_dt,self.overtake_side,
             exploration_lap=(self.cfg.get('disable_first_lap_racing_line',False)
                              and self.lap_learner.lap==1),
             center_requested=(bending or wall_bend or obstruction))
@@ -125,7 +129,7 @@ class SafetyPlanner(PlannerGeometry):
                      (map_target[0],map_target[1]+self.target_lane_offset))
         self.reference_geometry=self.reference_scheduler.update(
             self.road,self.target_lane_offset,observed,actual_yaw_rate,
-            self.prev_steer,dt,mapped_goal)
+            self.prev_steer,physics_dt,mapped_goal)
         desired=0.
         if self.road.valid:
             pursuit_speed=(self.measured_speed if self.measured_speed is not None

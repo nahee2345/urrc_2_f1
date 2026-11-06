@@ -1,5 +1,6 @@
 """Independent start diagnostics; neither this module nor readiness starts the car."""
 import json
+from team01_race.start_fallback import StartFallback
 
 
 def camera_ready(vision_ready, gate_baseline, first_bright_time, rgb_age,
@@ -19,16 +20,38 @@ class StartDiagnosticsMixin:
     def init_start_diagnostics(self):
         from std_msgs.msg import Bool, String
         self._StartBool=Bool
+        self.start_fallback=StartFallback(self.p['start_fallback_delay_s'])
+        self.last_sim_time=None
         self._StartString=String
         self.pub_start_ready=self.create_publisher(
             Bool,'/team01/ready_for_lights',10)
         self.pub_start_status=self.create_publisher(
             String,'/team01/debug/start',10)
+        self.pub_start_fallback=self.create_publisher(Bool,'/team01/start_fallback',10)
+
+    def authorized(self,now):
+        fallback=self.start_fallback.active(now,self.gate)
+        self.pub_start_fallback.publish(self._StartBool(data=fallback))
+        return bool(fallback or (self.permission and
+                    (self.start_mode=='signal' or self.gate.lights_out)))
+
+    def simulated_elapsed_s(self):
+        clock=self.get_clock().now().nanoseconds*1e-9
+        dt=(max(0.,min(.25,clock-self.last_sim_time))
+            if clock>0 and self.last_sim_time is not None else 0.)
+        self.last_sim_time=clock if clock>0 else None
+        return dt
 
     def publish_start_diagnostics(self,now,motion,depth_good,lidar_good):
         age=now-self.rgb_at
         status={
             'permission':self.permission,
+            'fallback_active':self.start_fallback.active(now,self.gate),
+            'spawn_elapsed_s':(None if self.start_fallback.elapsed(now) is None
+                               else round(self.start_fallback.elapsed(now),3)),
+            'start_source':('CAMERA' if self.permission and self.gate.lights_out
+                            else 'NO_RED_7S' if self.start_fallback.active(now,self.gate)
+                            else 'NONE'),
             'start_mode':self.start_mode,
             'camera_calibrated':self.signal_vision.ready,
             'camera_frames':self.signal_vision.frames,

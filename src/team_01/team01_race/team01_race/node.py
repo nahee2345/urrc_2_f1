@@ -24,8 +24,6 @@ from team01_race.road_node import RoadPerception
 from team01_race.bev_node import BEVPublisher
 from team01_race.road_roi import road_roi_metrics
 from team01_race.start_diagnostics import StartDiagnosticsMixin
-
-
 from team01_race.defaults import DEFAULTS
 
 class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
@@ -223,6 +221,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
             value=float(msg.twist.twist.linear.x)
             if math.isfinite(value):
                 self.actual_speed=abs(value)
+                self.start_fallback.observe_spawn(time.monotonic())
                 yaw=float(msg.twist.twist.angular.z)
                 self.actual_yaw_rate=yaw if math.isfinite(yaw) else None
                 self.odom_at=time.monotonic()
@@ -245,11 +244,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         now=time.monotonic()
         dt=now-self.last_tick
         self.last_tick=now
-        rgb_fresh=now-self.rgb_at<self.p['rgb_timeout_s']
-        # Once CAMERA verified lights out, ongoing signal-camera FPS cannot
-        # repeatedly suppress motion; depth and lidar are still mandatory.
-        enabled=(self.permission and (self.start_mode=='signal' or
-                 self.gate.lights_out))
+        enabled=self.authorized(now)
         d_ok=self.depth_valid and now-self.depth_at<self.p['depth_timeout_s']
         l_ok=now-self.lidar_at<self.p['lidar_timeout_s']
         # Stale rear sensor forbids lane-change overtakes, not ordinary driving.
@@ -262,11 +257,13 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                      else None)
         pose=self._map_pose()
         mapped=self.track.target(pose,max(2.5,min(6.,2.+(self.actual_speed or 0.)*.35)))
+        sim_dt=self.simulated_elapsed_s()
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
                                  actual_yaw_rate=(self.actual_yaw_rate if now-self.odom_at<.6 else None),
-                                 map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None))
+                                 map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None),
+                                 distance_dt=sim_dt)
         motion=self.motion_guard.update(motion,dt)
         if motion.mode=='RECOVER':
             self.planner.speed=0.
@@ -320,6 +317,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'road_conflict_reason':self.planner.road_belief.reason,
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'candidate_shift_m':self.planner.adaptive_shift_m,
+                 'odom_sim_dt_s':round(sim_dt,4),
                  'candidate_xy':([] if self.planner.adaptive_points is None else np.round(self.planner.adaptive_points[::max(1,len(self.planner.adaptive_points)//20)],3).tolist()),
                  'road_bounds_xy':([] if self.planner.road.bounds is None else np.round(self.planner.road.bounds[::max(1,len(self.planner.road.bounds)//16)],3).tolist()),
                  'fault_transitions':self.motion_guard.transitions,
