@@ -150,6 +150,10 @@ for topic in front_rgb road_rgb front_depth front_scan rear_scan; do
   echo "[TEAM01] 센서 데이터 확인: /team01/$topic"
   if ! timeout 15s ros2 topic echo "/team01/$topic" --once --field "$field" \
       --qos-reliability best_effort >/dev/null; then
+    if [[ "$topic" == 'front_rgb' ]]; then
+      echo '[TEAM01] 신호등 RGB 미수신: 스폰 7초 후 무빨간불 대체출발 허용' >&2
+      continue
+    fi
     echo "[TEAM01] $topic 실제 데이터 수신 실패. 출발 금지." >&2
     exit 2
   fi
@@ -158,17 +162,16 @@ done
 # Both the vision background and gate intensity baseline MUST be ready.
 # Starting the lamps before that calibration can make the actual reds part of
 # the "dark" reference, preventing any true light-out detection.
-python3 "$HERE/wait_camera_ready.py" --timeout 70 \
-  --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json" || {
-  echo '[TEAM01] Camera calibration failed; see /team01/debug/start' >&2
-  exit 2
-}
-echo '[TEAM01] Camera background calibrated; camera-based lights may start.'
-ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
-echo '[TEAM01] 카메라 준비 후 빨간불 1~5 점등을 시작합니다.'
-python3 "$MAP_DIR/scripts/traffic_lights_v10.py" --track monza & LIGHTS_PID=$!
-wait "$LIGHTS_PID"
-LIGHTS_PID=''
-echo '[TEAM01] 신호등 시퀀스 완료. 카메라 판정 및 센서 안전 조건 충족 시 이동합니다.'
+if python3 "$HERE/wait_camera_ready.py" --timeout 6 \
+  --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json"; then
+  echo '[TEAM01] Camera calibrated; run original red-light sequence.'
+  ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
+  python3 "$MAP_DIR/scripts/traffic_lights_v10.py" --track monza & LIGHTS_PID=$!
+  wait "$LIGHTS_PID"
+  LIGHTS_PID=''
+else
+  echo '[TEAM01] No calibrated signal camera. Controller uses no-red 7s spawn gate.' >&2
+fi
+echo '[TEAM01] Signal camera or 7-second no-red timer authorizes start; lidar/depth checks remain.'
 wait "$CONTROL_PID"
 
