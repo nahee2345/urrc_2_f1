@@ -73,3 +73,30 @@ bash scripts/qa_team01_gazebo.sh --local
 ```
 
 **보고서 증거:** [Actions #42161954918](https://github.com/nahee2345/urrc_2_f1/actions/runs/42161954918), [Actions #42161954917](https://github.com/nahee2345/urrc_2_f1/actions/runs/42161954917), [공식 Monza #42161954931](https://github.com/nahee2345/urrc_2_f1/actions/runs/42161954931) 109MB 아티팩트의 `lap.json`, `controller.log`, `adapter_status.log`, `permission_validation.json`, `camera_ready_diag.json`, `lights.log`, `gazebo.log`, `monza_runtime` 디렉터리. **실제 Monza 최종 PASS 미획득**.
+
+
+## 7. QA frame self-test 보정 후 실제 독립 Gazebo 최종 결과
+
+**실행:** [#42162624848](https://github.com/nahee2345/urrc_2_f1/actions/runs/42162624848), 차량코드 `3d9ebf9`과 동일 + QA self-test 전용 수정 `f67453d`. Actions 결론 **FAIL**.
+
+| 독립 검증 항목 | 판정 | 아티팩트 근거 |
+|---|---|---|
+| 좌표계 self-test | PASS | `[QA] coordinate-frame regression PASS` |
+| 400줄 검사 | **PASS** | `source_line_limits.json`: 92개 파일, 초과 0건 |
+| 오프라인 회귀시험 | **PASS** | CI 독립 오프라인 step success 및 공식 fast regression 184/184 |
+| Gazebo 카메라·전후방 LiDAR 구동 | PASS(기본 데이터 확인) | `qa_runner.log`: RGB·Depth·front/rear scan 토픽 검출 |
+| 출발 허가 동시 수신 | PASS | `permission_validation.json`: controller=True, adapter=True, 5회 송신 |
+| RED 점등 전 타이머 | **FAIL, 재현** | `camera_ready_diag.json`: `WAIT_RED`, `fallback_active=true`, `spawn_elapsed_s=26.334`, `cmd_speed_mps=0.75`. 이후 RED1→RED5/소등. P0 Issue #5와 동일 |
+| 실제 Odometry 누적거리 | **FAIL** | 독립 `lap.json`: 0.152m / 1158.473m, `DRIVE_STALL`, 0랩 |
+| 실측 최대속도/P95 | **0.154 / 0.078m/s** | `drive_metrics.json`; 주행 목표 미충족 |
+| 도로 경계 최소 여유 | 0.455m | `drive_metrics.json`; 이 짧은 이동 구간에서 도로 이탈 0건 |
+| 조향 좌우 반전(2° 초과) | 관측 0건 / 성능 UNVERIFIED | 단 0.152m 이동, 직선 안정성 입증 불가 |
+| 계획경로 추종오차 평균/P95 | UNVERIFIED | `planned_path_tracking_evaluable=false`, 유효 계획경로 매칭 표본 0개 |
+| rosbag 원본 및 metadata | **PASS** | `rosbag_core/metadata.yaml`, `rosbag_core/rosbag_core_0.db3.zstd` 확보 |
+| 최종 1랩 | **FAIL** | `GEOMETRIC_LAP_PASS` 없음; `DRIVE_STALL` |
+
+**측정 범위 차이:** `lap.json`은 검증기 전체 시점부터 누적 실제 거리 **0.152m**이고 `drive_metrics.json`의 거리 **0.077m**는 rosbag/metrics 구독 시작 이후 일부 구간만 측정합니다. 두 수치를 서로 교체하거나 두 거리의 차이를 차량 내부 거리 오차라고 단정하지 않습니다.
+
+**카메라 진단 불일치:** `drive_metrics.json`의 `camera_ready=false`는 측정기가 준비 상태 True 이벤트를 늦게 구독한 결과일 수 있습니다. `camera_ready_diag.json`에는 `CAMERA_START_BASELINE_READY` 및 ready_sample_count=5가 명시돼 있으므로 **실제 카메라 준비 실패로 판정하지 않습니다**. 다만 실차의 신호등 준수는 PRE-RED fallback 전진 허가로 여전히 FAIL입니다.
+
+**결론 확정:** 184개 오프라인 및 파일 400줄 검사는 PASS, 원본 맵 gitlink 정적 PASS, **두 Gazebo 실행에서 조기 타이머 승인과 저속/DRIVE_STALL 재현**, 원본 ROSbag 저장 PASS, **Monza 실제 1랩 FAIL**. 차량 제작 코드 미수정. P0 [출발 규칙 #5](https://github.com/nahee2345/urrc_2_f1/issues/5) 및 P0 [실구동 #6](https://github.com/nahee2345/urrc_2_f1/issues/6) 별도 개발팀 조치 대기.
