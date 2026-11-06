@@ -2,9 +2,14 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG="$ROOT/src/team_01/team01_race"
-MAP="$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo"
+SOURCE_MAP="$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo"
 STATE="$ROOT/ci_artifacts"
-mkdir -p "$STATE"
+RUNTIME_ROOT="$STATE/monza_runtime"
+MAP="$RUNTIME_ROOT/src/urrc_track_gazebo"
+rm -rf "$RUNTIME_ROOT"
+mkdir -p "$RUNTIME_ROOT"
+# Read the immutable submodule tree, not its potentially dirty working copy.
+git -C "$ROOT/upstream/urrc_f1_ws" archive HEAD src/urrc_track_gazebo | tar -xf - -C "$RUNTIME_ROOT"
 cd "$ROOT"
 set +u
 source /opt/ros/jazzy/setup.bash
@@ -18,6 +23,7 @@ export XDG_STATE_HOME="$STATE/state"
 export TEAM01_VERIFY_LAP=0
 [[ -f "$PKG/package.xml" ]] || { echo 'ERROR: v10 vehicle source not committed'; exit 2; }
 [[ -f "$MAP/worlds/monza_race.sdf" ]] || { echo 'ERROR: submodule missing'; exit 2; }
+# Augment only the disposable map copy.
 python3 - "$MAP" <<'PY'
 import pathlib,sys
 p=pathlib.Path(sys.argv[1])
@@ -112,3 +118,4 @@ for CHECK in $(seq 1 660);do
   sleep 1
 done
 echo '[CI] LAP TIMEOUT';exit 1
+

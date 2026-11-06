@@ -6,9 +6,20 @@ HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 MODEL="$HERE/../models/team01_car/model.sdf"
 # Use the same official submodule world as CI, with old layout as fallback.
-MAP_DIR="${TEAM01_MAP_DIR:-$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo}"
-if [[ ! -d "$MAP_DIR" && -d "$ROOT/src/urrc_track_gazebo" ]]; then
-  MAP_DIR="$ROOT/src/urrc_track_gazebo"
+MAP_SOURCE="${TEAM01_MAP_DIR:-$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo}"
+if [[ ! -d "$MAP_SOURCE" && -d "$ROOT/src/urrc_track_gazebo" ]]; then
+  MAP_SOURCE="$ROOT/src/urrc_track_gazebo"
+fi
+RUNTIME_BASE="${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01"
+mkdir -p "$RUNTIME_BASE"
+RUNTIME_ROOT="$(mktemp -d "$RUNTIME_BASE/monza_run.XXXXXXXX")"
+MAP_DIR="$RUNTIME_ROOT/src/urrc_track_gazebo"
+mkdir -p "$MAP_DIR"
+# Never write to the existing upstream Monza; operate on a throwaway copy.
+if [[ "$MAP_SOURCE" == "$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo" ]]; then
+  git -C "$ROOT/upstream/urrc_f1_ws" archive HEAD src/urrc_track_gazebo | tar -xf - -C "$RUNTIME_ROOT"
+else
+  cp -a "$MAP_SOURCE/." "$MAP_DIR/"
 fi
 
 set +u
@@ -60,6 +71,7 @@ cleanup() {
     if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; fi
   done
   wait 2>/dev/null || true
+  rm -rf "$RUNTIME_ROOT"
 }
 trap cleanup EXIT
 
@@ -159,3 +171,4 @@ wait "$LIGHTS_PID"
 LIGHTS_PID=''
 echo '[TEAM01] 신호등 시퀀스 완료. 카메라 판정 및 센서 안전 조건 충족 시 이동합니다.'
 wait "$CONTROL_PID"
+
