@@ -6,6 +6,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32, String
 from geometry_msgs.msg import Twist
+from team01_race.command_freshness import fresh_command, command_age
 
 
 class Adapter(Node):
@@ -22,6 +23,8 @@ class Adapter(Node):
         self.steer=0.
         self.ts=0.
         self.tt=0.
+        self.ts_sim=0.
+        self.tt_sim=0.
         self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                  self.on_gate,10)
         self.create_subscription(Bool,'/team01/start_fallback',self.on_fallback,10)
@@ -50,16 +53,23 @@ class Adapter(Node):
     def on_speed(self,m):
         self.speed=max(0.,min(12.,float(m.data))) if math.isfinite(m.data) else 0.
         self.ts=time.monotonic()
+        self.ts_sim=self.get_clock().now().nanoseconds*1e-9
 
     def on_steer(self,m):
         # Race rule steering: +RIGHT, -LEFT. Max centre steer deliberately
         # below 35 degrees because Ackermann INNER tyre can be sharper.
         self.steer=max(-.52,min(.52,float(m.data))) if math.isfinite(m.data) else 0.
         self.tt=time.monotonic()
+        self.tt_sim=self.get_clock().now().nanoseconds*1e-9
 
     def tick(self):
         now=time.monotonic()
-        safe=(self.allowed and now-self.ts<.3 and now-self.tt<.3)
+        sim_now=self.get_clock().now().nanoseconds*1e-9
+        speed_fresh=fresh_command(sim_now,self.ts_sim,now,self.ts)
+        steer_fresh=fresh_command(sim_now,self.tt_sim,now,self.tt)
+        safe=(self.allowed and speed_fresh and steer_fresh)
+        speed_sim_age,speed_wall_age=command_age(sim_now,self.ts_sim,now,self.ts)
+        steer_sim_age,steer_wall_age=command_age(sim_now,self.tt_sim,now,self.tt)
         m=Twist()
         if safe:
             m.linear.x=self.speed
@@ -70,8 +80,16 @@ class Adapter(Node):
         self.pub_debug.publish(String(data=json.dumps({
             'allowed':self.allowed,'race_allowed':self.race_allowed,
             'fallback_allowed':self.fallback_allowed,
-            'fresh_speed':now-self.ts<.3,
-            'fresh_steer':now-self.tt<.3,'send_enabled':safe,
+            'fresh_speed':speed_fresh,
+            'fresh_steer':steer_fresh,'send_enabled':safe,
+            'watchdog_clock':'simulation' if sim_now>0 else 'wall_fallback',
+            'speed_sim_age_s':speed_sim_age,
+            'steer_sim_age_s':steer_sim_age,
+            'speed_wall_age_s':speed_wall_age,
+            'steer_wall_age_s':steer_wall_age,
+            'stop_reason':('gate' if not self.allowed else
+                           'stale_speed' if not speed_fresh else
+                           'stale_steering' if not steer_fresh else 'none'),
             'received_speed_mps':round(self.speed,3),
             'received_steer_rad':round(self.steer,4),
             'sent_linear_mps':round(float(m.linear.x),3),
