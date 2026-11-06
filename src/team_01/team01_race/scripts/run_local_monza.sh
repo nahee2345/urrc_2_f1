@@ -17,6 +17,8 @@ MAP_DIR="$RUNTIME_ROOT/src/urrc_track_gazebo"
 mkdir -p "$MAP_DIR"
 # Never write to the existing upstream Monza; operate on a throwaway copy.
 if [[ "$MAP_SOURCE" == "$ROOT/upstream/urrc_f1_ws/src/urrc_track_gazebo" ]]; then
+  # Repair only original Monza assets previously changed by the old launcher.
+  bash "$ROOT/scripts/team01_restore_original_monza.sh"
   git -C "$ROOT/upstream/urrc_f1_ws" archive HEAD src/urrc_track_gazebo | tar -xf - -C "$RUNTIME_ROOT"
 else
   cp -a "$MAP_SOURCE/." "$MAP_DIR/"
