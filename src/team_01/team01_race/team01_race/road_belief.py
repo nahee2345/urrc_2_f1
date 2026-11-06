@@ -45,7 +45,7 @@ class RoadBelief:
         v=visual if visual is not None and visual.valid else None
         l=lidar if lidar is not None and lidar.valid else None
         merged=fuse_verified_corridors(v,l)
-        dt=max(.005,min(.20,float(dt)))
+        dt=max(0.,min(.20,float(dt)))
         dx=max(0.,float(speed))*dt
         dyaw=(float(yaw_rate)*dt if yaw_rate is not None and
                math.isfinite(float(yaw_rate)) else 0.)

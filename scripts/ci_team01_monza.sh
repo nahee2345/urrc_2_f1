@@ -10,6 +10,7 @@ rm -rf "$RUNTIME_ROOT"
 mkdir -p "$RUNTIME_ROOT"
 # Read the immutable submodule tree, not its potentially dirty working copy.
 git -C "$ROOT/upstream/urrc_f1_ws" archive HEAD src/urrc_track_gazebo | tar -xf - -C "$RUNTIME_ROOT"
+rm -f "$STATE/start_authorized.ready" "$STATE/lights_out.ready"
 cd "$ROOT"
 set +u
 source /opt/ros/jazzy/setup.bash

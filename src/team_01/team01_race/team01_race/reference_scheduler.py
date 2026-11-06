@@ -25,7 +25,7 @@ class ReferenceScheduler:
         self.source='EMPTY'
 
     def update(self,road,offset,speed,yaw_rate,steer,dt,map_target=None):
-        dt=max(.005,min(.25,float(dt)))
+        dt=max(0.,min(.25,float(dt)))
         if not road.valid:
             self.reset()
             return None
