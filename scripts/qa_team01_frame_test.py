@@ -12,6 +12,10 @@ def main():
         x0=.37867235;y0=-2.0560354;theta=1.45738442
         path.write_text(json.dumps({'x':x0,'y':y0,'yaw':theta}))
         relative=OdomWorld(path)
+        # First actual odometry sample establishes whether the pose is spawn-relative.
+        start=relative.transform(0.,0.,0.)
+        assert relative.mode=='SPAWN_RELATIVE'
+        assert abs(start[0]-x0)<1e-6 and abs(start[1]-y0)<1e-6
         x,y,h=relative.transform(1.,0.,0.)
         assert relative.mode=='SPAWN_RELATIVE'
         assert abs(x-(x0+math.cos(theta)))<1e-6
