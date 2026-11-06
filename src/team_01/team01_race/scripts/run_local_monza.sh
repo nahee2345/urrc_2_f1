@@ -116,7 +116,12 @@ fi
 
 ros2 run ros_gz_bridge parameter_bridge \
   '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' & CLOCK_PID=$!
-ros2 launch team01_race race.launch.py race_start_mode:=camera & CONTROL_PID=$!
+if [[ "${TEAM01_NO_SIGNAL_MODE:-0}" == "1" ]];then
+  START_MODE=no_signal
+else
+  START_MODE=camera
+fi
+ros2 launch team01_race race.launch.py race_start_mode:="$START_MODE" & CONTROL_PID=$!
 
 # QA process uses the track's reference centerline but NEVER feeds it to the
 # vehicle controller. It listens only to Gazebo odometry and writes its own
@@ -165,7 +170,9 @@ done
 # Both the vision background and gate intensity baseline MUST be ready.
 # Starting the lamps before that calibration can make the actual reds part of
 # the "dark" reference, preventing any true light-out detection.
-if python3 "$HERE/wait_camera_ready.py" --timeout 6 \
+if [[ "$START_MODE" == no_signal ]];then
+  echo '[TEAM01] Operator-selected NO_SIGNAL mode; spawn+7s fallback only.'
+elif python3 "$HERE/wait_camera_ready.py" --timeout 6 \
   --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json"; then
   echo '[TEAM01] Camera calibrated; run original red-light sequence.'
   ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
@@ -173,7 +180,8 @@ if python3 "$HERE/wait_camera_ready.py" --timeout 6 \
   wait "$LIGHTS_PID"
   LIGHTS_PID=''
 else
-  echo '[TEAM01] No calibrated signal camera. Controller uses no-red 7s spawn gate.' >&2
+  echo '[TEAM01] Camera not ready; race expects RED sequence. Fail closed.' >&2
+  exit 2
 fi
 echo '[TEAM01] Signal camera or 7-second no-red timer authorizes start; lidar/depth checks remain.'
 wait "$CONTROL_PID"

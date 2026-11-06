@@ -38,7 +38,8 @@ class StartDiagnosticsMixin:
         self.pub_start_fallback=self.create_publisher(Bool,'/team01/start_fallback',10)
 
     def authorized(self,now):
-        fallback=self.start_fallback.active(now,self.gate)
+        fallback=self.start_fallback.active(now,self.gate,
+            confirmed_no_signal=self.start_mode=='no_signal')
         self.pub_start_fallback.publish(self._StartBool(data=fallback))
         return bool(fallback or (self.permission and
                     (self.start_mode=='signal' or self.gate.lights_out)))
@@ -54,11 +55,14 @@ class StartDiagnosticsMixin:
         age=now-self.rgb_at
         status={
             'permission':self.permission,
-            'fallback_active':self.start_fallback.active(now,self.gate),
+            'fallback_active':self.start_fallback.active(now,self.gate,
+                               confirmed_no_signal=self.start_mode=='no_signal'),
+            'fallback_mode_authorized':self.start_mode=='no_signal',
             'spawn_elapsed_s':(None if self.start_fallback.elapsed(now) is None
                                else round(self.start_fallback.elapsed(now),3)),
             'start_source':('CAMERA' if self.permission and self.gate.lights_out
-                            else 'NO_RED_7S' if self.start_fallback.active(now,self.gate)
+                            else 'NO_RED_7S' if self.start_fallback.active(now,self.gate,
+                                confirmed_no_signal=self.start_mode=='no_signal')
                             else 'NONE'),
             'start_mode':self.start_mode,
             'camera_calibrated':self.signal_vision.ready,

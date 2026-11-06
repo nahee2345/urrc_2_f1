@@ -15,8 +15,10 @@ class StartFallback:
         if self.spawn_wall is None:return None
         return max(0.,float(now)-self.spawn_wall)
 
-    def active(self,now,gate):
-        if gate.lights_out:return False
+    def active(self,now,gate,confirmed_no_signal=False):
+        # WAIT_RED is NOT proof that the race has no traffic-light sequence.
+        # Only an explicit operator choice of no-signal mode may enable this.
+        if not confirmed_no_signal or gate.lights_out:return False
         # Real red evidence takes priority over fallback; never depart during
         # an observed countdown simply because the off sequence was missed.
         if gate.first_bright_time is not None or gate.saw_full_red:

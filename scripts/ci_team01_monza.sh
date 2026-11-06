@@ -74,7 +74,8 @@ echo "[CI] corrected grid spawn: ($SPX,$SPY), yaw=$SPYAW" | tee "$STATE/spawn.lo
 ros2 run ros_gz_sim create --world monza --file "$PKG/models/team01_car/model.sdf" --name team01 --x "$SPX" --y "$SPY" --z 1.243527 -Y "$SPYAW" | tee -a "$STATE/spawn.log"
 export TEAM01_SPAWN_MONOTONIC="$(python3 -c 'import time;print(time.monotonic())')"
 ros2 run ros_gz_bridge parameter_bridge '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' >"$STATE/clock.log" 2>&1 & PIDS+=("$!")
-ros2 launch team01_race race.launch.py race_start_mode:=camera >"$STATE/controller.log" 2>&1 & PIDS+=("$!")
+if [[ "${TEAM01_NO_SIGNAL_MODE:-0}" == 1 ]];then START_MODE=no_signal;else START_MODE=camera;fi
+ros2 launch team01_race race.launch.py race_start_mode:="$START_MODE" >"$STATE/controller.log" 2>&1 & PIDS+=("$!")
 # Retain independent gate and adapter evidence even if the Gazebo vehicle
 # fails to move. They distinguish recognition, authorization, commanding,
 # and drivetrain/physics stalls.
@@ -102,15 +103,8 @@ for TOP in front_rgb road_rgb front_depth front_scan rear_scan;do
 done
 # Red-camera path when calibration works; otherwise a separately labelled
 # no-red timeout path. Never claim a camera PASS from timeout authorization.
-if python3 "$PKG/scripts/wait_camera_ready.py" --timeout 6 \
-  --out "$STATE/camera_ready_diag.json" | tee "$STATE/camera_ready.log";then
-  python3 "$ROOT/scripts/qa_team01_permission.py" --timeout 35 \
-    --out "$STATE/permission_validation.json" | tee "$STATE/permission.log"
-  python3 "$MAP/scripts/traffic_lights_v10.py" --track monza --skip-camera-check | tee "$STATE/lights.log"
-  grep -q 'LIGHTS OUT ' "$STATE/lights.log" || { echo '[CI] LIGHTS_OUT_MISSING';exit 1; }
-  touch "$STATE/start_authorized.ready"
-else
-  echo '[CI] SIGNAL_CAMERA_NOT_READY; expect NO_RED_7S (not CAMERA PASS)' | tee "$STATE/start_fallback.log"
+if [[ "$START_MODE" == no_signal ]];then
+  echo '[CI] EXPLICIT_NO_SIGNAL; no traffic lights will be operated' | tee "$STATE/start_fallback.log"
   READY_FALLBACK=0
   for _ in $(seq 1 70);do
     if grep -q 'NO_RED_7S' "$STATE/start_status.log" 2>/dev/null;then
@@ -120,6 +114,16 @@ else
   done
   [[ "$READY_FALLBACK" == 1 ]] || { echo '[CI] NO_RED_7S_TIMEOUT';exit 1; }
   touch "$STATE/start_authorized.ready"
+elif python3 "$PKG/scripts/wait_camera_ready.py" --timeout 6 \
+  --out "$STATE/camera_ready_diag.json" | tee "$STATE/camera_ready.log";then
+  python3 "$ROOT/scripts/qa_team01_permission.py" --timeout 35 \
+    --out "$STATE/permission_validation.json" | tee "$STATE/permission.log"
+  python3 "$MAP/scripts/traffic_lights_v10.py" --track monza --skip-camera-check | tee "$STATE/lights.log"
+  grep -q 'LIGHTS OUT ' "$STATE/lights.log" || { echo '[CI] LIGHTS_OUT_MISSING';exit 1; }
+  touch "$STATE/start_authorized.ready"
+else
+  echo '[CI] CAMERA_NOT_READY; traffic-light race remains stopped' | tee "$STATE/start_failure.txt"
+  exit 1
 fi
 # Deterministic final result: FAIL on timeout, sensor failure, offroad, no progress.
 for CHECK in $(seq 1 660);do
