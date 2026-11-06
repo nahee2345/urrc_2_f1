@@ -38,7 +38,7 @@ class RejoinPlanner:
 
     def update(self,road,points,lead,lead_speed,rear_gap,dt,speed,
                enabled,base_offset=0.):
-        dt=max(.01,min(.25,float(dt)))
+        dt=max(0.,min(.25,float(dt)))
         self.base_offset=float(base_offset)
         if not enabled or not road.valid:
             # Localization dropout while alongside another car must NOT snap

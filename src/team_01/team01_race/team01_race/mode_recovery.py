@@ -14,7 +14,7 @@ class RecoveryGuard:
         self.active=False
 
     def update(self,motion,dt):
-        dt=max(.005,min(.25,float(dt)))
+        dt=max(0.,min(.25,float(dt)))
         if motion.mode!=self.previous:
             self.transitions+=1
             self.previous=motion.mode

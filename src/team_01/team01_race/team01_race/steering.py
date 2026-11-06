@@ -15,7 +15,7 @@ class SteeringLimiter:
         self.filtered_target=0.0
 
     def apply(self,target,dt,speed):
-        dt=max(.005,min(.20,float(dt)))
+        dt=max(0.,min(.20,float(dt)))
         full=math.radians(float(self.cfg['max_center_steer_deg']))
         target=max(-full,min(full,float(target)))
         tau=max(0.,float(self.cfg.get('steer_target_filter_tau_s',.10)))

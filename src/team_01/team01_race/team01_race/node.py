@@ -264,7 +264,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                                  actual_yaw_rate=(self.actual_yaw_rate if now-self.odom_at<.6 else None),
                                  map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None),
                                  distance_dt=sim_dt)
-        motion=self.motion_guard.update(motion,dt)
+        motion=self.motion_guard.update(motion,sim_dt)
         if motion.mode=='RECOVER':
             self.planner.speed=0.
         if self.road_image is not None and now-self.road_at<self.p['road_rgb_timeout_s']:
@@ -317,7 +317,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'road_conflict_reason':self.planner.road_belief.reason,
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'candidate_shift_m':self.planner.adaptive_shift_m,
-                 'odom_sim_dt_s':round(sim_dt,4),
+                 'odom_sim_dt_s':round(sim_dt,4), 'control_wall_dt_s':round(dt,4),
                  'candidate_xy':([] if self.planner.adaptive_points is None else np.round(self.planner.adaptive_points[::max(1,len(self.planner.adaptive_points)//20)],3).tolist()),
                  'road_bounds_xy':([] if self.planner.road.bounds is None else np.round(self.planner.road.bounds[::max(1,len(self.planner.road.bounds)//16)],3).tolist()),
                  'fault_transitions':self.motion_guard.transitions,

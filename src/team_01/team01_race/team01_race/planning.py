@@ -63,7 +63,7 @@ class SafetyPlanner(PlannerGeometry):
         bending=bool(self.road.valid and
                      (abs(self.road.heading_deg)>=self.cfg.get('corner_prelook_heading_deg',7.5)
                       or early_curve>=self.cfg.get('preview_curvature_threshold',.08)))
-        wall_static=self._front_wall(lidar_obstacles,self.measured_speed,dt)
+        wall_static=self._front_wall(lidar_obstacles,self.measured_speed,physics_dt)
         wall_bend=bool(wall_static and bending and
                        self.static_wall_distance_m is not None and
                        self.static_wall_distance_m<self.cfg.get('precorner_wall_range_m',10.))
@@ -112,14 +112,14 @@ class SafetyPlanner(PlannerGeometry):
         # Prior v5 alternated left/right every 12 s. First-lap lane holding
         # must instead follow measured center and corner geometry.
         horizon=min(15.0,max(4.0,3.+self.speed*1.3))
-        lead=self._lead(depth_obstacles,dt)
+        lead=self._lead(depth_obstacles,physics_dt)
         self.lead_distance=lead
         self.overtake_start_distance_m=None
         self.planned_pass_distance_m=None
         passing_enabled=bool(self.cfg.get('enable_overtake',True) and self.map_ready)
         self.target_lane_offset,self.overtake_side=(
             self.rejoin.update(self.road,pts,lead,self.lead_speed,
-                               rear_gap,dt,observed,passing_enabled,
+                               rear_gap,physics_dt,observed,passing_enabled,
                                base_offset=self.racing_line.offset_m))
         self.overtake_start_distance_m=lead
         self.planned_pass_distance_m=self.rejoin.remaining_m
@@ -271,7 +271,7 @@ class SafetyPlanner(PlannerGeometry):
             steer=self.yaw_feedback.correct(steer,observed,actual_yaw_rate)
             # The chosen adaptive trajectory was checked for edges; smoothing
             # must not require a constant arc to reproduce a varying curve.
-            steer=self.steer_limiter.apply(steer,dt,observed)
+            steer=self.steer_limiter.apply(steer,physics_dt,observed)
             # The selected adaptive path has already passed a full rollout
             # against the road and obstacles. A CONSTANT-arc projection of
             # the *rate-limited first wheel command* over 2.5 m is not that
@@ -296,7 +296,7 @@ class SafetyPlanner(PlannerGeometry):
                   actual_v**2/(2*self.cfg['max_braking_mps2']))
         hard_gap=free-self.cfg['emergency_margin_m']
         if hard_gap<=.18 or (self.speed>0 and free<stopping+.15):
-            self.speed=max(0.,self.speed-self.cfg['max_braking_mps2']*dt)
+            self.speed=max(0.,self.speed-self.cfg['max_braking_mps2']*physics_dt)
             if hard_gap<=.18:self.speed=0.
             self.last_mode='BRAKE'
             return Motion(self.speed,-steer,'BRAKE','obstacle in stopping envelope')
@@ -384,7 +384,7 @@ class SafetyPlanner(PlannerGeometry):
         if self.reference_geometry is None and self.road.valid:
             # A fallback arc is not proof of a stable racing trajectory.
             v=min(v,float(self.cfg.get('missing_reference_speed_mps',1.25)))
-        v=np.clip(v,self.speed-decel*dt,self.speed+self.cfg['accel_mps2']*dt)
+        v=np.clip(v,self.speed-decel*physics_dt,self.speed+self.cfg['accel_mps2']*physics_dt)
         self.speed=float(max(0.,v))
         self.prev_steer=float(steer)
         mode=('OVERTAKE' if self.overtake_side else 'GRID' if self.racing_line.grid
