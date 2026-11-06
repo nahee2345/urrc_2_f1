@@ -11,6 +11,7 @@ class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
              depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None, distance_dt=None):
         self.adaptive_points=None
+        self.steering_recovery='NONE'
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
@@ -268,24 +269,25 @@ class SafetyPlanner(PlannerGeometry):
                 self.cfg.get('straight_capture_max_steer_deg',6.)))
             steer=float(np.clip(steer,-capture_limit,capture_limit))
         if not startup_hold:
+            from team01_race.steering_recovery import choose_safe_steer
             steer=self.yaw_feedback.correct(steer,observed,actual_yaw_rate)
-            # The chosen adaptive trajectory was checked for edges; smoothing
-            # must not require a constant arc to reproduce a varying curve.
-            steer=self.steer_limiter.apply(steer,physics_dt,observed)
-            # The selected adaptive path has already passed a full rollout
-            # against the road and obstacles. A CONSTANT-arc projection of
-            # the *rate-limited first wheel command* over 2.5 m is not that
-            # trajectory: it falsely rejects bends where the wheel will keep
-            # turning on subsequent controller ticks. Check the bounded
-            # near-term response, and re-plan with fresh sensing every tick.
-            # Keep the conservative 2.5 m check for constant-arc control.
-            near_horizon=(min(2.5,horizon)
-                          if self.planner_type!='adaptive_pursuit'
+            near_horizon=(min(2.5,horizon) if self.planner_type!='adaptive_pursuit'
                           else min(horizon,max(1.25,min(2.5,observed*.25))))
-            safe,_=self._within_road(steer,near_horizon)
-            if not safe:
+            moving=max(self.speed,observed)
+            stop_needed=(moving*self.cfg['reaction_delay_s']+
+                         moving**2/(2*self.cfg['max_braking_mps2'])+
+                         self.cfg['emergency_margin_m'])
+            steer,self.steering_recovery=choose_safe_steer(
+                self.steer_limiter,steer,physics_dt,observed,
+                lambda a:(self._within_road(a,near_horizon)[0] and
+                          self.clearance(pts,a,near_horizon)>=near_horizon-.06),
+                math.radians(self.cfg['max_center_steer_deg']),
+                near_horizon>=stop_needed+.15)
+            if steer is None:
                 self.speed=0.;self.last_mode='BRAKE'
                 return Motion(0.,-self.prev_steer,'BRAKE','limited steering outside visible road')
+            if self.steering_recovery=='BOUNDED_REPLAN':
+                self.planner_type='bounded_recovery';free=min(free,near_horizon)
         # Clamp initial steering, with a stop if the clamped arc would not fit
         # the curb corridor. No unchecked steering override after validation.
         if startup_hold and abs(steer)>startup_limit+1e-8:

@@ -32,6 +32,7 @@ class PlannerGeometry:
         self.planner_type="constant_arc"
         self.adaptive_shift_m=0.
         self.adaptive_points=None
+        self.steering_recovery='NONE'
         self.measured_speed=None
         self.near_edge_m=None  # observed curb clearance from base_link
         self.edge_speed_cap_mps=None

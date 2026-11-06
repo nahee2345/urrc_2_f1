@@ -317,6 +317,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'road_conflict_reason':self.planner.road_belief.reason,
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'candidate_shift_m':self.planner.adaptive_shift_m,
+                 'steering_recovery':self.planner.steering_recovery,
                  'odom_sim_dt_s':round(sim_dt,4), 'control_wall_dt_s':round(dt,4),
                  'candidate_xy':([] if self.planner.adaptive_points is None else np.round(self.planner.adaptive_points[::max(1,len(self.planner.adaptive_points)//20)],3).tolist()),
                  'road_bounds_xy':([] if self.planner.road.bounds is None else np.round(self.planner.road.bounds[::max(1,len(self.planner.road.bounds)//16)],3).tolist()),
