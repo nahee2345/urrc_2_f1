@@ -72,6 +72,7 @@ read SPX SPY SPYAW < <(python3 "$PKG/scripts/safe_grid_spawn.py" \
   --reference "$MAP/tracks/processed/monza_centerline.csv" --report "$STATE/spawn_clearance.json")
 echo "[CI] corrected grid spawn: ($SPX,$SPY), yaw=$SPYAW" | tee "$STATE/spawn.log"
 ros2 run ros_gz_sim create --world monza --file "$PKG/models/team01_car/model.sdf" --name team01 --x "$SPX" --y "$SPY" --z 1.243527 -Y "$SPYAW" | tee -a "$STATE/spawn.log"
+export TEAM01_SPAWN_MONOTONIC="$(python3 -c 'import time;print(time.monotonic())')"
 ros2 run ros_gz_bridge parameter_bridge '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' >"$STATE/clock.log" 2>&1 & PIDS+=("$!")
 ros2 launch team01_race race.launch.py race_start_mode:=camera >"$STATE/controller.log" 2>&1 & PIDS+=("$!")
 # Retain independent gate and adapter evidence even if the Gazebo vehicle

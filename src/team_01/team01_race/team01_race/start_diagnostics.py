@@ -1,5 +1,7 @@
 """Independent start diagnostics; neither this module nor readiness starts the car."""
 import json
+import os
+import time
 from team01_race.start_fallback import StartFallback
 
 
@@ -21,6 +23,12 @@ class StartDiagnosticsMixin:
         from std_msgs.msg import Bool, String
         self._StartBool=Bool
         self.start_fallback=StartFallback(self.p['start_fallback_delay_s'])
+        try:
+            spawn=float(os.environ['TEAM01_SPAWN_MONOTONIC'])
+            if 0.<spawn<=time.monotonic():
+                self.start_fallback.observe_spawn(spawn)
+        except (KeyError,ValueError,TypeError):
+            pass
         self.last_sim_time=None
         self._StartString=String
         self.pub_start_ready=self.create_publisher(

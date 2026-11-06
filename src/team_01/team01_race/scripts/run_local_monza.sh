@@ -101,6 +101,7 @@ read SPX SPY SPYAW < <(python3 "$HERE/safe_grid_spawn.py" \
 echo "[TEAM01] start pose x=$SPX y=$SPY yaw=$SPYAW (inspection: $SPAWN_REPORT)"
 ros2 run ros_gz_sim create --world monza --file "$MODEL" --name team01 \
   --x "$SPX" --y "$SPY" --z 1.243527 -Y "$SPYAW"
+export TEAM01_SPAWN_MONOTONIC="$(python3 -c 'import time;print(time.monotonic())')"
 FOUND=0
 for i in $(seq 1 20); do
   MODELS=$(timeout 3s gz model --list 2>&1 || true)
