@@ -318,6 +318,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'candidate_shift_m':self.planner.adaptive_shift_m,
                  'steering_recovery':self.planner.steering_recovery,
+                 'arc_rejection':self.planner.last_arc_rejection,
                  'odom_sim_dt_s':round(sim_dt,4), 'control_wall_dt_s':round(dt,4),
                  'candidate_xy':([] if self.planner.adaptive_points is None else np.round(self.planner.adaptive_points[::max(1,len(self.planner.adaptive_points)//20)],3).tolist()),
                  'road_bounds_xy':([] if self.planner.road.bounds is None else np.round(self.planner.road.bounds[::max(1,len(self.planner.road.bounds)//16)],3).tolist()),
@@ -364,6 +365,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                 f'odom_v={self.actual_speed if now-self.odom_at<.6 else None} '
                 f'odom_yaw_rate={self.actual_yaw_rate if now-self.odom_at<.6 else None} '
                 f'planner={self.planner.planner_type} curve={self.planner.preview_curve:.3f} '
+                f'recovery={self.planner.steering_recovery} arc_reject={self.planner.last_arc_rejection} '
                 f'recenter={self.planner.recenter_reason} '
                 f'hold_offset={self.planner.racing_line.held_lane_offset_m} '
                 f'front_wall_m={self.planner.static_wall_distance_m} '

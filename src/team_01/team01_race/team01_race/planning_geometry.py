@@ -37,6 +37,7 @@ class PlannerGeometry:
         self.near_edge_m=None  # observed curb clearance from base_link
         self.edge_speed_cap_mps=None
         self.edge_alert='NONE'
+        self.last_arc_rejection=None
         self.startup_steer_limit_active=False
         self.startup_right_error_m=None
         self.static_wall_distance_m=None
@@ -86,6 +87,9 @@ class PlannerGeometry:
         centers=self.road.centers
         applicable=(arc[:,0]>=centers[0,0])&(arc[:,0]<=centers[-1,0])
         if np.count_nonzero(applicable)<3:
+            self.last_arc_rejection={'reason':'road_not_observed',
+                'steer_rad':round(float(steer),5),
+                'horizon_m':round(float(horizon),2)}
             return False,1e6
         x,y=arc[applicable,0],arc[applicable,1]
         if self.road.bounds is not None:
@@ -93,10 +97,27 @@ class PlannerGeometry:
             left=np.interp(x,self.road.bounds[:,0],self.road.bounds[:,2])
             margin=self.cfg['path_half_width_m']+.055
             over=np.maximum(np.maximum(right+margin-y, y-(left-margin)),0.)
+            bad=np.flatnonzero(over>=.001)
+            if len(bad):
+                i=int(bad[0])
+                self.last_arc_rejection={'reason':'curb_envelope',
+                    'x_m':round(float(x[i]),3),'y_m':round(float(y[i]),3),
+                    'right_m':round(float(right[i]),3),
+                    'left_m':round(float(left[i]),3),
+                    'shortfall_m':round(float(over[i]),4),
+                    'steer_rad':round(float(steer),5),
+                    'horizon_m':round(float(horizon),2)}
             return bool(np.max(over)<.001),float(np.mean(over))
         expected=np.interp(x,centers[:,0],centers[:,1])
         deviation=np.abs(y-expected)
         avail=self.road.half_width-self.cfg['path_half_width_m']-.08
+        if avail<=.05 or np.any(deviation>avail):
+            i=int(np.argmax(deviation-avail))
+            self.last_arc_rejection={'reason':'lidar_corridor',
+                'x_m':round(float(x[i]),3),'y_m':round(float(y[i]),3),
+                'shortfall_m':round(float(deviation[i]-avail),4),
+                'steer_rad':round(float(steer),5),
+                'horizon_m':round(float(horizon),2)}
         return bool(avail>.05 and np.all(deviation<=avail)),float(np.mean(deviation))
 
     def _path_samples(self, angle, horizon=8.0):

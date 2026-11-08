@@ -12,6 +12,7 @@ class SafetyPlanner(PlannerGeometry):
              depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None, distance_dt=None):
         self.adaptive_points=None
         self.steering_recovery='NONE'
+        self.last_arc_rejection=None
         if not enabled or not depth_valid or (not front_lidar_valid and
              not self.cfg.get('unsafe_allow_without_front_lidar',False)):
             self.speed=0.
