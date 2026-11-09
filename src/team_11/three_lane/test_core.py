@@ -1,7 +1,7 @@
 import math
 import unittest
 from core import (Waypoint, lane_spacing, generate_lanes, closest_lane,
-                  LaneDecision, blocked_lanes, commanded_speed, smoothstep5)
+                  LaneDecision, blocked_lanes, commanded_speed, smoothstep5, rate_limited_speed)
 
 def ring(n=800, radius=60., width=2.):
     return [
@@ -47,8 +47,21 @@ class LaneTests(unittest.TestCase):
         self.assertAlmostEqual(smoothstep5(.5),.5)
     def test_speed(self):
         self.assertEqual(commanded_speed(math.radians(10)),10)
-        self.assertEqual(commanded_speed(math.radians(10.1)),8)
-        self.assertEqual(commanded_speed(math.radians(-11)),8)
+        self.assertEqual(commanded_speed(math.radians(10.1)),7)
+        self.assertEqual(commanded_speed(math.radians(-11)),7)
+        self.assertEqual(commanded_speed(math.radians(2), .04),6)
+        self.assertEqual(commanded_speed(math.radians(2), .11),3)
+
+    def test_gradual_speed(self):
+        self.assertAlmostEqual(rate_limited_speed(10.,3.,.1),9.6)
+        self.assertAlmostEqual(rate_limited_speed(9.6,3.,.1),9.2)
+        self.assertAlmostEqual(rate_limited_speed(3.,10.,.1),3.2)
+        self.assertAlmostEqual(rate_limited_speed(0.,10.,.1),.2)
+        speed=10.
+        for _ in range(20):
+            speed=rate_limited_speed(speed,3.,.1)
+        self.assertEqual(speed,3.)
+
 
 if __name__=="__main__":
     unittest.main()
