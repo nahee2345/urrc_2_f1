@@ -135,7 +135,10 @@ class OfflineTests(unittest.TestCase):
         front=chassis.find("collision[@name='front_wing_collision']")
         self.assertAlmostEqual(float(front.findtext('geometry/box/size').split()[1]),.25)
         self.assertAlmostEqual(float(front.findtext('geometry/box/size').split()[0]),.08)
-        self.assertIn('AckermannSteering',m.find('plugin').attrib['name'])
+        plugins=[x.get('name','') for x in m.findall('plugin')]
+        self.assertTrue(any('AckermannSteering' in name for name in plugins))
+        self.assertTrue(any('systems::Imu' in name for name in plugins))
+        self.assertTrue(any('JointStatePublisher' in name for name in plugins))
 
 
 if __name__=='__main__':unittest.main()
