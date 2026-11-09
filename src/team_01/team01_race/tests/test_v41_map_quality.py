@@ -21,6 +21,13 @@ class V41(unittest.TestCase):
         q.info(10.10,42)
         self.assertTrue(q.ready(10.12,True,True))
 
+    def test_proximity_only_is_not_verified_loop_closure(self):
+        q=self.quality()
+        q.info(10.10,0,proximity_id=42)
+        self.assertFalse(q.ready(10.12,True,True))
+        q.info(10.13,loop_id=27)
+        self.assertTrue(q.ready(10.14,True,True))
+
     def test_bad_covariance_or_stale_info_blocks_guidance(self):
         q=self.quality();q.info(10.10,42)
         self.assertFalse(q.ready(15.,True,True))

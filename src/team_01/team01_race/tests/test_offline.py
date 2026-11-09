@@ -127,7 +127,7 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(len(sensors),6)
         self.assertEqual({s.get('name') for s in sensors},
                          {'front_rgb','road_rgb','front_depth',
-                          'front_scan','rear_scan','team01_imu'})
+                          'front_lidar','rear_lidar','team01_imu'})
         imu=m.find(".//sensor[@name='team01_imu']")
         self.assertEqual(imu.get('type'),'imu')
         self.assertGreaterEqual(float(imu.findtext('update_rate')),50.)

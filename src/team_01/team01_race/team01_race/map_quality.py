@@ -46,7 +46,9 @@ class MapQuality:
         stamp=float(stamp)
         if stamp>0 and math.isfinite(stamp):
             self.info_at=stamp
-            if loop_id>0 or proximity_id>0:self.closed=True
+            # A nearby keyframe is not proof of successful global closure.
+            # Only RTAB-Map graph loop closure unlocks learned-map guidance.
+            if int(loop_id)>0:self.closed=True
 
     def ready(self,now,track_complete,pose_valid):
         if not track_complete or not pose_valid:
