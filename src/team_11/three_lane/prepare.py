@@ -12,9 +12,11 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera'):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False):
     if start_mode not in ('camera', 'immediate'):
         raise ValueError(f'Unsupported start mode: {start_mode}')
+    if str(lane) not in ('auto','1','2','3'):
+        raise ValueError(f'Invalid lane {lane}; expected auto or 1..3')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     pace = source / "race/pace_cars"
@@ -31,7 +33,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
     grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][0]
-    initial_lane = closest_lane(points, grid["x"], grid["y"])
+    nearest_lane = closest_lane(points, grid["x"], grid["y"])
+    initial_lane = nearest_lane if str(lane) == "auto" else int(lane) - 1
     runner = {"position": 1, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
@@ -62,6 +65,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("ego_name", ego_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
         ("initial_lane", str(initial_lane)),
+        ("fixed_lane", str(fixed_lane).lower()),
         ("spacing_m", str(spacing)),
         ("wheelbase_m", ".33"),
         ("base_speed_mps", "10"),
@@ -111,6 +115,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "track": track, "source_repo": str(source), "world_file": str(result),
         "resource_path": meta["resource_path"], "ego": ego_name,
         "first_lane": initial_lane,
+        "selected_lane_number": initial_lane+1,
+        "nearest_lane_number": nearest_lane+1,
+        "fixed_lane": fixed_lane,
         "start_mode": start_mode,
         "grid_position": 1, "start_camera_topic": camera_topic,
         "practice_cars": [name for name in sorted(names)],
@@ -133,10 +140,12 @@ def main():
     parser.add_argument("--plugin", default="liburrc_team11.so")
     parser.add_argument("--pace-plugin", default="liburrc_pace_cars.so")
     parser.add_argument("--start-mode", choices=("camera", "immediate"), default="camera")
+    parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
+    parser.add_argument("--fixed-lane", action="store_true")
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
