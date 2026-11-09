@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Generate an isolated Gazebo practice world with three routes and a stationary blocker."""
+"""Generate three routes and the grid-01 car without a stationary obstacle."""
 from __future__ import annotations
 import argparse
-import csv
 import json
-import math
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -32,17 +30,6 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     spacing = export_routes(points, destination / "team11_routes")
     grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][0]
     initial_lane = closest_lane(points, grid["x"], grid["y"])
-    # Place one parked obstacle 40m ahead on the selected lane.
-    idx = min(range(len(points)), key=lambda i: abs(points[i].s - 40.0))
-    p = points[idx]
-    offset = (spacing, 0.0, -spacing)[initial_lane]
-    blocker = {
-        "position": 99, "x": p.x-offset*math.sin(p.yaw),
-        "y": p.y+offset*math.cos(p.yaw), "road_z": p.z,
-        "yaw": p.yaw,
-    }
-    obstacle_name = add_car(world, blocker, "0.92 0.44 0.08 1")
-    # The blocker is stationary. Existing pace cars remain as visible moving obstacles.
     runner = {"position": 1, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
@@ -64,13 +51,12 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     clip = ET.SubElement(settings, "clip")
     ET.SubElement(clip, "near").text = "0.1"
     ET.SubElement(clip, "far").text = "80"
-    # Existing pace plugin still starts on its original topic.
+    # TEAM11 starts as soon as the model is available; pace cars retain their light sequence.
     ctrl = ET.SubElement(world, "plugin", filename=str(Path(plugin_file).resolve()),
                          name="urrc::Team11ThreeLane")
     for tag, val in (
         ("camera_topic", camera_topic),
         ("ego_name", ego_name),
-        ("obstacle_name", obstacle_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
         ("initial_lane", str(initial_lane)),
         ("spacing_m", str(spacing)),
@@ -87,7 +73,6 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         "urrc_pace_grid_01": 1,
         "urrc_pace_grid_02": 2,
         "urrc_pace_grid_09": 9,
-        "urrc_pace_grid_99": 99,
     }
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
@@ -106,8 +91,6 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         (source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text()
     )["grid"]
     for name, number in expected.items():
-        if number == 99:
-            continue
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
         if (abs(pose[0] - original["x"]) > 1e-6 or
@@ -122,7 +105,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     manifest = {
         "track": track, "source_repo": str(source), "world_file": str(result),
         "resource_path": meta["resource_path"], "ego": ego_name,
-        "obstacle": obstacle_name, "first_lane": initial_lane,
+        "first_lane": initial_lane,
+        "start_mode": "immediate",
         "grid_position": 1, "start_camera_topic": camera_topic,
         "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
