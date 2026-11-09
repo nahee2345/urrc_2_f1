@@ -123,7 +123,14 @@ class OfflineTests(unittest.TestCase):
         for joint in j:
             axis=joint.find('axis/limit')
             self.assertLessEqual(float(axis.findtext('upper')),math.radians(35))
-        self.assertEqual(len(m.findall('.//sensor')),5)
+        sensors=m.findall('.//sensor')
+        self.assertEqual(len(sensors),6)
+        self.assertEqual({s.get('name') for s in sensors},
+                         {'front_rgb','road_rgb','front_depth',
+                          'front_scan','rear_scan','team01_imu'})
+        imu=m.find(".//sensor[@name='team01_imu']")
+        self.assertEqual(imu.get('type'),'imu')
+        self.assertGreaterEqual(float(imu.findtext('update_rate')),50.)
         chassis=m.find("link[@name='base_link']")
         front=chassis.find("collision[@name='front_wing_collision']")
         self.assertAlmostEqual(float(front.findtext('geometry/box/size').split()[1]),.25)

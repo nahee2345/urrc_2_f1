@@ -95,7 +95,7 @@ for TOP in front_rgb road_rgb front_depth front_scan rear_scan;do
   echo "SENSOR $TOP"
   if ! timeout 50s ros2 topic echo "/team01/$TOP" --once --field "$FIELD" --qos-reliability best_effort >/dev/null;then
     if [[ "$TOP" == front_rgb ]];then
-      echo '[CI] Signal camera missing; seven-second post-spawn no-red fallback is eligible'
+      echo '[CI] Signal camera data missing; normal race remains fail-closed'
       continue
     fi
     echo "ERROR: $TOP no rendered data";exit 2
@@ -114,7 +114,7 @@ if [[ "$START_MODE" == no_signal ]];then
   done
   [[ "$READY_FALLBACK" == 1 ]] || { echo '[CI] NO_RED_7S_TIMEOUT';exit 1; }
   touch "$STATE/start_authorized.ready"
-elif python3 "$PKG/scripts/wait_camera_ready.py" --timeout 6 \
+elif python3 "$PKG/scripts/wait_camera_ready.py" --timeout "${TEAM01_CAMERA_READY_TIMEOUT_S:-75}" \
   --out "$STATE/camera_ready_diag.json" | tee "$STATE/camera_ready.log";then
   python3 "$ROOT/scripts/qa_team01_permission.py" --timeout 35 \
     --out "$STATE/permission_validation.json" | tee "$STATE/permission.log"
@@ -123,6 +123,10 @@ elif python3 "$PKG/scripts/wait_camera_ready.py" --timeout 6 \
   touch "$STATE/start_authorized.ready"
 else
   echo '[CI] CAMERA_NOT_READY; traffic-light race remains stopped' | tee "$STATE/start_failure.txt"
+  echo '[CI] Inspect controller.log, bridge topics, and /team01/debug/start; no fallback in camera mode.' | tee -a "$STATE/start_failure.txt"
+  tail -n 90 "$STATE/controller.log" 2>/dev/null | tee "$STATE/controller_start_tail.log" || true
+  ros2 node list >"$STATE/start_nodes.txt" 2>&1 || true
+  ros2 topic info /team01/ready_for_lights >"$STATE/start_ready_topic.txt" 2>&1 || true
   exit 1
 fi
 # Deterministic final result: FAIL on timeout, sensor failure, offroad, no progress.

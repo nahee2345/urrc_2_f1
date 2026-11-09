@@ -140,10 +140,22 @@ class V4Tests(unittest.TestCase):
         self.assertFalse(p.racing_line.grid)
         pts=np.array([[3.2,y] for y in (-.1,0,.1)])
         m=p.step(pts,np.empty((0,2)),8.,.1,True,True,True,
-                 bounds(1.2,-1.2),map_ready=True)
+                 bounds(1.2,-1.2),map_ready=True,map_target=(3.,0.))
+        self.assertTrue(p.map_ready)
         self.assertNotEqual(p.overtake_side,0)
         # The safety supervisor may brake while a slow car is nearby.
         self.assertIn(m.mode,('BRAKE','OVERTAKE','CORNER','STRAIGHT'))
+
+    def test_unverified_map_target_cannot_enable_overtake(self):
+        p=SafetyPlanner({**CFG,'require_visual_road':True})
+        for _ in range(45):
+            p.step(np.empty((0,2)),np.empty((0,2)),8.,.1,True,True,True,
+                   bounds(1.2,-1.2))
+        pts=np.array([[3.2,y] for y in (-.1,0,.1)])
+        p.step(pts,np.empty((0,2)),8.,.1,True,True,True,
+               bounds(1.2,-1.2),map_ready=True,map_target=(3.,1.8))
+        self.assertFalse(p.map_ready)
+        self.assertEqual(p.overtake_side,0)
 
     def test_explicit_visual_road_required_even_with_lidar(self):
         p=SafetyPlanner({**CFG,'require_visual_road':True})
