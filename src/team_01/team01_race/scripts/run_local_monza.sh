@@ -159,8 +159,8 @@ for topic in front_rgb road_rgb front_depth front_scan rear_scan; do
   if ! timeout 15s ros2 topic echo "/team01/$topic" --once --field "$field" \
       --qos-reliability best_effort >/dev/null; then
     if [[ "$topic" == 'front_rgb' ]]; then
-      echo '[TEAM01] 신호등 RGB 미수신: 스폰 7초 후 무빨간불 대체출발 허용' >&2
-      continue
+      echo '[TEAM01] 신호등 RGB 미수신: camera mode에서는 자동출발하지 않습니다.' >&2
+      exit 2
     fi
     echo "[TEAM01] $topic 실제 데이터 수신 실패. 출발 금지." >&2
     exit 2
@@ -172,7 +172,7 @@ done
 # the "dark" reference, preventing any true light-out detection.
 if [[ "$START_MODE" == no_signal ]];then
   echo '[TEAM01] Operator-selected NO_SIGNAL mode; spawn+7s fallback only.'
-elif python3 "$HERE/wait_camera_ready.py" --timeout 6 \
+elif python3 "$HERE/wait_camera_ready.py" --timeout "${TEAM01_CAMERA_READY_TIMEOUT_S:-75}" \
   --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json"; then
   echo '[TEAM01] Camera calibrated; run original red-light sequence.'
   ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
@@ -180,7 +180,8 @@ elif python3 "$HERE/wait_camera_ready.py" --timeout 6 \
   wait "$LIGHTS_PID"
   LIGHTS_PID=''
 else
-  echo '[TEAM01] Camera not ready; race expects RED sequence. Fail closed.' >&2
+  echo '[TEAM01] Camera not ready; see ~/.local/state/urrc_team01/qa/start_readiness.json' >&2
+  echo '[TEAM01] Check /team01/debug/start and camera bridge; no automatic start in camera mode.' >&2
   exit 2
 fi
 echo '[TEAM01] Signal camera or 7-second no-red timer authorizes start; lidar/depth checks remain.'
