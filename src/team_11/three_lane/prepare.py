@@ -27,19 +27,10 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     world = doc.getroot().find("world")
     if world is None:
         raise RuntimeError("Missing Gazebo world")
-    # Grid 02 belongs to TEAM11; remove the pace copy to prevent spawn overlap.
-    for model in list(world.findall("model")):
-        if model.get("name") == "urrc_pace_grid_02":
-            world.remove(model)
-    for pace_plugin in world.findall("plugin"):
-        if pace_plugin.get("name") == "urrc::PaceCars":
-            for car in list(pace_plugin.findall("car")):
-                if car.findtext("name") == "urrc_pace_grid_02":
-                    pace_plugin.remove(car)
     csv_file = source / "src/urrc_track_gazebo/tracks/processed" / (track + "_centerline.csv")
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
-    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][1]
+    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][0]
     initial_lane = closest_lane(points, grid["x"], grid["y"])
     # Place one parked obstacle 40m ahead on the selected lane.
     idx = min(range(len(points)), key=lambda i: abs(points[i].s - 40.0))
@@ -52,14 +43,32 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     }
     obstacle_name = add_car(world, blocker, "0.85 0.65 0.07 1")
     # The blocker is stationary. Existing pace cars remain as visible moving obstacles.
-    runner = {"position": 98, "x": grid["x"], "y": grid["y"],
+    runner = {"position": 1, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.05 0.85 0.3 1")
+    ego_model = world.find(f"model[@name='{ego_name}']")
+    link = ego_model.find("link[@name='base_link']")
+    camera_topic = f"/urrc/{track}/team11/front/image"
+    camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
+    ET.SubElement(camera, "pose").text = "0.20 0 0.24 0 -0.43 0"
+    ET.SubElement(camera, "always_on").text = "true"
+    ET.SubElement(camera, "update_rate").text = "20"
+    ET.SubElement(camera, "visualize").text = "false"
+    ET.SubElement(camera, "topic").text = camera_topic
+    settings = ET.SubElement(camera, "camera")
+    ET.SubElement(settings, "horizontal_fov").text = "1.3"
+    image = ET.SubElement(settings, "image")
+    ET.SubElement(image, "width").text = "640"
+    ET.SubElement(image, "height").text = "360"
+    ET.SubElement(image, "format").text = "R8G8B8"
+    clip = ET.SubElement(settings, "clip")
+    ET.SubElement(clip, "near").text = "0.1"
+    ET.SubElement(clip, "far").text = "80"
     # Existing pace plugin still starts on its original topic.
     ctrl = ET.SubElement(world, "plugin", filename=str(Path(plugin_file).resolve()),
                          name="urrc::Team11ThreeLane")
     for tag, val in (
-        ("start_topic", f"/urrc/{track}/pace/start"),
+        ("camera_topic", camera_topic),
         ("ego_name", ego_name),
         ("obstacle_name", obstacle_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
@@ -80,6 +89,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         "track": track, "source_repo": str(source), "world_file": str(result),
         "resource_path": meta["resource_path"], "ego": ego_name,
         "obstacle": obstacle_name, "first_lane": initial_lane,
+        "grid_position": 1, "start_camera_topic": camera_topic,
+        "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
         "steering_threshold_deg": 10, "slow_speed_mps": 8,
         "routes": [str(destination/"team11_routes"/f"lane_{j}.csv") for j in range(3)],
