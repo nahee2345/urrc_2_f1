@@ -38,7 +38,6 @@ class Team11ThreeLane:public gz::sim::System,
     gz::sim::EntityComponentManager &,gz::sim::EventManager &) override {
     this->world=world;
     egoName=cfg->Get<std::string>("ego_name");
-    obstacleName=cfg->Get<std::string>("obstacle_name");
     lane=cfg->Get<int>("initial_lane");
     target=lane;
     spacing=cfg->Get<double>("spacing_m");
@@ -63,18 +62,15 @@ class Team11ThreeLane:public gz::sim::System,
     // Centerline s coordinate is common to all three lanes.
     auto &r=routes[1];
     lap=r.back().s+std::hypot(r.back().x-r.front().x,r.back().y-r.front().y);
-    const std::string topic=cfg->Get<std::string>("start_topic");
-    node.Subscribe(topic,&Team11ThreeLane::OnStart,this);
     ready=true;
-    std::cout<<"[TEAM11] 3 routes armed, spacing "<<spacing<<"m, obstacle "
-             <<obstacleName<<", waiting lights OFF\n";
+    std::cout<<"[TEAM11] 3 routes armed, spacing "<<spacing
+             <<"m; grid 01 will start immediately when spawned\n";
   }
   void PreUpdate(const gz::sim::UpdateInfo &info,
                  gz::sim::EntityComponentManager &ecm) override {
     if(info.paused || !ready)return;
     findEntities(ecm);
-    if(ego==gz::sim::kNullEntity || obstacle==gz::sim::kNullEntity)return;
-    if(!startRequested.load())return;
+    if(ego==gz::sim::kNullEntity)return;
     if(!started){
       const auto pose=gz::sim::worldPose(ego,ecm);
       const double x=pose.Pos().X(),y=pose.Pos().Y();
@@ -85,30 +81,33 @@ class Team11ThreeLane:public gz::sim::System,
         if(d<best){best=d;s=p.s;}
       }
       started=true;
-      std::cout<<"[TEAM11] GREEN start s="<<s<<" lane="<<lane<<"\n";
+      std::cout<<"[TEAM11] IMMEDIATE start s="<<s<<" lane="<<lane<<"\n";
     }
     double dt=std::chrono::duration<double>(info.dt).count();
     if(dt<=0 || dt>0.2)return;
-    // Find stationary demo blocker in actual Gazebo world coordinates.
-    auto obstaclePose=gz::sim::worldPose(obstacle,ecm);
-    const double ox=obstaclePose.Pos().X(),oy=obstaclePose.Pos().Y();
-    const auto &middle=routes[1];
-    double dmin=1e99,obsS=0;
-    int obsIndex=0;
-    for(size_t i=0;i<middle.size();i++){
-      const double d=std::hypot(ox-middle[i].x,oy-middle[i].y);
-      if(d<dmin){dmin=d;obsS=middle[i].s;obsIndex=static_cast<int>(i);}
-    }
-    const double dx=ox-middle[obsIndex].x,dy=oy-middle[obsIndex].y;
-    const double normal=-dx*std::sin(middle[obsIndex].yaw)
-                        +dy*std::cos(middle[obsIndex].yaw);
-    const double ahead=std::fmod(obsS-s+lap,lap);
+    // Detect the original moving practice cars (grid 02 and grid 09).
+    // No synthetic stationary blocker is spawned by TEAM11.
     auto offsets=std::array<double,3>{spacing,0.,-spacing};
     bool blocked[3]={false,false,false};
-    if(ahead>1.0 && ahead<scanAhead){
+    const auto &middle=routes[1];
+    for(const auto other: practice){
+      if(other==gz::sim::kNullEntity)continue;
+      const auto pose=gz::sim::worldPose(other,ecm);
+      const double ox=pose.Pos().X(),oy=pose.Pos().Y();
+      double best=1e99, obsS=0;
+      size_t closest=0;
+      for(size_t i=0;i<middle.size();i++){
+        const double d=std::hypot(ox-middle[i].x,oy-middle[i].y);
+        if(d<best){best=d;obsS=middle[i].s;closest=i;}
+      }
+      const double ahead=std::fmod(obsS-s+lap,lap);
+      if(ahead<1.0 || ahead>=scanAhead)continue;
+      const auto &p=middle[closest];
+      const double lateral=-(ox-p.x)*std::sin(p.yaw)
+                           +(oy-p.y)*std::cos(p.yaw);
       for(int k=0;k<3;k++){
-        // .25 car width, .25 blocker width, 0.12 extra clearance.
-        blocked[k]=std::abs(normal-offsets[k]) < .37;
+        if(std::abs(lateral-offsets[k])<.37)
+          blocked[k]=true;
       }
     }
     if(!changing && blocked[target]){
@@ -120,7 +119,7 @@ class Team11ThreeLane:public gz::sim::System,
       if(next>=0){
         lane=target;target=next;
         changeStart=s;changing=true;
-        std::cout<<"[TEAM11] BLOCKER "<<ahead<<"m: "
+        std::cout<<"[TEAM11] PRACTICE CAR ahead: "
                  <<lane<<" -> "<<target<<" (keep new lane)\n";
       } else {
         speed=0;
@@ -175,7 +174,8 @@ class Team11ThreeLane:public gz::sim::System,
             a.z+(b.z-a.z)*t,a.yaw+(b.yaw-a.yaw)*t};
   }
   void findEntities(gz::sim::EntityComponentManager &ecm){
-    if(ego!=gz::sim::kNullEntity && obstacle!=gz::sim::kNullEntity)return;
+    if(ego!=gz::sim::kNullEntity &&
+       practice[0]!=gz::sim::kNullEntity && practice[1]!=gz::sim::kNullEntity)return;
     ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
              gz::sim::components::ParentEntity>(
       [&](const gz::sim::Entity &ent,const gz::sim::components::Model *,
@@ -183,17 +183,15 @@ class Team11ThreeLane:public gz::sim::System,
           const gz::sim::components::ParentEntity *parent)->bool{
         if(parent->Data()!=world)return true;
         if(name->Data()==egoName)ego=ent;
-        if(name->Data()==obstacleName)obstacle=ent;
+        if(name->Data()=="urrc_pace_grid_02")practice[0]=ent;
+        if(name->Data()=="urrc_pace_grid_09")practice[1]=ent;
         return true;
       });
   }
-  void OnStart(const gz::msgs::Boolean &msg){if(msg.data())startRequested.store(true);}
-  gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity},
-                   obstacle{gz::sim::kNullEntity};
-  gz::transport::Node node;
-  std::atomic<bool> startRequested{false};
+  gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
+  std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName,obstacleName;
+  std::string egoName;
   bool ready{false},started{false},changing{false};
   int lane{1},target{1};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
