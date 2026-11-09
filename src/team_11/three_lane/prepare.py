@@ -27,6 +27,15 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     world = doc.getroot().find("world")
     if world is None:
         raise RuntimeError("Missing Gazebo world")
+    # Grid 02 belongs to TEAM11; remove the pace copy to prevent spawn overlap.
+    for model in list(world.findall("model")):
+        if model.get("name") == "urrc_pace_grid_02":
+            world.remove(model)
+    for pace_plugin in world.findall("plugin"):
+        if pace_plugin.get("name") == "urrc::PaceCars":
+            for car in list(pace_plugin.findall("car")):
+                if car.findtext("name") == "urrc_pace_grid_02":
+                    pace_plugin.remove(car)
     csv_file = source / "src/urrc_track_gazebo/tracks/processed" / (track + "_centerline.csv")
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
