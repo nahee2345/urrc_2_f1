@@ -34,3 +34,22 @@ jobs:
         run: python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only
       - name: Generate independent Hungaroring world and routes
         run: python src/team_11/three_lane/run_demo.py hungaroring --source urrc_source --prepare-only
+      - name: Verify grid 01 immediate start and zero synthetic blockers
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for track in ('monza', 'hungaroring'):
+              base=Path('urrc_source/generated/team11')/track
+              data=json.loads((base/'team11_manifest.json').read_text())
+              root=ET.parse(data['world_file']).getroot()
+              world=root.find('world')
+              models={m.get('name') for m in world.findall('model')}
+              assert {'urrc_pace_grid_01','urrc_pace_grid_02','urrc_pace_grid_09'}<=models
+              assert 'urrc_pace_grid_99' not in models
+              assert data['grid_position']==1 and data['start_mode']=='immediate'
+              plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::Team11ThreeLane')
+              assert plugin.find('obstacle_name') is None
+              print('PASS',track,'grid1 immediate, practice grids 2/9, no blocker')
+          PY
