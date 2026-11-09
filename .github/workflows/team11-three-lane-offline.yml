@@ -1,0 +1,23 @@
+name: TEAM11 three-lane offline
+on:
+  pull_request:
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-three-lane-offline.yml'
+  push:
+    branches: ['team11-three-lane-practice']
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-three-lane-offline.yml'
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python syntax
+        run: python -m compileall -q src/team_11/three_lane
+      - name: Run tests
+        run: python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
