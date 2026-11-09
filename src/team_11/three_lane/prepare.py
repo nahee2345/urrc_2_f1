@@ -12,7 +12,9 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera'):
+    if start_mode not in ('camera', 'immediate'):
+        raise ValueError(f'Unsupported start mode: {start_mode}')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     pace = source / "race/pace_cars"
@@ -56,6 +58,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
                          name="urrc::Team11ThreeLane")
     for tag, val in (
         ("camera_topic", camera_topic),
+        ("start_mode", start_mode),
         ("ego_name", ego_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
         ("initial_lane", str(initial_lane)),
@@ -106,12 +109,12 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         "track": track, "source_repo": str(source), "world_file": str(result),
         "resource_path": meta["resource_path"], "ego": ego_name,
         "first_lane": initial_lane,
-        "start_mode": "immediate",
+        "start_mode": start_mode,
         "grid_position": 1, "start_camera_topic": camera_topic,
         "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
-        "steering_threshold_deg": 10, "slow_speed_mps": 8,
+        "steering_threshold_deg": 10, "corner_speed_range_mps": [3, 7],
         "routes": [str(destination/"team11_routes"/f"lane_{j}.csv") for j in range(3)],
         "note": "Kinematic demonstration: pose control, not force/steering joint simulation"
     }
@@ -126,10 +129,11 @@ def main():
     parser.add_argument("--output", default=None)
     parser.add_argument("--plugin", default="liburrc_team11.so")
     parser.add_argument("--pace-plugin", default="liburrc_pace_cars.so")
+    parser.add_argument("--start-mode", choices=("camera", "immediate"), default="camera")
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
