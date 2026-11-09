@@ -14,14 +14,14 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing)
 
-def prepare(source, destination, track, plugin_file):
+def prepare(source, destination, track, plugin_file, pace_plugin_file):
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     pace = source / "race/pace_cars"
     sys.path.insert(0, str(pace))
     from routes import add_car, generate
     # Existing pace tool copies all source assets into destination.
-    meta = generate(source, track, destination, str(plugin_file))
+    meta = generate(source, track, destination, str(pace_plugin_file))
     world_file = Path(meta["world_file"])
     doc = ET.parse(world_file)
     world = doc.getroot().find("world")
@@ -86,10 +86,11 @@ def main():
     parser.add_argument("--source", default="~/urrc_2")
     parser.add_argument("--output", default=None)
     parser.add_argument("--plugin", default="liburrc_team11.so")
+    parser.add_argument("--pace-plugin", default="liburrc_pace_cars.so")
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
