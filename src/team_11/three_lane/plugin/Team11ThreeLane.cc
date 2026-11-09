@@ -11,6 +11,7 @@
 #include <gz/plugin/Register.hh>
 #include <gz/transport/Node.hh>
 #include <gz/msgs/boolean.pb.h>
+#include <gz/msgs/image.pb.h>
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
 #include <algorithm>
@@ -47,6 +48,14 @@ class Team11ThreeLane:public gz::sim::System,
     slowFactor=cfg->Get<double>("slow_factor");
     changeLength=cfg->Get<double>("lane_change_length_m");
     scanAhead=cfg->Get<double>("scan_ahead_m");
+    startMode=cfg->Get<std::string>("start_mode","camera").first;
+    cameraTopic=cfg->Get<std::string>("camera_topic","").first;
+    if(startMode!="immediate" && startMode!="camera"){
+      std::cerr<<"[TEAM11 ERROR] Invalid start mode "<<startMode<<"\n";return;
+    }
+    if(startMode=="camera" && !node.Subscribe(cameraTopic,&Team11ThreeLane::OnImage,this)){
+      std::cerr<<"[TEAM11 ERROR] Failed subscribing camera "<<cameraTopic<<"\n";return;
+    }
     const auto directory=cfg->Get<std::string>("route_prefix");
     for(int k=0;k<3;k++){
       std::ifstream file(directory+"/lane_"+std::to_string(k)+".csv");
@@ -64,13 +73,20 @@ class Team11ThreeLane:public gz::sim::System,
     lap=r.back().s+std::hypot(r.back().x-r.front().x,r.back().y-r.front().y);
     ready=true;
     std::cout<<"[TEAM11] 3 routes armed, spacing "<<spacing
-             <<"m; grid 01 will start immediately when spawned\n";
+             <<"m; start_mode="<<startMode<<" camera="<<cameraTopic<<"\n";
   }
   void PreUpdate(const gz::sim::UpdateInfo &info,
                  gz::sim::EntityComponentManager &ecm) override {
     if(info.paused || !ready)return;
     findEntities(ecm);
     if(ego==gz::sim::kNullEntity)return;
+    if(startMode=="camera" && !cameraStarted.load()){
+      if(redObserved.load() && !redReported){
+        redReported=true;
+        std::cout<<"[TEAM11] CAMERA red lights observed; waiting all OFF\n";
+      }
+      return;
+    }
     if(!started){
       const auto pose=gz::sim::worldPose(ego,ecm);
       const double x=pose.Pos().X(),y=pose.Pos().Y();
@@ -81,7 +97,8 @@ class Team11ThreeLane:public gz::sim::System,
         if(d<best){best=d;s=p.s;}
       }
       started=true;
-      std::cout<<"[TEAM11] IMMEDIATE start s="<<s<<" lane="<<lane<<"\n";
+      std::cout<<"[TEAM11] "<<(startMode=="camera"?"CAMERA GREEN":"IMMEDIATE")
+               <<" start s="<<s<<" lane="<<lane<<" images="<<imageFrames.load()<<"\n";
     }
     double dt=std::chrono::duration<double>(info.dt).count();
     if(dt<=0 || dt>0.2)return;
@@ -146,7 +163,28 @@ class Team11ThreeLane:public gz::sim::System,
     double yawChange=std::atan2(std::sin(yaw1-yaw0),std::cos(yaw1-yaw0));
     const double curvature=yawChange/std::max(.05,std::hypot(p1.x-p0.x,p1.y-p0.y));
     const double steer=std::atan(wheelbase*curvature);
-    speed=baseSpeed*(std::abs(steer)>slowThreshold?slowFactor:1.);
+    // Preview 10m of curvature to brake BEFORE the corner apex.
+    double futureCurvature=std::abs(curvature);
+    for(double look=0.;look<=10.;look+=2.){
+      const auto a=sample(1,s+look);
+      const auto b=sample(1,s+look+2.);
+      const double delta=std::atan2(std::sin(b.yaw-a.y),std::cos(b.yaw-a.y));
+      futureCurvature=std::max(futureCurvature,std::abs(delta)/2.);
+    }
+    if(futureCurvature<.012 && std::abs(steer)<=slowThreshold){
+      speed=baseSpeed;
+    }else if(futureCurvature<.025){
+      speed=7.;
+    }else if(futureCurvature<.055){
+      speed=7.-2.*(futureCurvature-.025)/.030;
+    }else if(futureCurvature<.10){
+      speed=5.-2.*(futureCurvature-.055)/.045;
+    }else{
+      speed=3.;
+    }
+    if(std::abs(steer)>slowThreshold)speed=std::min(speed,7.);
+    if(std::abs(steer)>2.*slowThreshold)speed=std::min(speed,3.);
+    speed=clamp(speed,3.,baseSpeed);
     const auto pos=poseAt(s);
     gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
         pos.x,pos.y,pos.z+.003,0,0,yaw0));
@@ -155,10 +193,39 @@ class Team11ThreeLane:public gz::sim::System,
     if(trace>=1.){
       trace=0.;
       std::cout<<"[TEAM11] lane="<<target<<" speed="<<speed
-               <<"m/s steer="<<steer*180./M_PI<<"deg s="<<s<<"\n";
+               <<"m/s steer="<<steer*180./M_PI<<"deg preview_curvature="
+               <<futureCurvature<<" s="<<s<<"\n";
     }
   }
  private:
+  void OnImage(const gz::msgs::Image &image){
+    const auto width=static_cast<size_t>(image.width());
+    const auto height=static_cast<size_t>(image.height());
+    const auto pitch=static_cast<size_t>(image.step());
+    const auto &bytes=image.data();
+    if(width<20 || height<20 || pitch<3*width ||
+       bytes.size()<pitch*height)return;
+    imageFrames.fetch_add(1);
+    // Gazebo R8G8B8 camera; detect bright red emissive lenses.
+    size_t redPixels=0;
+    for(size_t row=height/12;row<height*3/4;row+=2){
+      for(size_t col=width/6;col<width*5/6;col+=2){
+        const size_t pos=row*pitch+col*3;
+        const auto r=static_cast<unsigned char>(bytes[pos]);
+        const auto g=static_cast<unsigned char>(bytes[pos+1]);
+        const auto b=static_cast<unsigned char>(bytes[pos+2]);
+        if(r>145 && r>2*g && r>2*b && g<105 && b<105)redPixels++;
+      }
+    }
+    if(redPixels>=6){
+      offFrames.store(0);
+      if(redFrames.fetch_add(1)+1>=2)redObserved.store(true);
+    }else{
+      redFrames.store(0);
+      if(redObserved.load() && offFrames.fetch_add(1)+1>=4)
+        cameraStarted.store(true);
+    }
+  }
   Sample sample(int k,double distance)const{
     const auto &r=routes[k];
     distance=std::fmod(distance+lap,lap);
@@ -191,7 +258,11 @@ class Team11ThreeLane:public gz::sim::System,
   gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName;
+  std::string egoName,startMode,cameraTopic;
+  gz::transport::Node node;
+  std::atomic<bool> cameraStarted{false},redObserved{false};
+  std::atomic<unsigned int> imageFrames{0},redFrames{0},offFrames{0};
+  bool redReported{false};
   bool ready{false},started{false},changing{false};
   int lane{1},target{1};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
