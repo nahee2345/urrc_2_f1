@@ -49,6 +49,29 @@ python3 -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
 - `generated/team11/<track>/team11_gazebo.log`에서 `[TEAM11] IMMEDIATE start` 로그와 주행 상태를 확인하십시오.
 - TEAM11 차량은 아직 *Gazebo 위치 기반 시연 차량*입니다. 전방 카메라 영상의 빨간색 픽셀을 검사하는 출발 게이트가 추가되었으며, 실제 신호 인식 정확도는 Gazebo 실주행으로 검증해야 합니다.
 
+## 경로 1·2·3 단독 테스트
+
+도로 **진행 방향 기준** 왼쪽에서 오른쪽으로 1번(좌측) / 2번(중앙) / 3번(우측)입니다. 파일은 각각 `lane_0.csv`, `lane_1.csv`, `lane_2.csv`이며 **번호가 1씩 차이 납니다.**
+
+```bash
+cd ~/urrc_2_f1
+git switch team11-three-lane-practice
+git pull --ff-only origin team11-three-lane-practice
+
+# 1번 경로 (왼쪽)
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --start-mode immediate --lane 1 --fixed-lane
+
+# 2번 경로 (중앙) - 이전 Gazebo 종료 후 실행
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --start-mode immediate --lane 2 --fixed-lane
+
+# 3번 경로 (오른쪽) - 이전 Gazebo 종료 후 실행
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --start-mode immediate --lane 3 --fixed-lane
+```
+
+Hungaroring도 `monza`를 `hungaroring`으로 바꿔 동일하게 시험합니다. 고정 모드는 장애물이 있어도 자동 경로변경을 하지 않으므로 **경로 형상·벽 간격 확인에만 사용**하십시오. 항상 1번 그리드에서 출발하며 선택된 경로까지 처음 12m 구간에 부드럽게 합류합니다. 실전의 가장 가까운 경로 자동 선택과 장애물 회피는 `--lane auto`로 시험합니다.
+
+로그에는 `[TEAM11] ... lane=1`처럼 1부터 시작하는 번호로 출력됩니다.
+
 ## 검증 범위·주의
 - 단위시험은 경로 생성, 장애물 판정, 인접 경로 선택, 원래 경로 비복귀, 5차 보간, 감속 규칙을 확인합니다.
 - 코너 벽 간격은 **맵 데이터 기반 설계값**이며, 실제 Gazebo 접촉 없는 1랩/3랩 검증을 통과하기 전까지 실주행 성공으로 판단하지 않습니다.
