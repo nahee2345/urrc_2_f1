@@ -14,7 +14,6 @@ from std_msgs.msg import Bool, Float32, String
 from team01_race.perception import (decode_depth, decode_rgb, depth_geometry,
                                     laser_to_xy)
 from team01_race.planning import TrafficGate, SafetyPlanner
-from team01_race.road_surface import (dark_asphalt_bounds, transverse_start_marking,
                                        aligned_depth_rgb)
 from team01_race.signal_vision import SignalVision
 from team01_race.node_diagnostics import DiagnosticsMixin
@@ -25,8 +24,9 @@ from team01_race.bev_node import BEVPublisher
 from team01_race.road_roi import road_roi_metrics
 from team01_race.start_diagnostics import StartDiagnosticsMixin
 from team01_race.defaults import DEFAULTS
+from team01_race.motion_sensors import MotionSensors
 
-class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
+class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionSensors):
     def __init__(self):
         super().__init__('team01_control')
         for k,v in DEFAULTS.items(): self.declare_parameter(k,v)
@@ -87,6 +87,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         self.pub_path=self.create_publisher(String,'/team01/debug/path',10)
         self.init_start_diagnostics()
         self.init_bev()
+        self.init_motion_sensors()
         self.sub_start=self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                                 self.on_start,10)
         self.create_subscription(Image,'/team01/front_depth',self.on_depth,qos_profile_sensor_data)
@@ -101,12 +102,9 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
 
     def on_start(self,msg):
         if not msg.data and self.permission:
-            # Reset only after a previous authorization; false during lighting
-            # must not erase the full-red observations.
             self.gate=TrafficGate(self.p['traffic_light_min_red_blobs'],
                                   self.p['traffic_light_ready_frames'],
                                   self.p['traffic_light_off_frames'])
-            # Do not reuse an earlier course trace on a new race start.
             self.planner=SafetyPlanner(self.p)
             self.motion_guard=RecoveryGuard(self.p)
             self.track=TrackMemory(self.p)
@@ -153,7 +151,6 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         try:
             self.road_image=decode_rgb(msg)
             self.road_at=time.monotonic()
-            # Cameras arrive independently on software-rendered Gazebo.
             self._refresh_road()
         except Exception as exc:
             self.road_image=None
@@ -166,12 +163,8 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
     def on_rgb(self,msg):
         try:
             rgb=decode_rgb(msg)
-            # Spatial temporal delta: stationary red guardrails and dark lenses
-            # must NEVER be counted as illuminated start lights.
             self.rgb_blobs,self.rgb_strength=self.signal_vision.observe(rgb)
             self.gate.observe(self.rgb_blobs,self.rgb_strength)
-            # Camera evidence makes subsequent on-machine diagnosis possible.
-            # Includes the FULL image, not just the algorithm crop.
             now=time.monotonic()
             if self.signal_vision.ready:
                 if 'dark' not in self._snapshots and self.signal_vision.peak_blobs==0:
@@ -216,7 +209,6 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
             self.get_logger().warning('TF2 unavailable; mapped lap disabled')
 
     def on_odometry(self,msg):
-        # Velocity only; NO world pose, no simulator track coordinates.
         try:
             value=float(msg.twist.twist.linear.x)
             if math.isfinite(value):
@@ -247,7 +239,6 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         enabled=self.authorized(now)
         d_ok=self.depth_valid and now-self.depth_at<self.p['depth_timeout_s']
         l_ok=now-self.lidar_at<self.p['lidar_timeout_s']
-        # Stale rear sensor forbids lane-change overtakes, not ordinary driving.
         rear_gap=self.rear_gap if now-self.rear_at<self.p['lidar_timeout_s'] else -1.0
         visual_road=(self.road_bounds
                      if self.road_bounds is not None and
@@ -261,7 +252,8 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
-                                 actual_yaw_rate=(self.actual_yaw_rate if now-self.odom_at<.6 else None),
+                                 actual_yaw_rate=self.feedback_yaw(now),
+                                 actual_steering_rad=self.feedback_steer(now),
                                  map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None),
                                  distance_dt=sim_dt)
         motion=self.motion_guard.update(motion,sim_dt)
@@ -278,8 +270,6 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                 self._save_road('edge_critical')
             if motion.mode=='BRAKE' and 'first_brake' not in self._road_debug_saved:
                 self._save_road('first_brake')
-        # Provisional lap learning needs independent sensor evidence of the
-        # starting stripe, distance/heading closure and curb signature.
         learning=self.planner.lap_learner
         if enabled and d_ok and motion.speed>0:
             self.track.observe(pose,self.planner.road)
@@ -292,17 +282,13 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                 self.get_logger().warning('Lap marker reached but SLAM map unverified; remain in exploration')
             self.get_logger().info('LAP 1 SENSOR-CANDIDATE COMPLETE; cautious learned lap 2 enabled')
             self._write_lap_record()
-        # Save newly observed features during the first lap, even if the car
-        # never completes. This file is NOT read at subsequent starts.
         if (enabled and learning.lap==1 and
                 learning.distance_m-self._last_partial_record_distance>=10.):
             self._write_learning_progress()
             self._last_partial_record_distance=learning.distance_m
-        # No early movement: speed repeatedly 0 while gate is unfulfilled.
         self.pub_speed.publish(Float32(data=float(motion.speed)))
         self.pub_steer.publish(Float32(data=float(motion.steering)))
         self.publish_start_diagnostics(now,motion,d_ok,l_ok)
-        # High-rate evidence: whether a trajectory EXISTS and is selected.
         path=self.planner.reference_geometry
         payload={'mode':motion.mode,'reason':motion.reason,
                  'reference_valid':path is not None,
@@ -318,6 +304,10 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                  'candidate_rejections':getattr(self.planner,'candidate_rejections',[]),
                  'candidate_shift_m':self.planner.adaptive_shift_m,
                  'steering_recovery':self.planner.steering_recovery,
+                 'steering_intent':self.planner.steering_intent.phase,
+                 'joint_feedback':self.planner.steering_joint_feedback.source,
+                 'joint_error_rad':self.planner.steering_joint_feedback.error,
+                 'motion_sensors':self.motion_sensor_diag(now),
                  'arc_rejection':self.planner.last_arc_rejection,
                  'odom_sim_dt_s':round(sim_dt,4), 'control_wall_dt_s':round(dt,4),
                  'candidate_xy':([] if self.planner.adaptive_points is None else np.round(self.planner.adaptive_points[::max(1,len(self.planner.adaptive_points)//20)],3).tolist()),
@@ -365,7 +355,9 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher):
                 f'odom_v={self.actual_speed if now-self.odom_at<.6 else None} '
                 f'odom_yaw_rate={self.actual_yaw_rate if now-self.odom_at<.6 else None} '
                 f'planner={self.planner.planner_type} curve={self.planner.preview_curve:.3f} '
-                f'recovery={self.planner.steering_recovery} arc_reject={self.planner.last_arc_rejection} '
+                f'recovery={self.planner.steering_recovery} intent={self.planner.steering_intent.phase} '
+                f'joint_feedback={self.planner.steering_joint_feedback.source} '
+                f'arc_reject={self.planner.last_arc_rejection} '
                 f'recenter={self.planner.recenter_reason} '
                 f'hold_offset={self.planner.racing_line.held_lane_offset_m} '
                 f'front_wall_m={self.planner.static_wall_distance_m} '

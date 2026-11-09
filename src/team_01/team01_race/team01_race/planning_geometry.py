@@ -55,6 +55,10 @@ class PlannerGeometry:
         from team01_race.speed_stages import SpeedStages
         self.rejoin=RejoinPlanner(cfg)
         self.steer_limiter=SteeringLimiter(cfg)
+        from team01_race.steering_intent import SteeringIntent
+        from team01_race.steering_joint_feedback import SteeringJointFeedback
+        self.steering_intent=SteeringIntent(cfg)
+        self.steering_joint_feedback=SteeringJointFeedback(cfg)
         self.yaw_feedback=YawFeedback(cfg)
         self.reference_path=GradualReference(cfg)
         self.reference_scheduler=ReferenceScheduler(self.reference_path,cfg)

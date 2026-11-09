@@ -9,7 +9,7 @@ from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvatur
 
 class SafetyPlanner(PlannerGeometry):
     def step(self, depth_obstacles, lidar_obstacles, rear_gap, dt, enabled,
-             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None, distance_dt=None):
+             depth_valid, front_lidar_valid=True, road_bounds=None, actual_speed=None, map_target=None, map_ready=False, actual_yaw_rate=None, distance_dt=None, actual_steering_rad=None):
         self.adaptive_points=None
         self.steering_recovery='NONE'
         self.last_arc_rejection=None
@@ -18,6 +18,7 @@ class SafetyPlanner(PlannerGeometry):
             self.speed=0.
             self.prev_steer=0.
             self.steer_limiter.reset()
+            self.steering_intent.reset()
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','gate or stale/missing forward sensor')
         dt=max(.01,min(dt,.25))
@@ -272,6 +273,9 @@ class SafetyPlanner(PlannerGeometry):
         if not startup_hold:
             from team01_race.steering_recovery import choose_safe_steer
             steer=self.yaw_feedback.correct(steer,observed,actual_yaw_rate)
+            steer=self.steering_joint_feedback.correct(steer,actual_steering_rad,observed)
+            steer=self.steering_intent.update(steer,self.road.heading_deg,
+                                               self.preview_curve,physics_dt)
             near_horizon=(min(2.5,horizon) if self.planner_type!='adaptive_pursuit'
                           else min(horizon,max(1.25,min(2.5,observed*.25))))
             moving=max(self.speed,observed)
@@ -303,9 +307,6 @@ class SafetyPlanner(PlannerGeometry):
             if hard_gap<=.18:self.speed=0.
             self.last_mode='BRAKE'
             return Motion(self.speed,-steer,'BRAKE','obstacle in stopping envelope')
-        # Defensive strategy is *only* maintaining speed and a steady safe line.
-        # Never swerve to block another car, especially in an adjacent lane.
-        # DEFEND is only a situational flag for lane holding and diagnostics.
         # A nearby rear car is relevant even before SLAM map closure.
         # It NEVER authorizes a swerve or overtaking without a valid map.
         self.defend=(self.overtake_side==0 and rear_gap is not None and

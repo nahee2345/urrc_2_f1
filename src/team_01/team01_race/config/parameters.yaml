@@ -79,6 +79,10 @@ team01_control:
     center_reached_tolerance_m: 0.12
     max_steer_accel_deg_s2: 170.0
     steer_target_filter_tau_s: 0.10
+    opposite_corner_confirm_frames: 3
+    steering_flip_threshold_deg: 4.0
+    steering_joint_feedback_gain: 0.35
+    steering_joint_feedback_max_deg: 3.0
     yaw_feedback_gain: 0.065
     yaw_feedback_max_correction_deg: 4.0
     motion_restart_hold_s: 0.12
