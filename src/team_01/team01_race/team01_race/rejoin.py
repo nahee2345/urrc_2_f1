@@ -50,7 +50,10 @@ class RejoinPlanner:
             self.offset=0.
             return self.base_offset,0
         if self.phase=='HOLD':
-            # Reacquired sensors: regain a safe passing offset before merging.
+            # Rejoin only when the chosen side is still physically observed clear.
+            if not self._side_safe(road,points,self.side,lead,
+                                   abs(self.pass_offset)):
+                return self.base_offset+self.offset,self.side
             self.phase='PASS'
             self.clear_time=0.
         front_limit=max(3.5,min(10.,speed*.7+2.))
@@ -67,12 +70,20 @@ class RejoinPlanner:
                         self.remaining_m=max(3.,speed*1.5)
                         break
         elif self.phase=='SHIFT':
+            if not self._side_safe(road,points,self.side,lead,
+                                   abs(self.pass_offset)):
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
             self.elapsed+=dt
             duration=max(1.0,min(2.5,self.remaining_m/max(.5,speed)))
             self.offset=self.start_offset+(self.pass_offset-self.start_offset)*smooth(self.elapsed/duration)
             if self.elapsed>=duration:
                 self.offset=self.pass_offset;self.phase='PASS';self.clear_time=0.
         elif self.phase=='PASS':
+            if not self._side_safe(road,points,self.side,lead,
+                                   abs(self.pass_offset)):
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
             self.offset=self.pass_offset
             if lead is None and rear_gap!=-1. and (rear_gap is None or rear_gap>3.):
                 self.clear_time+=dt
@@ -80,6 +91,10 @@ class RejoinPlanner:
             if self.clear_time>=.8:
                 self.phase='MERGE';self.elapsed=0.;self.start_offset=self.offset
         elif self.phase=='MERGE':
+            if not self._side_safe(road,points,self.side,lead,
+                                   abs(self.pass_offset)):
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
             if lead is not None and lead<3.0:
                 self.phase='PASS';self.offset=self.pass_offset
             elif rear_gap==-1. or (rear_gap is not None and rear_gap<2.5):

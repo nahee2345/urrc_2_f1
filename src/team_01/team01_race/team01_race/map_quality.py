@@ -34,9 +34,13 @@ class MapQuality:
             elapsed=stamp-self.odom_at
             displacement=math.hypot(float(x)-self.last_xy[0],
                                     float(y)-self.last_xy[1])
-            if displacement>.5+22.*elapsed:good=False
+            if displacement>.5+22.*elapsed:
+                # A pose discontinuity invalidates earlier loop evidence.
+                good=False
+                self.closed=False
+                self.info_at=None
         self.good=self.good+1 if good else 0
-        self.odom_at=stamp if stamp>0 else None
+        self.odom_at=stamp if math.isfinite(stamp) and stamp>0 else None
         self.last_xy=(float(x),float(y)) if good else None
 
     def reset(self):

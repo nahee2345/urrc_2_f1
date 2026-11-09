@@ -21,6 +21,10 @@ class SteeringIntent:
 
     def update(self,target,road_heading_deg,curvature,dt):
         target=float(target);dt=max(0.,float(dt))
+        if not all(math.isfinite(v) for v in (target,road_heading_deg,curvature,dt)):
+            self.phase='INVALID_STEERING_INTENT'
+            self.last_approved=0.
+            return 0.
         sign=1 if target>self.threshold else -1 if target<-self.threshold else 0
         head=float(road_heading_deg)
         straight=abs(head)<3. and abs(float(curvature))<.025

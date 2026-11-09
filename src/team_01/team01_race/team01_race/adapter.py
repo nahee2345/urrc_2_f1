@@ -25,6 +25,7 @@ class Adapter(Node):
         self.tt=0.
         self.ts_sim=0.
         self.tt_sim=0.
+        self.command_skew_limit_s=.12
         self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                  self.on_gate,10)
         self.create_subscription(Bool,'/team01/start_fallback',self.on_fallback,10)
@@ -67,7 +68,10 @@ class Adapter(Node):
         sim_now=self.get_clock().now().nanoseconds*1e-9
         speed_fresh=fresh_command(sim_now,self.ts_sim,now,self.ts)
         steer_fresh=fresh_command(sim_now,self.tt_sim,now,self.tt)
-        safe=(self.allowed and speed_fresh and steer_fresh)
+        # Pair velocity and steering from the same control generation window.
+        skew=abs(self.ts_sim-self.tt_sim) if sim_now>0 else abs(self.ts-self.tt)
+        paired=(self.ts>0 and self.tt>0 and skew<=self.command_skew_limit_s)
+        safe=(self.allowed and speed_fresh and steer_fresh and paired)
         speed_sim_age,speed_wall_age=command_age(sim_now,self.ts_sim,now,self.ts)
         steer_sim_age,steer_wall_age=command_age(sim_now,self.tt_sim,now,self.tt)
         m=Twist()
@@ -81,7 +85,8 @@ class Adapter(Node):
             'allowed':self.allowed,'race_allowed':self.race_allowed,
             'fallback_allowed':self.fallback_allowed,
             'fresh_speed':speed_fresh,
-            'fresh_steer':steer_fresh,'send_enabled':safe,
+            'fresh_steer':steer_fresh,'paired_commands':paired,
+            'command_skew_s':round(skew,4),'send_enabled':safe,
             'watchdog_clock':'simulation' if sim_now>0 else 'wall_fallback',
             'speed_sim_age_s':speed_sim_age,
             'steer_sim_age_s':steer_sim_age,
@@ -89,7 +94,8 @@ class Adapter(Node):
             'steer_wall_age_s':steer_wall_age,
             'stop_reason':('gate' if not self.allowed else
                            'stale_speed' if not speed_fresh else
-                           'stale_steering' if not steer_fresh else 'none'),
+                           'stale_steering' if not steer_fresh else
+                           'command_pair_skew' if not paired else 'none'),
             'received_speed_mps':round(self.speed,3),
             'received_steer_rad':round(self.steer,4),
             'sent_linear_mps':round(float(m.linear.x),3),

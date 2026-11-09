@@ -126,6 +126,7 @@ class SafetyPlanner(PlannerGeometry):
                                base_offset=self.racing_line.offset_m))
         self.overtake_start_distance_m=lead
         self.planned_pass_distance_m=self.rejoin.remaining_m
+        passing_hold=self.rejoin.phase=='HOLD'
         # Acquire the selected lane over several metres, preserving vehicle
         # heading at x=0. A distant straight line must not cause a snap turn.
         mapped_goal=(None if not self.map_ready or map_target is None else
@@ -321,7 +322,10 @@ class SafetyPlanner(PlannerGeometry):
                     float(self.cfg['straight_speed_mps']))
         if not self.cfg.get('enable_overtake',True):
             lap_boost=1.0  # no extra speed via opponent logic
-        v=lap_target*lap_boost*(1.15 if self.overtake_side else 1.)
+        v=lap_target*lap_boost*(1.15 if self.overtake_side and not passing_hold else 1.)
+        if passing_hold:
+            # No speed boost while the lateral passing envelope is unverified.
+            v=min(v,float(self.cfg.get('unmapped_speed_mps',.75)))
         if self.racing_line.grid:
             # Start along the right curb, low speed and very small steering.
             v=min(v,self.cfg.get('grid_discovery_speed_mps',.65))
@@ -336,7 +340,6 @@ class SafetyPlanner(PlannerGeometry):
             v=min(v,self.cfg.get('unmapped_speed_mps',.75))
         if (abs(steer)>=math.radians(self.cfg['corner_threshold_deg'])
                 or self.pre_corner_active or self.lap_learner.learned_corner_ahead()
-                or self.pre_corner_active
                 or self.preview_curve >= self.cfg.get('preview_curvature_threshold',.08)):
             v=min(v,lap_target*lap_boost*
                   self.cfg['corner_speed_factor'])

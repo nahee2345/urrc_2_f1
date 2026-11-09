@@ -73,6 +73,10 @@ class TrackMemory:
         cloud=np.asarray(self.samples,dtype=float)
         delta=cloud[:,:2]-np.asarray([x,y])
         idx=int(np.argmin(np.sum(delta*delta,axis=1)))
+        # Reject reversed or ambiguous nearest-map association at crossings.
+        nxt=cloud[(idx+1)%len(cloud),:2]-cloud[idx,:2]
+        if np.dot(nxt,np.array([math.cos(yaw),math.sin(yaw)]))<=0.:
+            self.reason='MAP_DIRECTION_MISMATCH';return None
         if float(np.linalg.norm(delta[idx]))>2.0:
             self.reason='LOCALIZATION_MISMATCH';return None
         total=0.
@@ -85,7 +89,8 @@ class TrackMemory:
         dx,dy=cloud[j,0]-x,cloud[j,1]-y
         local_x=math.cos(yaw)*dx+math.sin(yaw)*dy
         local_y=-math.sin(yaw)*dx+math.cos(yaw)*dy
-        if local_x<.5:return None
+        if local_x<.5 or math.hypot(local_x,local_y)>lookahead+2.:
+            self.reason='MAP_LOOKAHEAD_UNSAFE';return None
         return float(local_x),float(local_y)
 
     def save(self):

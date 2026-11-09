@@ -31,6 +31,12 @@ class FeedbackGuard:
                 abs(float(joint)-self.transition_target)<math.radians(2.)):
             self.response_delay=max(0.,joint_stamp-self.transition_t)
             self.transition_t=self.transition_target=None
+        if self.transition_t is not None and sim_now-self.transition_t>.5:
+            self.response_delay=max(0.,sim_now-self.transition_t)
+            self.transition_t=self.transition_target=None
+            self.good=0
+            self.status='STEERING_RESPONSE_TIMEOUT'
+            return False
         ages=(sim_now-joint_stamp,sim_now-imu_stamp)
         if (joint is None or yaw is None or self.command_t is None or
                 not all(math.isfinite(float(x)) for x in (joint,yaw)) or
