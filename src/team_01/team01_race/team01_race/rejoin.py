@@ -22,28 +22,39 @@ class RejoinPlanner:
         self.base_offset=0.
 
     def _side_safe(self,road,points,side,lead,offset):
-        if road is None or not road.valid or side not in (-1,1):return False
-        lookahead=float(lead) if lead is not None else 5.
-        if not math.isfinite(lookahead) or lookahead<.7:return False
-        if road.bounds is not None:
-            xs=road.bounds[:,0]; b=road.bounds
-            if xs[-1]<lookahead+1.:return False
-            x=min(float(xs[-1]),max(float(xs[0]),lookahead))
-            middle=.5*(np.interp(x,xs,b[:,1])+np.interp(x,xs,b[:,2]))
-            edge=np.interp(x,xs,b[:,2 if side>0 else 1])
-            free=side*(edge-middle)
-        else:free=road.half_width
-        margin=self.cfg['path_half_width_m']+.18
-        if free<abs(offset)+margin:return False
+        """Collision-check the moving lateral path, not a static side stripe."""
+        if (road is None or not road.valid or road.bounds is None or
+                side not in (-1,1)):return False
+        target=side*abs(float(offset))
+        ahead=float(lead) if lead is not None else 5.
+        if not math.isfinite(ahead) or ahead<1.5:return False
+        b=np.asarray(road.bounds,dtype=float)
+        if b.ndim!=2 or len(b)<4 or b.shape[1]!=3:return False
+        if b[0,0]>.75 or b[-1,0]<ahead+1.:return False
+        margin=float(self.cfg['path_half_width_m'])+.18
+        shift_end=max(1.0,ahead-1.)
+        xs=np.linspace(.75,min(ahead+2.5,10.),40)
+        lateral=target*np.array([smooth(x/shift_end) for x in xs])
+        right=np.interp(xs,b[:,0],b[:,1])
+        left=np.interp(xs,b[:,0],b[:,2])
+        if np.any(lateral-margin<right) or np.any(lateral+margin>left):
+            return False
+        pts=np.asarray(points,dtype=float).reshape((-1,2))
+        if not len(pts):return True
+        pts=pts[np.all(np.isfinite(pts),axis=1)]
+        pts=pts[(pts[:,0]>=xs[0])&(pts[:,0]<=xs[-1])]
+        if not len(pts):return True
+        planned=np.interp(pts[:,0],xs,lateral)
+        return not np.any(abs(pts[:,1]-planned)<margin)
+
+    def _merge_safe(self,road,points):
+        """Reject merge if live points occupy the return-to-lane region."""
+        if road.bounds is None or not road.valid:return False
         cloud=np.asarray(points,dtype=float).reshape((-1,2))
-        candidate=cloud[(cloud[:,0]>.7)&(cloud[:,0]<min(lookahead+2.5,11.))]
-        # Evaluate a swept side corridor, not only the final offset line.
-        lateral=candidate[:,1]
-        closest=np.minimum(abs(lateral),abs(lateral-side*abs(offset)))
-        swept=((lateral>=-margin)&(lateral<=side*abs(offset)+margin)
-               if side>0 else ((lateral<=margin)&
-                               (lateral>=side*abs(offset)-margin)))
-        return not np.any(swept & (closest<margin+abs(offset)))
+        cloud=cloud[np.all(np.isfinite(cloud),axis=1)]
+        cloud=cloud[(cloud[:,0]>.75)&(cloud[:,0]<4.)]
+        margin=float(self.cfg['path_half_width_m'])+.18
+        return not np.any(np.abs(cloud[:,1]-self.base_offset)<margin)
 
     def update(self,road,points,lead,lead_speed,rear_gap,dt,speed,
                enabled,base_offset=0.):
@@ -100,6 +111,9 @@ class RejoinPlanner:
             if self.clear_time>=.8:
                 self.phase='MERGE';self.elapsed=0.;self.start_offset=self.offset
         elif self.phase=='MERGE':
+            if not self._merge_safe(road,points):
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
             if not self._side_safe(road,points,self.side,lead,
                                    abs(self.pass_offset)):
                 self.phase='HOLD'
