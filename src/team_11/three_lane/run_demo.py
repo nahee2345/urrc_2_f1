@@ -40,6 +40,10 @@ def main():
     ap.add_argument("--server",action="store_true",help="headless Gazebo server")
     ap.add_argument("--start-mode",choices=("camera","immediate"),default="camera",
                     help="camera waits for observed red->all-off images")
+    ap.add_argument("--lane",choices=("auto","1","2","3"),default="auto",
+                    help="lane 1=left, 2=center, 3=right; auto=nearest")
+    ap.add_argument("--fixed-lane",action="store_true",
+                    help="ignore other cars for lane-change tests; stay on selected lane")
     args=ap.parse_args()
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
@@ -55,10 +59,12 @@ def main():
             ap.error("Gazebo Harmonic 'gz' executable not found")
         pace_lib=build(pace_src,plugin_dir/"pace","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
-    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode)
+    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,args.fixed_lane)
     print("[TEAM11] 3 lanes:",manifest["routes"],flush=True)
     print("[TEAM11] spacing:",round(manifest["lane_spacing_m"],3),
-          "m, start lane:",manifest["first_lane"],flush=True)
+          "m, selected lane:",manifest["selected_lane_number"],
+          "nearest lane:",manifest["nearest_lane_number"],
+          "fixed:",args.fixed_lane,flush=True)
     if args.prepare_only:
         print("[TEAM11] world prepared; not run in Gazebo",flush=True)
         return 0
