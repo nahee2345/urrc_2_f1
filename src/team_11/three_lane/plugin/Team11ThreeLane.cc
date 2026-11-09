@@ -171,7 +171,7 @@ class Team11ThreeLane:public gz::sim::System,
       Position p{mid.x-o*std::sin(mid.yaw),mid.y+o*std::cos(mid.yaw),mid.z};
       // Quintic grid-01 -> route merge, 12m travel, no teleport on spawn.
       if(traveledFromStart<12.){
-        const double ahead=std::fmod(distance-initialS+lap,lap);
+        const double ahead=std::fmod(distance-s+lap,lap);
         const double blend=1.-smooth((traveledFromStart+ahead)/12.);
         p.x+=initialDx*blend;
         p.y+=initialDy*blend;
