@@ -74,6 +74,10 @@ class StartDiagnosticsMixin:
             'first_red_seen':self.gate.first_bright_time is not None,
             'lights_out':self.gate.lights_out,
             'camera_age_s':round(age,3),
+            'camera_frame_state':('NO_FRAMES' if self.signal_vision.frames==0
+                                  else 'STALE' if age>=1.5
+                                  else 'BASELINE_PENDING' if not self.signal_vision.ready
+                                  else 'READY'),
             'depth_ok':bool(depth_good),
             'front_lidar_ok':bool(lidar_good),
             'motion_mode':motion.mode,

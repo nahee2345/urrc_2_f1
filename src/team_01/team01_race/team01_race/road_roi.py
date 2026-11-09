@@ -13,7 +13,8 @@ def road_roi_metrics(road):
     result={}
     for name,(start,end) in BANDS.items():
         entry={'valid':False,'x_start_m':start,'x_end_m':end}
-        if road is None or not road.valid or len(road.centers)<4:
+        if (road is None or not road.valid or road.bounds is None or
+                len(road.centers)<4):
             result[name]=entry
             continue
         c=np.asarray(road.centers,float)
@@ -26,8 +27,6 @@ def road_roi_metrics(road):
         if road.bounds is not None:
             b=np.asarray(road.bounds,float)
             width=np.interp(xs,b[:,0],b[:,2])-np.interp(xs,b[:,0],b[:,1])
-        else:
-            width=np.full_like(xs,2.*float(road.half_width))
         dy=np.gradient(y,xs)
         curvature=np.gradient(dy,xs)/(1.+dy*dy)**1.5
         entry.update(valid=True,
