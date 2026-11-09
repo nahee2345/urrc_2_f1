@@ -41,6 +41,7 @@ class Team11ThreeLane:public gz::sim::System,
     egoName=cfg->Get<std::string>("ego_name");
     lane=cfg->Get<int>("initial_lane");
     target=lane;
+    fixedLane=cfg->Get<bool>("fixed_lane",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -99,9 +100,18 @@ class Team11ThreeLane:public gz::sim::System,
         double d=std::hypot(x-p.x,y-p.y);
         if(d<best){best=d;s=p.s;}
       }
+      // Preserve the exact grid-01 spawn, then merge gently onto the selected route.
+      const auto initial=sample(1,s);
+      const std::array<double,3> offsets={spacing,0.,-spacing};
+      const double offset=offsets[target];
+      initialDx=x-(initial.x-offset*std::sin(initial.yaw));
+      initialDy=y-(initial.y+offset*std::cos(initial.yaw));
+      initialS=s;
+      traveledFromStart=0.;
       started=true;
       std::cout<<"[TEAM11] "<<(startMode=="camera"?"CAMERA GREEN":"IMMEDIATE")
-               <<" start s="<<s<<" lane="<<lane<<" images="<<imageFrames.load()<<"\n";
+               <<" start s="<<s<<" lane="<<(lane+1)<<" fixed="<<fixedLane
+               <<" images="<<imageFrames.load()<<"\n";
     }
     double dt=std::chrono::duration<double>(info.dt).count();
     if(dt<=0 || dt>0.2)return;
@@ -130,7 +140,7 @@ class Team11ThreeLane:public gz::sim::System,
           blocked[k]=true;
       }
     }
-    if(!changing && blocked[target]){
+    if(!fixedLane && !changing && blocked[target]){
       int next=-1;
       // Only adjacent paths. No jumping over a blocked lane.
       for(int j: {target-1,target+1}){
@@ -158,7 +168,15 @@ class Team11ThreeLane:public gz::sim::System,
     auto poseAt=[&](double distance){
       auto mid=sample(1,distance);
       double o=lateral(distance);
-      return Position{mid.x-o*std::sin(mid.yaw),mid.y+o*std::cos(mid.yaw),mid.z};
+      Position p{mid.x-o*std::sin(mid.yaw),mid.y+o*std::cos(mid.yaw),mid.z};
+      // Quintic grid-01 -> route merge, 12m travel, no teleport on spawn.
+      if(traveledFromStart<12.){
+        const double ahead=std::fmod(distance-initialS+lap,lap);
+        const double blend=1.-smooth((traveledFromStart+ahead)/12.);
+        p.x+=initialDx*blend;
+        p.y+=initialDy*blend;
+      }
+      return p;
     };
     const auto p0=poseAt(s),p1=poseAt(s+.4),p2=poseAt(s+.8);
     const double yaw0=std::atan2(p1.y-p0.y,p1.x-p0.x);
@@ -198,10 +216,11 @@ class Team11ThreeLane:public gz::sim::System,
     gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
         pos.x,pos.y,pos.z+.003,0,0,yaw0));
     s=std::fmod(s+speed*dt,lap);
+    traveledFromStart+=speed*dt;
     trace+=dt;
     if(trace>=1.){
       trace=0.;
-      std::cout<<"[TEAM11] lane="<<target<<" speed="<<speed
+      std::cout<<"[TEAM11] lane="<<(target+1)<<" speed="<<speed
                <<"m/s steer="<<steer*180./M_PI<<"deg preview_curvature="
                <<futureCurvature<<" target="<<targetSpeed
                <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";
@@ -273,12 +292,13 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<bool> cameraStarted{false},redObserved{false};
   std::atomic<unsigned int> imageFrames{0},redFrames{0},offFrames{0};
   bool redReported{false};
-  bool ready{false},started{false},changing{false};
+  bool ready{false},started{false},changing{false},fixedLane{false};
   int lane{1},target{1};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
   double maxDecel{4.},maxAccel{2.};
+  double initialDx{0.},initialDy{0.},initialS{0.},traveledFromStart{0.};
 };
 }
 GZ_ADD_PLUGIN(urrc::Team11ThreeLane,gz::sim::System,
