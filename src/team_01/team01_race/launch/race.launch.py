@@ -17,6 +17,7 @@ def generate_launch_description():
     # must not break the existing low-speed camera/LiDAR controller.
     try:
         get_package_prefix('rtabmap_slam')
+        get_package_prefix('rtabmap_odom')
         slam_default='true'
     except Exception:
         slam_default='false'
@@ -66,7 +67,7 @@ def generate_launch_description():
                   name='team01_rgbd_relay',output='screen',condition=slam_enabled,
                   parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}]),
              Node(package='rtabmap_odom',executable='rgbd_odometry',
-                  name='team01_icp_odometry',output='screen',condition=slam_enabled,
+                  name='team01_rgbd_odometry',output='screen',condition=slam_enabled,
                   parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time'),
                                'frame_id':'base_link','odom_frame_id':'team01_odom',
                                'publish_tf':True,'Reg/Force3DoF':'true',
