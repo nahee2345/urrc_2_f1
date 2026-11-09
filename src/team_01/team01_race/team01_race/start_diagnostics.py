@@ -36,13 +36,17 @@ class StartDiagnosticsMixin:
         self.pub_start_status=self.create_publisher(
             String,'/team01/debug/start',10)
         self.pub_start_fallback=self.create_publisher(Bool,'/team01/start_fallback',10)
+        self.pub_controller_authorized=self.create_publisher(
+            Bool,'/team01/start_authorized',10)
 
     def authorized(self,now):
         fallback=self.start_fallback.active(now,self.gate,
             confirmed_no_signal=self.start_mode=='no_signal')
         self.pub_start_fallback.publish(self._StartBool(data=fallback))
-        return bool(fallback or (self.permission and
-                    (self.start_mode=='signal' or self.gate.lights_out)))
+        granted=bool(fallback or (self.permission and
+                     (self.start_mode=='signal' or self.gate.lights_out)))
+        self.pub_controller_authorized.publish(self._StartBool(data=granted))
+        return granted
 
     def simulated_elapsed_s(self):
         clock=self.get_clock().now().nanoseconds*1e-9

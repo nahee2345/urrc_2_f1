@@ -22,10 +22,12 @@ class RejoinPlanner:
         self.base_offset=0.
 
     def _side_safe(self,road,points,side,lead,offset):
-        if not road.valid or side not in (-1,1):return False
+        if road is None or not road.valid or side not in (-1,1):return False
         lookahead=float(lead) if lead is not None else 5.
+        if not math.isfinite(lookahead) or lookahead<.7:return False
         if road.bounds is not None:
             xs=road.bounds[:,0]; b=road.bounds
+            if xs[-1]<lookahead+1.:return False
             x=min(float(xs[-1]),max(float(xs[0]),lookahead))
             middle=.5*(np.interp(x,xs,b[:,1])+np.interp(x,xs,b[:,2]))
             edge=np.interp(x,xs,b[:,2 if side>0 else 1])
@@ -35,7 +37,13 @@ class RejoinPlanner:
         if free<abs(offset)+margin:return False
         cloud=np.asarray(points,dtype=float).reshape((-1,2))
         candidate=cloud[(cloud[:,0]>.7)&(cloud[:,0]<min(lookahead+2.5,11.))]
-        return not np.any(np.abs(candidate[:,1]-side*abs(offset))<margin)
+        # Evaluate a swept side corridor, not only the final offset line.
+        lateral=candidate[:,1]
+        closest=np.minimum(abs(lateral),abs(lateral-side*abs(offset)))
+        swept=((lateral>=-margin)&(lateral<=side*abs(offset)+margin)
+               if side>0 else ((lateral<=margin)&
+                               (lateral>=side*abs(offset)-margin)))
+        return not np.any(swept & (closest<margin+abs(offset)))
 
     def update(self,road,points,lead,lead_speed,rear_gap,dt,speed,
                enabled,base_offset=0.):

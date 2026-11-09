@@ -19,6 +19,8 @@ class Adapter(Node):
         self.allowed=False
         self.race_allowed=False
         self.fallback_allowed=False
+        self.controller_authorized=False
+        self.controller_auth_at=0.
         self.speed=0.
         self.steer=0.
         self.ts=0.
@@ -29,6 +31,8 @@ class Adapter(Node):
         self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                  self.on_gate,10)
         self.create_subscription(Bool,'/team01/start_fallback',self.on_fallback,10)
+        self.create_subscription(Bool,'/team01/start_authorized',
+                                 self.on_controller_auth,10)
         self.create_subscription(Float32,self.get_parameter('speed_topic').value,
                                  self.on_speed,10)
         self.create_subscription(Float32,self.get_parameter('steering_topic').value,
@@ -51,6 +55,12 @@ class Adapter(Node):
             self.speed=self.steer=0.
             self.pub.publish(Twist())
 
+    def on_controller_auth(self,m):
+        self.controller_authorized=bool(m.data)
+        self.controller_auth_at=time.monotonic()
+        if not self.controller_authorized:
+            self.pub.publish(Twist())
+
     def on_speed(self,m):
         self.speed=max(0.,min(12.,float(m.data))) if math.isfinite(m.data) else 0.
         self.ts=time.monotonic()
@@ -71,7 +81,11 @@ class Adapter(Node):
         # Pair velocity and steering from the same control generation window.
         skew=abs(self.ts_sim-self.tt_sim) if sim_now>0 else abs(self.ts-self.tt)
         paired=(self.ts>0 and self.tt>0 and skew<=self.command_skew_limit_s)
-        safe=(self.allowed and speed_fresh and steer_fresh and paired)
+        controller_fresh=(self.controller_authorized and
+                          self.controller_auth_at>0 and
+                          0.<=now-self.controller_auth_at<=.25)
+        safe=(self.allowed and controller_fresh and speed_fresh and
+              steer_fresh and paired)
         speed_sim_age,speed_wall_age=command_age(sim_now,self.ts_sim,now,self.ts)
         steer_sim_age,steer_wall_age=command_age(sim_now,self.tt_sim,now,self.tt)
         m=Twist()
@@ -83,6 +97,7 @@ class Adapter(Node):
         # adapter permission, command timeout and Gazebo drivetrain issues.
         self.pub_debug.publish(String(data=json.dumps({
             'allowed':self.allowed,'race_allowed':self.race_allowed,
+            'controller_authorized':controller_fresh,
             'fallback_allowed':self.fallback_allowed,
             'fresh_speed':speed_fresh,
             'fresh_steer':steer_fresh,'paired_commands':paired,
@@ -93,6 +108,7 @@ class Adapter(Node):
             'speed_wall_age_s':speed_wall_age,
             'steer_wall_age_s':steer_wall_age,
             'stop_reason':('gate' if not self.allowed else
+                           'controller_start_not_authorized' if not controller_fresh else
                            'stale_speed' if not speed_fresh else
                            'stale_steering' if not steer_fresh else
                            'command_pair_skew' if not paired else 'none'),

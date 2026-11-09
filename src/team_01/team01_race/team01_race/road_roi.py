@@ -24,9 +24,11 @@ def road_roi_metrics(road):
             continue
         xs=np.linspace(lo,hi,12)
         y=np.interp(xs,c[:,0],c[:,1])
-        if road.bounds is not None:
-            b=np.asarray(road.bounds,float)
-            width=np.interp(xs,b[:,0],b[:,2])-np.interp(xs,b[:,0],b[:,1])
+        b=np.asarray(road.bounds,float)
+        width=np.interp(xs,b[:,0],b[:,2])-np.interp(xs,b[:,0],b[:,1])
+        if not np.all(np.isfinite(width)) or np.any(width<=0.):
+            result[name]=entry
+            continue
         dy=np.gradient(y,xs)
         curvature=np.gradient(dy,xs)/(1.+dy*dy)**1.5
         entry.update(valid=True,

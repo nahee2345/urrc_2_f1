@@ -17,7 +17,7 @@ class SpeedStages:
         elif not (self.corner and self.lap):
             self.effective=5.;self.reason='FIRST_CORNER_OR_LAP_NOT_APPROVED'
         elif self.requested==10. and not self.eight:
-            self.effective=8.;self.reason='EIGHT_MPS_NOT_APPROVED'
+            self.effective=5.;self.reason='EIGHT_MPS_NOT_APPROVED'
         else:
             self.effective=self.requested;self.reason='QA_APPROVED'
         return self.effective

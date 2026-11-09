@@ -118,6 +118,11 @@ class SafetyPlanner(PlannerGeometry):
         self.overtake_start_distance_m=lead
         self.planned_pass_distance_m=self.rejoin.remaining_m
         passing_hold=self.rejoin.phase=='HOLD'
+        if passing_hold:
+            self.speed=0.
+            self.prev_steer=0.
+            self.last_mode='BRAKE'
+            return Motion(0.,0.,'BRAKE','passing corridor unverified: hold')
         # Acquire the selected lane over several metres, preserving vehicle
         # heading at x=0. A distant straight line must not cause a snap turn.
         mapped_goal=(None if not self.map_ready or map_target is None else

@@ -40,6 +40,9 @@ class MapQuality:
                 self.closed=False
                 self.info_at=None
         self.good=self.good+1 if good else 0
+        if not good and self.good==0:
+            # Require a new closure after a discontinuity or invalid covariance.
+            self.closed=False
         self.odom_at=stamp if math.isfinite(stamp) and stamp>0 else None
         self.last_xy=(float(x),float(y)) if good else None
 
