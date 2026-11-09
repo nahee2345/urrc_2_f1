@@ -16,7 +16,8 @@ from team01_race.drive_chain_logic import classify_drive
 class DriveMonitor(Node):
     def __init__(self):
         super().__init__('team01_drive_monitor')
-        self.declare_parameter('use_sim_time',True)
+        if not self.has_parameter('use_sim_time'):
+            self.declare_parameter('use_sim_time',True)
         self.cmd=None;self.adapter=None;self.speed=None
         self.cmd_at=0.;self.adapter_at=0.
         self.joint=None;self.odom_at=0.
