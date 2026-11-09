@@ -48,6 +48,9 @@ class Team11ThreeLane:public gz::sim::System,
     slowFactor=cfg->Get<double>("slow_factor");
     changeLength=cfg->Get<double>("lane_change_length_m");
     scanAhead=cfg->Get<double>("scan_ahead_m");
+    maxDecel=cfg->Get<double>("max_deceleration_mps2",4.0).first;
+    maxAccel=cfg->Get<double>("max_acceleration_mps2",2.0).first;
+    if(maxDecel<=0 || maxAccel<=0){std::cerr<<"[TEAM11 ERROR] Invalid acceleration limits\n";return;}
     startMode=cfg->Get<std::string>("start_mode","camera").first;
     cameraTopic=cfg->Get<std::string>("camera_topic","").first;
     if(startMode!="immediate" && startMode!="camera"){
@@ -163,28 +166,34 @@ class Team11ThreeLane:public gz::sim::System,
     double yawChange=std::atan2(std::sin(yaw1-yaw0),std::cos(yaw1-yaw0));
     const double curvature=yawChange/std::max(.05,std::hypot(p1.x-p0.x,p1.y-p0.y));
     const double steer=std::atan(wheelbase*curvature);
-    // Preview 10m of curvature to brake BEFORE the corner apex.
+    // Preview 20m of curvature; braking 10 -> 3m/s at 4m/s^2
+    // needs about 11.4m, so start decelerating before corner entry.
     double futureCurvature=std::abs(curvature);
-    for(double look=0.;look<=10.;look+=2.){
+    for(double look=0.;look<=20.;look+=2.){
       const auto a=sample(1,s+look);
       const auto b=sample(1,s+look+2.);
       const double delta=std::atan2(std::sin(b.yaw-a.y),std::cos(b.yaw-a.y));
       futureCurvature=std::max(futureCurvature,std::abs(delta)/2.);
     }
+    double targetSpeed=baseSpeed;
     if(futureCurvature<.012 && std::abs(steer)<=slowThreshold){
-      speed=baseSpeed;
+      targetSpeed=baseSpeed;
     }else if(futureCurvature<.025){
-      speed=7.;
+      targetSpeed=7.;
     }else if(futureCurvature<.055){
-      speed=7.-2.*(futureCurvature-.025)/.030;
+      targetSpeed=7.-2.*(futureCurvature-.025)/.030;
     }else if(futureCurvature<.10){
-      speed=5.-2.*(futureCurvature-.055)/.045;
+      targetSpeed=5.-2.*(futureCurvature-.055)/.045;
     }else{
-      speed=3.;
+      targetSpeed=3.;
     }
-    if(std::abs(steer)>slowThreshold)speed=std::min(speed,7.);
-    if(std::abs(steer)>2.*slowThreshold)speed=std::min(speed,3.);
-    speed=clamp(speed,3.,baseSpeed);
+    if(std::abs(steer)>slowThreshold)targetSpeed=std::min(targetSpeed,7.);
+    if(std::abs(steer)>2.*slowThreshold)targetSpeed=std::min(targetSpeed,3.);
+    targetSpeed=clamp(targetSpeed,3.,baseSpeed);
+    // Acceleration/deceleration slew limits in simulation time.
+    // speed starts at 0 at spawn, ramps up smoothly, and never jumps
+    // instantly from 10 to 3 at a corner.
+    speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
     const auto pos=poseAt(s);
     gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
         pos.x,pos.y,pos.z+.003,0,0,yaw0));
@@ -194,7 +203,8 @@ class Team11ThreeLane:public gz::sim::System,
       trace=0.;
       std::cout<<"[TEAM11] lane="<<target<<" speed="<<speed
                <<"m/s steer="<<steer*180./M_PI<<"deg preview_curvature="
-               <<futureCurvature<<" s="<<s<<"\n";
+               <<futureCurvature<<" target="<<targetSpeed
+               <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";
     }
   }
  private:
@@ -268,6 +278,7 @@ class Team11ThreeLane:public gz::sim::System,
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
+  double maxDecel{4.},maxAccel{2.};
 };
 }
 GZ_ADD_PLUGIN(urrc::Team11ThreeLane,gz::sim::System,
