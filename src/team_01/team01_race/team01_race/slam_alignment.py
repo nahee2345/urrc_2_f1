@@ -29,5 +29,5 @@ def wide_rgb_to_depth(rgb,depth_width,depth_height,
                      borderMode=cv2.BORDER_CONSTANT,borderValue=(0,0,0))
 
 
-def paired_stamp(rgb_stamp,depth_stamp,max_skew=.06):
+def paired_stamp(rgb_stamp,depth_stamp,max_skew=.025):
     return abs(float(rgb_stamp)-float(depth_stamp))<=float(max_skew)

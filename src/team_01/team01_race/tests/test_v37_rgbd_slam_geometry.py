@@ -20,7 +20,8 @@ class AlignmentTests(unittest.TestCase):
         self.assertGreater(camera_focal(424,1.6057),camera_focal(424,1.832596))
 
     def test_synchronization_rejects_stale_pair(self):
-        self.assertTrue(paired_stamp(100.0,100.05))
+        self.assertTrue(paired_stamp(100.0,100.02))
+        self.assertFalse(paired_stamp(100.0,100.03))
         self.assertFalse(paired_stamp(100.0,100.3))
 
 

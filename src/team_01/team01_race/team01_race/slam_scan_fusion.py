@@ -32,7 +32,8 @@ class ScanFusion(Node):
     def emit(self):
         if self.front is None or self.rear is None:return
         a=self.stamp(self.front);b=self.stamp(self.rear)
-        if a<=0 or b<=0 or abs(a-b)>.10:return
+        # At 5m/s a 100ms mismatch would shift obstacles by ~0.5m.
+        if a<=0 or b<=0 or abs(a-b)>.025:return
         stamp=max(a,b)
         if self.last_stamp is not None and stamp-self.last_stamp<.045:return
         self.last_stamp=stamp
