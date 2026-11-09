@@ -53,3 +53,20 @@ jobs:
               assert plugin.find('obstacle_name') is None
               print('PASS',track,'grid1 camera start, practice grids 2/9, no blocker')
           PY
+      - name: Validate selectable left center right lanes
+        run: |
+          for lane in 1 2 3; do
+            python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --start-mode immediate --lane "$lane" --fixed-lane >/dev/null
+            python - "$lane" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          data=json.loads((Path("urrc_source/generated/team11/monza")/"team11_manifest.json").read_text())
+          assert data["selected_lane_number"]==int(sys.argv[1])
+          assert data["first_lane"]==int(sys.argv[1])-1
+          assert data["fixed_lane"] is True
+          assert data["grid_position"]==1
+          assert len(data["routes"])==3
+          print("PASS fixed lane",sys.argv[1])
+          PY
+          done
