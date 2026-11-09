@@ -174,11 +174,30 @@ if [[ "$START_MODE" == no_signal ]];then
   echo '[TEAM01] Operator-selected NO_SIGNAL mode; spawn+7s fallback only.'
 elif python3 "$HERE/wait_camera_ready.py" --timeout "${TEAM01_CAMERA_READY_TIMEOUT_S:-75}" \
   --out "${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/start_readiness.json"; then
-  echo '[TEAM01] Camera calibrated; run original red-light sequence.'
+  echo '[TEAM01] Vehicle camera baseline ready. Starting actual Gazebo red sequence.'
+  # The participant RGB stream was independently verified above. The
+  # spectator start/overview cameras are not required by the driver, and
+  # some local GUI builds do not publish those optional Gazebo topics.
+  # Keep Gazebo visual_config service checks and real red/off operations.
   ros2 topic pub --once /race/start/team01 std_msgs/msg/Bool '{data: true}'
-  python3 "$MAP_DIR/scripts/traffic_lights_v10.py" --track monza & LIGHTS_PID=$!
-  wait "$LIGHTS_PID"
-  LIGHTS_PID=''
+  LIGHT_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/urrc_team01/qa/traffic_lights.log"
+  echo "[TEAM01] Signal controller log: $LIGHT_LOG"
+  python3 "$MAP_DIR/scripts/traffic_lights_v10.py" --track monza \
+    --skip-camera-check --timeout 50 >"$LIGHT_LOG" 2>&1 & LIGHTS_PID=$!
+  if wait "$LIGHTS_PID"; then
+    LIGHTS_PID=''
+    cat "$LIGHT_LOG"
+    if ! grep -q 'LIGHTS OUT ' "$LIGHT_LOG"; then
+      echo '[TEAM01] Lamp operation did not confirm LIGHTS OUT.' >&2
+      exit 2
+    fi
+  else
+    rc=$?
+    LIGHTS_PID=''
+    cat "$LIGHT_LOG"
+    echo "[TEAM01] Lamp operation failed (exit=$rc); start denied." >&2
+    exit "$rc"
+  fi
 else
   echo '[TEAM01] Camera not ready; see ~/.local/state/urrc_team01/qa/start_readiness.json' >&2
   echo '[TEAM01] Check /team01/debug/start and camera bridge; no automatic start in camera mode.' >&2
