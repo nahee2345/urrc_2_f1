@@ -33,6 +33,10 @@
       <collision name="rear_wing_collision">
         <pose>-0.235 0 0.133 0 0 0</pose><geometry><box><size>0.080 0.220 0.014</size></box></geometry>
       </collision>
+      <sensor name="team01_imu" type="imu">
+        <pose>0 0 0.075 0 0 0</pose><always_on>true</always_on>
+        <update_rate>100</update_rate><topic>/team01/imu</topic>
+      </sensor>
       <sensor name="front_depth" type="depth_camera">
         <pose>0.214 0 0.112 0 0.191986 0</pose><always_on>true</always_on><update_rate>20</update_rate><topic>/team01/front_depth</topic><camera>
           <horizontal_fov>1.6057</horizontal_fov><image><width>424</width><height>240</height><format>R_FLOAT32</format></image><clip><near>0.10</near>
@@ -176,6 +180,11 @@
       <parent>base_link</parent><child>rear_right_wheel</child><axis><xyz>0 1 0</xyz><limit><lower>-1e16</lower><upper>1e16</upper><effort>200</effort>
           <velocity>100</velocity></limit><dynamics /></axis>
     </joint>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+      <topic>/team01/steering_joint_states</topic><update_rate>50</update_rate>
+      <joint_name>front_left_steer_joint</joint_name><joint_name>front_right_steer_joint</joint_name>
+    </plugin>
     <plugin filename="gz-sim-ackermann-steering-system" name="gz::sim::systems::AckermannSteering">
       <left_joint>front_left_spin_joint</left_joint><left_joint>rear_left_spin_joint</left_joint><right_joint>front_right_spin_joint</right_joint>
       <right_joint>rear_right_spin_joint</right_joint><left_steering_joint>front_left_steer_joint</left_steering_joint>
