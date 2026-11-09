@@ -14,7 +14,6 @@ from std_msgs.msg import Bool, Float32, String
 from team01_race.perception import (decode_depth, decode_rgb, depth_geometry,
                                     laser_to_xy)
 from team01_race.planning import TrafficGate, SafetyPlanner
-                                       aligned_depth_rgb)
 from team01_race.signal_vision import SignalVision
 from team01_race.node_diagnostics import DiagnosticsMixin
 from team01_race.track_memory import TrackMemory
