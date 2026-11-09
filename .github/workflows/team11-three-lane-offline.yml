@@ -21,3 +21,13 @@ jobs:
         run: python -m compileall -q src/team_11/three_lane
       - name: Run tests
         run: python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - name: Checkout exact practice map source
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+          sparse-checkout: src/urrc_track_gazebo/tracks/processed
+      - name: Install road geometry validator
+        run: python -m pip install shapely
+      - name: Check 3 safe lanes on real Monza and Hungaroring
+        run: python src/team_11/three_lane/validate_tracks.py --source urrc_source
