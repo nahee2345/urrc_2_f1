@@ -32,6 +32,14 @@ class IntentTests(unittest.TestCase):
         self.assertLess(first[2],0.)
         self.assertEqual(gate.phase,'OPPOSITE_CORNER_CONFIRMED')
 
+    def test_long_straight_does_not_unlock_unsupported_flip(self):
+        gate=SteeringIntent({})
+        gate.update(math.radians(15.),12.,.12,.05)
+        for _ in range(40):
+            gate.update(0.,0.,0.,.05)
+        self.assertEqual(gate.update(math.radians(-15.),0.,0.,.05),0.)
+        self.assertEqual(gate.phase,'REVERSAL_HELD')
+
     def test_actual_steering_feedback_reduces_error(self):
         closed=SteeringJointFeedback({'steering_joint_feedback_gain':.35,
                                       'steering_joint_feedback_max_deg':3.})

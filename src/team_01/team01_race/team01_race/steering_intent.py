@@ -26,9 +26,9 @@ class SteeringIntent:
         straight=abs(head)<3. and abs(float(curvature))<.025
         if straight:self.straight_time+=dt
         else:self.straight_time=0.
-        if self.straight_time>=.50:
-            self.committed=0
-            self.opposite_frames=0
+        # Preserve turn-side memory across long straights. Otherwise a
+        # spurious -15 degree target after +15 -> 0 bypasses this guard.
+        # A genuine opposing bend releases the guard using signed road evidence.
         if self.committed and sign and sign!=self.committed:
             if sign*head>=7.:
                 self.opposite_frames+=1
