@@ -43,7 +43,16 @@ def main():
             if node.consecutive>=3:
                 status='CAMERA_START_BASELINE_READY'
                 break
-        summary={'status':status,'ready_samples':node.samples,
+        if status=='CAMERA_START_BASELINE_READY':
+            diagnosis='READY'
+        elif node.samples==0 and node.last is None:
+            diagnosis='NO_CONTROLLER_READINESS_OR_DIAGNOSTIC_MESSAGES'
+        elif node.samples==0:
+            diagnosis='NO_READY_FLAG_MESSAGES'
+        else:
+            diagnosis='CAMERA_BASELINE_NOT_YET_CONFIRMED'
+        summary={'status':status,'diagnosis':diagnosis,
+                 'ready_samples':node.samples,
                  'consecutive_ready':node.consecutive,
                  'last_start_status':node.last}
         print(json.dumps(summary,ensure_ascii=False),flush=True)
