@@ -121,6 +121,13 @@ def commanded_speed(steering_rad, curvature=0.):
     return max(3., min(10., speed))
 
 
+def rate_limited_speed(previous, target, dt, decel=4., accel=2.):
+    """Speed changes are bounded by simulation time, including from standstill."""
+    if dt <= 0:
+        return previous
+    return max(previous-decel*dt, min(target, previous+accel*dt))
+
+
 def projected_obstacle(points, x, y):
     i = closest_centerline_index(points, x, y)
     p = points[i]
