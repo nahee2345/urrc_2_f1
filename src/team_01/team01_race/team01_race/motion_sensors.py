@@ -25,7 +25,8 @@ class MotionSensors:
     def on_imu(self,msg):
         rate=float(msg.angular_velocity.z)
         covariance=msg.angular_velocity_covariance
-        if not math.isfinite(rate) or abs(rate)>8. or (covariance and covariance[0]<0):
+        if (not math.isfinite(rate) or abs(rate)>8. or
+                (len(covariance)>0 and covariance[0]<0)):
             return
         self.imu_rate=rate
         self.imu_at=time.monotonic()
