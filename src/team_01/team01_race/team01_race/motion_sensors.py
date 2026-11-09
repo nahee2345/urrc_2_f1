@@ -4,10 +4,13 @@ import time
 from sensor_msgs.msg import Imu, JointState
 from rclpy.qos import qos_profile_sensor_data
 from team01_race.sensor_freshness import feedback_fresh
+from team01_race.feedback_guard import FeedbackGuard
 
 
 class MotionSensors:
     def init_motion_sensors(self):
+        self.feedback_guard=FeedbackGuard(self.p)
+        self.feedback_approved=False
         self.imu_rate=None
         self.imu_at=0.
         self.imu_stamp=0.
@@ -49,22 +52,46 @@ class MotionSensors:
         sim_now=self.get_clock().now().nanoseconds*1e-9
         return feedback_fresh(sim_now,stamp,now,last_wall)
 
+    def update_feedback_trust(self,now):
+        sim_now=self.get_clock().now().nanoseconds*1e-9
+        imu=(self.imu_rate if self.imu_rate is not None and
+             self.fresh(now,self.imu_stamp,self.imu_at) else None)
+        joint=(self.joint_angle if self.joint_angle is not None and
+               self.fresh(now,self.joint_stamp,self.joint_at) else None)
+        self.feedback_approved=self.feedback_guard.observe(
+            sim_now,joint,imu,self.actual_speed or 0.,
+            self.joint_stamp,self.imu_stamp)
+        return imu,joint
+
     def feedback_yaw(self,now):
-        if self.imu_rate is not None and self.fresh(now,self.imu_stamp,self.imu_at):
-            return self.imu_rate
+        imu,joint=self.update_feedback_trust(now)
+        if self.feedback_approved:return imu
         if self.actual_yaw_rate is not None and now-self.odom_at<.6:
             return self.actual_yaw_rate
         return None
 
     def feedback_steer(self,now):
-        if self.joint_angle is not None and self.fresh(now,self.joint_stamp,self.joint_at):
+        if (self.feedback_approved and self.joint_angle is not None and
+                self.fresh(now,self.joint_stamp,self.joint_at)):
             return self.joint_angle
         return None
 
+    def record_steering(self,steering):
+        stamp=self.get_clock().now().nanoseconds*1e-9
+        # Motion publishes opposite sign of the internal left-positive target.
+        self.feedback_guard.command_sent(-float(steering),stamp)
+
     def motion_sensor_diag(self,now):
-        imu_good=self.imu_rate is not None and self.fresh(now,self.imu_stamp,self.imu_at)
-        return {'yaw_rate_source':('IMU' if imu_good else
-                                   'ODOM' if self.actual_yaw_rate is not None and
-                                   now-self.odom_at<.6 else 'NONE'),
-                'imu_yaw_rad_s':self.imu_rate if imu_good else None,
-                'joint_steer_rad':self.feedback_steer(now)}
+        imu_ok=self.imu_rate is not None and self.fresh(now,self.imu_stamp,self.imu_at)
+        status=self.feedback_guard.diag()
+        status.update({'yaw_rate_source':('IMU' if self.feedback_approved else
+                                         'ODOM' if self.actual_yaw_rate is not None and
+                                         now-self.odom_at<.6 else 'NONE'),
+                       'imu_yaw_rad_s':self.imu_rate if imu_ok else None,
+                       'raw_joint_steer_rad':(self.joint_angle if
+                                              self.fresh(now,self.joint_stamp,self.joint_at)
+                                              else None),
+                       'active_joint_steer_rad':self.feedback_steer(now),
+                       'imu_sample_age_sim_s':(self.get_clock().now().nanoseconds*1e-9-
+                                                self.imu_stamp if imu_ok else None)})
+        return status

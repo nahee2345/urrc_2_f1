@@ -291,6 +291,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
             self._write_learning_progress()
             self._last_partial_record_distance=learning.distance_m
         self.pub_speed.publish(Float32(data=float(motion.speed)))
+        self.record_steering(motion.steering)
         self.pub_steer.publish(Float32(data=float(motion.steering)))
         self.publish_start_diagnostics(now,motion,d_ok,l_ok)
         path=self.planner.reference_geometry
