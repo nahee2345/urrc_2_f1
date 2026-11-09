@@ -15,7 +15,7 @@ WALL_MARGIN_M = .22
 EXTRA_CLEARANCE_M = .12
 BASE_SPEED_MPS = 10.0
 STEER_LIMIT_DEG = 10.0
-SLOW_FACTOR = .8
+SLOW_FACTOR = .8  # legacy constant; corner schedule now 3-7 m/s
 LANE_CHANGE_LENGTH_M = 9.0
 WHEELBASE_M = .33
 
@@ -98,8 +98,27 @@ def interpolated_offset(source, target, progress):
     return source + (target-source) * smoothstep5(progress / LANE_CHANGE_LENGTH_M)
 
 
-def commanded_speed(steering_rad):
-    return BASE_SPEED_MPS * (SLOW_FACTOR if abs(math.degrees(steering_rad)) > STEER_LIMIT_DEG else 1.)
+def commanded_speed(steering_rad, curvature=0.):
+    """10m/s straight; 3-7m/s for curves, using preview curvature.
+
+    Steering is an additional severity signal, not the only corner detector.
+    """
+    severity = abs(curvature)
+    if severity < 0.012 and abs(math.degrees(steering_rad)) <= 10.:
+        return 10.
+    if severity < 0.025:
+        speed = 7.
+    elif severity < 0.055:
+        speed = 7. - (severity - .025) / .030 * 2.
+    elif severity < 0.10:
+        speed = 5. - (severity - .055) / .045 * 2.
+    else:
+        speed = 3.
+    if abs(math.degrees(steering_rad)) > 10.:
+        speed = min(speed, 7.)
+    if abs(math.degrees(steering_rad)) > 20.:
+        speed = min(speed, 3.)
+    return max(3., min(10., speed))
 
 
 def projected_obstacle(points, x, y):
