@@ -7,6 +7,8 @@ from ament_index_python.packages import get_package_prefix
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from pathlib import Path
+import os
+import time
 
 
 def generate_launch_description():
@@ -49,9 +51,16 @@ def generate_launch_description():
                   parameters=[{n:LaunchConfiguration(n) for n in
                                ('race_start_topic','speed_topic','steering_topic','use_sim_time')}],
                   output='screen')]
+    state=Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state')))
+    database_dir=state/'urrc_team01'/'slam'
+    database_dir.mkdir(parents=True,exist_ok=True)
+    fresh_db=str(database_dir/('run_'+str(time.time_ns())+'.db'))
     slam_enabled=IfCondition(LaunchConfiguration('enable_slam'))
     args += [Node(package='team01_race',executable='team01_scan_frame',
                   name='team01_scan_frame',output='screen',condition=slam_enabled,
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}]),
+             Node(package='team01_race',executable='team01_scan_fusion',
+                  name='team01_scan_fusion',output='screen',condition=slam_enabled,
                   parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}]),
              Node(package='team01_race',executable='team01_rgbd_relay',
                   name='team01_rgbd_relay',output='screen',condition=slam_enabled,
@@ -75,6 +84,7 @@ def generate_launch_description():
                                'subscribe_rgb':True,'subscribe_depth':True,
                                'subscribe_scan':True,'subscribe_rgbd':False,
                                'approx_sync':True,'qos':2,
+                               'database_path':fresh_db,
                                'Reg/Strategy':'2',
                                'Reg/Force3DoF':'true',
                                'RGBD/NeighborLinkRefining':'true',
@@ -85,6 +95,6 @@ def generate_launch_description():
                   remappings=[('rgb/image','/team01/slam/rgb'),
                               ('depth/image','/team01/slam/depth'),
                               ('rgb/camera_info','/team01/slam/camera_info'),
-                              ('scan','/team01/front_scan'),
+                              ('scan','/team01/slam/scan'),
                               ('odom','/team01/slam_odom')])]
     return LaunchDescription(args)

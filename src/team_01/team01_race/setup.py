@@ -19,5 +19,6 @@ setup(
         'team01_adapter = team01_race.adapter:main',
         'team01_rgbd_relay = team01_race.slam_rgbd:main',
         'team01_scan_frame = team01_race.slam_scan_tf:main',
+        'team01_scan_fusion = team01_race.slam_scan_fusion:main',
     ]},
 )
