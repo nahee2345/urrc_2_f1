@@ -18,6 +18,7 @@ class DriveMonitor(Node):
         super().__init__('team01_drive_monitor')
         self.declare_parameter('use_sim_time',True)
         self.cmd=None;self.adapter=None;self.speed=None
+        self.cmd_at=0.;self.adapter_at=0.
         self.joint=None;self.odom_at=0.
         self.create_subscription(Float32,'/team01/speed',self.on_cmd,10)
         self.create_subscription(String,'/team01/debug/adapter',self.on_adapter,10)
@@ -29,10 +30,12 @@ class DriveMonitor(Node):
 
     def on_cmd(self,msg):
         self.cmd=float(msg.data) if math.isfinite(float(msg.data)) else None
+        self.cmd_at=time.monotonic()
 
     def on_adapter(self,msg):
         try:self.adapter=json.loads(msg.data)
         except (ValueError,TypeError):self.adapter=None
+        self.adapter_at=time.monotonic()
 
     def on_odom(self,msg):
         value=float(msg.twist.twist.linear.x)
@@ -51,8 +54,11 @@ class DriveMonitor(Node):
 
     def tick(self):
         age=time.monotonic()-self.odom_at if self.odom_at else float('inf')
-        payload={'status':classify_drive(self.cmd,self.adapter,self.speed,self.joint,age),
-                 'cmd_speed_mps':self.cmd,'adapter':self.adapter,
+        now=time.monotonic()
+        cmd=self.cmd if self.cmd_at and now-self.cmd_at<=.5 else None
+        adapter=self.adapter if self.adapter_at and now-self.adapter_at<=.5 else None
+        payload={'status':classify_drive(cmd,adapter,self.speed,self.joint,age),
+                 'cmd_speed_mps':cmd,'adapter':adapter,
                  'odom_speed_mps':self.speed if age<=1. else None,
                  'steering_joint_rad':self.joint,
                  'odom_wall_age_s':round(age,3) if math.isfinite(age) else None,

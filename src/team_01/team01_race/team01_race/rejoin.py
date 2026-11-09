@@ -1,6 +1,7 @@
 """Persistent passing and smooth rejoin to the preselected base lane."""
 import math
 import numpy as np
+from team01_race.traffic_guard import should_abort_pass
 
 
 def smooth(u):
@@ -90,6 +91,9 @@ class RejoinPlanner:
                         self.remaining_m=max(3.,speed*1.5)
                         break
         elif self.phase=='SHIFT':
+            if should_abort_pass(lead,speed,lead_speed):
+                self.phase='HOLD'
+                return self.base_offset+self.offset,self.side
             if not self._side_safe(road,points,self.side,lead,
                                    abs(self.pass_offset)):
                 self.phase='HOLD'
