@@ -67,6 +67,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("base_speed_mps", "10"),
         ("steering_slow_threshold_deg", "10"),
         ("slow_factor", ".8"),
+        ("max_deceleration_mps2", "4.0"),
+        ("max_acceleration_mps2", "2.0"),
         ("lane_change_length_m", "9"),
         ("scan_ahead_m", "35"),
     ):
@@ -115,6 +117,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
         "steering_threshold_deg": 10, "corner_speed_range_mps": [3, 7],
+        "max_deceleration_mps2": 4.0, "max_acceleration_mps2": 2.0,
         "routes": [str(destination/"team11_routes"/f"lane_{j}.csv") for j in range(3)],
         "note": "Kinematic demonstration: pose control, not force/steering joint simulation"
     }
