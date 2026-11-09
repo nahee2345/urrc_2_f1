@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import threading
 
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
@@ -91,18 +92,28 @@ def main():
                 time.sleep(.5)
             else:
                 raise RuntimeError("Pace plugin not ready; inspect "+str(log))
-            lights=start_signal(args.track,env,dest)
-            fired=False
-            assert lights.stdout is not None
-            for line in lights.stdout:
-                print("[LIGHT] "+line.rstrip(),flush=True)
-                if not fired and confirmed_all_off(line):
-                    fire_start(args.track,env)
-                    fired=True
-                    print("[TEAM11] All five lights off: start",flush=True)
-            if lights.wait()!=0 or not fired:
-                raise RuntimeError("Five-light signal confirmation failed; no start")
-            print("[TEAM11] Steering/speed/lane transitions in "+str(log),flush=True)
+            # TEAM11 ego starts immediately in the Gazebo plugin.
+            # The original pace cars may start after the regular light sequence;
+            # light-camera/service failure must NOT terminate the ego run.
+            def run_pace_signal():
+                nonlocal lights
+                try:
+                    lights=start_signal(args.track,env,dest)
+                    confirmed=False
+                    if lights.stdout is not None:
+                        for line in lights.stdout:
+                            print("[LIGHT] "+line.rstrip(),flush=True)
+                            if not confirmed and confirmed_all_off(line):
+                                fire_start(args.track,env)
+                                confirmed=True
+                                print("[PACE] Practice cars started after lights off",flush=True)
+                    if lights.wait()!=0 or not confirmed:
+                        print("[PACE WARNING] Light sequence failed; TEAM11 runs independently",flush=True)
+                except Exception as exc:
+                    print("[PACE WARNING] "+str(exc)+"; TEAM11 runs independently",flush=True)
+            threading.Thread(target=run_pace_signal,daemon=True).start()
+            print("[TEAM11] Spawn-immediate mode: yellow ego does not await camera or lights",flush=True)
+            print("[TEAM11] Log:",log,flush=True)
             return sim.wait()
     except KeyboardInterrupt:
         return 130
