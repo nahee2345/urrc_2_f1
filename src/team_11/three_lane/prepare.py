@@ -20,7 +20,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
     pace = source / "race/pace_cars"
     sys.path.insert(0, str(pace))
     from routes import add_car, generate
-    # Existing pace tool copies all source assets into destination.
+    # Source pace generator independently restores grids 02 and 09 for every run.
     meta = generate(source, track, destination, str(pace_plugin_file))
     world_file = Path(meta["world_file"])
     doc = ET.parse(world_file)
@@ -41,11 +41,11 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         "y": p.y+offset*math.cos(p.yaw), "road_z": p.z,
         "yaw": p.yaw,
     }
-    obstacle_name = add_car(world, blocker, "0.85 0.65 0.07 1")
+    obstacle_name = add_car(world, blocker, "0.92 0.44 0.08 1")
     # The blocker is stationary. Existing pace cars remain as visible moving obstacles.
     runner = {"position": 1, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
-    ego_name = add_car(world, runner, "0.05 0.85 0.3 1")
+    ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
     ego_model = world.find(f"model[@name='{ego_name}']")
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
@@ -82,6 +82,40 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         ("scan_ahead_m", "35"),
     ):
         ET.SubElement(ctrl, tag).text = val
+    # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
+    expected = {
+        "urrc_pace_grid_01": 1,
+        "urrc_pace_grid_02": 2,
+        "urrc_pace_grid_09": 9,
+        "urrc_pace_grid_99": 99,
+    }
+    models = {model.get("name"): model for model in world.findall("model")}
+    for name in expected:
+        if name not in models:
+            raise RuntimeError(f"Required vehicle missing from generated world: {name}")
+    pace_plugins = [
+        plugin for plugin in world.findall("plugin")
+        if plugin.get("name") == "urrc::PaceCars"
+    ]
+    if len(pace_plugins) != 1:
+        raise RuntimeError(f"Expected exactly one pace plugin; found {len(pace_plugins)}")
+    names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
+    if sorted(names) != ["urrc_pace_grid_02", "urrc_pace_grid_09"]:
+        raise RuntimeError(f"Original practice cars not restored: {names}")
+    grid_data = json.loads(
+        (source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text()
+    )["grid"]
+    for name, number in expected.items():
+        if number == 99:
+            continue
+        pose = [float(v) for v in models[name].findtext("pose").split()]
+        original = grid_data[number-1]
+        if (abs(pose[0] - original["x"]) > 1e-6 or
+            abs(pose[1] - original["y"]) > 1e-6 or
+            abs(pose[5] - original["yaw"]) > 1e-6):
+            raise RuntimeError(f"{name} is not at painted grid {number}")
+    print(f"[TEAM11] Grid 01=yellow TEAM11, Grid 02=red practice (10m/s), "
+          f"Grid 09=blue practice (20m/s); all present", flush=True)
     ET.indent(doc)
     result = world_file.with_name(track + "_team11.sdf")
     doc.write(result, encoding="utf-8", xml_declaration=True)
@@ -90,6 +124,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file):
         "resource_path": meta["resource_path"], "ego": ego_name,
         "obstacle": obstacle_name, "first_lane": initial_lane,
         "grid_position": 1, "start_camera_topic": camera_topic,
+        "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
         "steering_threshold_deg": 10, "slow_speed_mps": 8,
