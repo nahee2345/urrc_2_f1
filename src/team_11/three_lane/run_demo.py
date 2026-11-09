@@ -38,6 +38,8 @@ def main():
     ap.add_argument("--source",default="~/urrc_2")
     ap.add_argument("--prepare-only",action="store_true")
     ap.add_argument("--server",action="store_true",help="headless Gazebo server")
+    ap.add_argument("--start-mode",choices=("camera","immediate"),default="camera",
+                    help="camera waits for observed red->all-off images")
     args=ap.parse_args()
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
@@ -53,7 +55,7 @@ def main():
             ap.error("Gazebo Harmonic 'gz' executable not found")
         pace_lib=build(pace_src,plugin_dir/"pace","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
-    manifest=prepare(src,dest,args.track,team_lib,pace_lib)
+    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode)
     print("[TEAM11] 3 lanes:",manifest["routes"],flush=True)
     print("[TEAM11] spacing:",round(manifest["lane_spacing_m"],3),
           "m, start lane:",manifest["first_lane"],flush=True)
@@ -112,7 +114,7 @@ def main():
                 except Exception as exc:
                     print("[PACE WARNING] "+str(exc)+"; TEAM11 runs independently",flush=True)
             threading.Thread(target=run_pace_signal,daemon=True).start()
-            print("[TEAM11] Spawn-immediate mode: yellow ego does not await camera or lights",flush=True)
+            print(f"[TEAM11] Start mode={args.start_mode}; camera={manifest['start_camera_topic']}",flush=True)
             print("[TEAM11] Log:",log,flush=True)
             return sim.wait()
     except KeyboardInterrupt:
