@@ -10,7 +10,8 @@
 - 35m 전방에 장애물이 있으면 **인접한 빈 경로**를 선택합니다.
 - 9m 이동 동안 quintic smoothstep 5차 함수를 사용하여 측면 이동합니다.
 - 경로 변경 후 **원래 경로로 자동 복귀하지 않습니다.**
-- 좌우 조향각 절댓값이 **10° 초과**하면 10m/s → 8m/s(20% 감속)로 조절합니다.
+- 전방 20m 곡률과 조향각을 함께 판단합니다. 직선 목표 **10m/s**, 코너 목표 **3~7m/s**입니다. 조향각 |10°| 초과 시 7m/s 이하를 목표로 합니다.
+- 속도를 급격하게 변경하지 않습니다. **최대 감속도 4m/s², 최대 가속도 2m/s²**로 제한합니다. 코너 진입 전 감속하고 탈출 후 서서히 가속합니다.
 - 현재 시스템은 **물리 조향 모델이 아닌 Gazebo 직접 위치 명령 시연차량**입니다. 실제 조향 관절, 타이어 접지, 가속 제한의 정확한 물리 검증에는 별도 차량 제어기 통합이 필요합니다.
 
 ## Ubuntu 24.04 / Gazebo Harmonic
@@ -22,9 +23,10 @@ cd ~
 git clone https://github.com/nahee2345/urrc_2.git
 git clone -b team11-three-lane-practice https://github.com/nahee2345/urrc_2_f1.git
 cd ~/urrc_2_f1
-python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --start-mode camera
+# 즉시 출발 비교 시험: 끝에 --start-mode immediate 사용
 # 다른 맵
-python3 src/team_11/three_lane/run_demo.py hungaroring --source ~/urrc_2
+python3 src/team_11/three_lane/run_demo.py hungaroring --source ~/urrc_2 --start-mode camera
 ```
 
 위 두 명령은 **동시에 실행하지 마세요.** 각 실행은 Ctrl+C로 종료 후 다음 맵을 시작합니다.
@@ -40,12 +42,12 @@ python3 -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
 원본 맵과 메쉬 파일은 수정하지 않습니다. 새 world/CSV는 `~/urrc_2/generated/team11/<track>` 에 생성합니다.
 
 ## 시연 내용
-- **1번 그리드 노란색 TEAM11 차량**: 스폰 직후 3개 경로 중 가장 가까운 경로를 선택하고 바로 주행합니다. 카메라나 신호등 대기 없음(임시 출발 모드).
+- **1번 그리드 노란색 TEAM11 차량**: 스폰 위치에 가장 가까운 3개 경로 중 하나를 선택합니다. 기본값은 **camera 출발**이며 빨간불이 보이다가 꺼지면 출발합니다. `--start-mode immediate`로 즉시 출발을 시험할 수 있습니다.
 - **2번 그리드 빨간색 연습차량(10m/s)** 및 **9번 그리드 파란색 연습차량(20m/s)**: 원본 시연차량 유지, 기존 5등 소등 신호 이후 출발합니다.
 - **정적 장애물은 더 이상 생성하지 않습니다.** 기존 생성 월드도 매번 덮어써서 제거됩니다.
 - TEAM11 차량은 두 연습차량을 Gazebo 위치로 감지하여 필요하면 인접 경로로 이동합니다.
 - `generated/team11/<track>/team11_gazebo.log`에서 `[TEAM11] IMMEDIATE start` 로그와 주행 상태를 확인하십시오.
-- TEAM11 차량은 아직 *Gazebo 위치 기반 시연 차량*입니다. 전방 카메라는 장착되어 있지만 현재 출발 조건으로 사용하지 않습니다.
+- TEAM11 차량은 아직 *Gazebo 위치 기반 시연 차량*입니다. 전방 카메라 영상의 빨간색 픽셀을 검사하는 출발 게이트가 추가되었으며, 실제 신호 인식 정확도는 Gazebo 실주행으로 검증해야 합니다.
 
 ## 검증 범위·주의
 - 단위시험은 경로 생성, 장애물 판정, 인접 경로 선택, 원래 경로 비복귀, 5차 보간, 감속 규칙을 확인합니다.
