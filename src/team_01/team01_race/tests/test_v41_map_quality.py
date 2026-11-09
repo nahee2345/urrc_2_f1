@@ -28,6 +28,18 @@ class V41(unittest.TestCase):
         q.odom(10.2,c,0.,0.)
         self.assertFalse(q.ready(10.21,True,True))
 
+    def test_visual_pose_teleport_is_not_trusted(self):
+        q=self.quality();q.info(10.1,42)
+        c=[0.]*36;c[0]=c[7]=.01;c[35]=.03
+        q.odom(10.15,c,20.,0.)
+        self.assertFalse(q.ready(10.17,True,True))
+
+    def test_race_restart_clears_old_loop_closure(self):
+        q=self.quality();q.info(10.1,42)
+        self.assertTrue(q.ready(10.12,True,True))
+        q.reset()
+        self.assertFalse(q.ready(10.13,True,True))
+
     def test_unobserved_or_outside_map_waypoint_is_untrusted(self):
         xs=np.linspace(.5,5.,60)
         centers=np.column_stack((xs,np.zeros(len(xs))))

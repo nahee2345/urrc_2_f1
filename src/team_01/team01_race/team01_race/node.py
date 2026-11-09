@@ -108,7 +108,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
                                   self.p['traffic_light_off_frames'])
             self.planner=SafetyPlanner(self.p)
             self.motion_guard=RecoveryGuard(self.p)
-            self.track=TrackMemory(self.p)
+            self.track=TrackMemory(self.p);self.map_quality.reset()
             self._lap_record_saved=False
             self._last_partial_record_distance=-10.
         self.permission=bool(msg.data)

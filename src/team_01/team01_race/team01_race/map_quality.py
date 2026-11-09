@@ -19,6 +19,7 @@ class MapQuality:
         self.odom_at=None
         self.info_at=None
         self.good=0
+        self.last_xy=None
         self.closed=False
         self.reason='NO_SLAM_ODOM'
 
@@ -29,8 +30,17 @@ class MapQuality:
               np.all(np.isfinite(c)) and all(math.isfinite(float(v)) for v in (x,y)) and
               0.<c[0]<=.09 and 0.<c[7]<=.09 and 0.<c[35]<=.12 and
               (self.odom_at is None or stamp>self.odom_at))
+        if good and self.odom_at is not None and self.last_xy is not None:
+            elapsed=stamp-self.odom_at
+            displacement=math.hypot(float(x)-self.last_xy[0],
+                                    float(y)-self.last_xy[1])
+            if displacement>.5+22.*elapsed:good=False
         self.good=self.good+1 if good else 0
         self.odom_at=stamp if stamp>0 else None
+        self.last_xy=(float(x),float(y)) if good else None
+
+    def reset(self):
+        self.__init__()
 
     def info(self,stamp,loop_id,proximity_id=0):
         stamp=float(stamp)
