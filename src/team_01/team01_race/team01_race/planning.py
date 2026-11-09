@@ -73,7 +73,7 @@ class SafetyPlanner(PlannerGeometry):
         self.racing_line.update(self.road,observed,physics_dt,self.overtake_side,
             exploration_lap=(self.cfg.get('disable_first_lap_racing_line',False)
                              and self.lap_learner.lap==1),
-            center_requested=(bending or wall_bend or obstruction))
+            center_requested=obstruction)
         info=self.racing_line.last_distances
         # checked future arcs, but not the immediate base_link curb clearance.
         # Begin slowing while there is still room to make a correction.

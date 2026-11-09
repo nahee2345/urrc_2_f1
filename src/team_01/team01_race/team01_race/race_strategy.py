@@ -102,8 +102,8 @@ class RacingLine:
                 self.phase='CENTER'
                 self.center_confirmed=True
                 if emergency_bend:
-                    # Safest close bend: go for the sensed road centre now,
-                    # instead of preserving a far-right initial line.
+                    # Release GRID steering cap, but keep the observed lane.
+                    # A bend alone never authorizes a centerward lane change.
                     self.center_transition_from_m=0.
                     self.center_transition_elapsed_s=float(self.cfg.get('center_transition_s',2.))
                 if self.right_reference_m is not None and not emergency_bend:
@@ -114,10 +114,12 @@ class RacingLine:
                 if not emergency_bend:self.center_transition_elapsed_s=0.
                 half=max(0.,info.width_m/2-self.cfg['path_half_width_m']-.12)
                 self.held_lane_offset_m=float(np.clip(-info.midpoint_m,-half,half))
-                if emergency_bend:
-                    self.recenter_active=True
-                    self.held_lane_offset_m=0.
-            self.offset_m=0.
+                # Start from the measured lateral position: ramping from
+                # zero offset would create a false center-seeking S-turn.
+                self.recenter_active=False
+                self.offset_m=self.held_lane_offset_m
+            else:
+                self.offset_m=0.
             return
         if self.center_confirmed:
             self.center_transition_elapsed_s+=dt
@@ -134,18 +136,20 @@ class RacingLine:
             if self.held_lane_offset_m is None:
                 self.held_lane_offset_m=float(np.clip(-info.midpoint_m,-half,half))
             near_edge=min(info.left_m,info.right_m)
-            if center_requested or near_edge<=self.cfg['path_half_width_m']+.22:
+            if center_requested or near_edge<=self.cfg['path_half_width_m']+.12:
                 self.recenter_active=True
                 self.held_lane_offset_m=0.
                 self.safe_straight_frames=0
             elif self.recenter_active:
-                if abs(info.midpoint_m)<self.cfg.get('center_reached_tolerance_m',.12):
+                # Once the immediate hazard clears, hold the current
+                # measured lane rather than keep chasing the road centre.
+                if not center_requested and near_edge>self.cfg['path_half_width_m']+.16:
                     self.safe_straight_frames+=1
                 else:
                     self.safe_straight_frames=0
                 if self.safe_straight_frames>=12:
                     self.recenter_active=False
-                    self.held_lane_offset_m=0.
+                    self.held_lane_offset_m=float(np.clip(-info.midpoint_m,-half,half))
             target=0. if self.recenter_active else float(np.clip(self.held_lane_offset_m,-half,half))
             max_delta=self.cfg.get('max_line_offset_change_mps',.28)*dt
             self.offset_m=float(np.clip(target,self.offset_m-max_delta,self.offset_m+max_delta))
