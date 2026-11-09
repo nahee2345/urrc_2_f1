@@ -26,8 +26,11 @@ jobs:
         with:
           repository: nahee2345/urrc_2
           path: urrc_source
-          sparse-checkout: src/urrc_track_gazebo/tracks/processed
       - name: Install road geometry validator
         run: python -m pip install shapely
       - name: Check 3 safe lanes on real Monza and Hungaroring
         run: python src/team_11/three_lane/validate_tracks.py --source urrc_source
+      - name: Generate independent Monza world and routes
+        run: python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only
+      - name: Generate independent Hungaroring world and routes
+        run: python src/team_11/three_lane/run_demo.py hungaroring --source urrc_source --prepare-only
