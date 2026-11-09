@@ -52,6 +52,9 @@ def generate_launch_description():
                   parameters=[{n:LaunchConfiguration(n) for n in
                                ('race_start_topic','speed_topic','steering_topic','use_sim_time')}],
                   output='screen')]
+    args += [Node(package='team01_race',executable='team01_drive_monitor',
+                  name='team01_drive_monitor',output='screen',
+                  parameters=[{'use_sim_time':LaunchConfiguration('use_sim_time')}])]
     state=Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state')))
     database_dir=state/'urrc_team01'/'slam'
     database_dir.mkdir(parents=True,exist_ok=True)

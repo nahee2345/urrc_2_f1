@@ -7,6 +7,7 @@ team01_control:
     permit_lidar_verified_fallback: true
     road_rgb_timeout_s: 0.95
     road_sync_max_age_s: 1.1
+    road_frame_sync_tolerance_s: 0.05
     regulated_min_turn_radius_m: 2.0
     regulated_min_ttc_s: 0.8
     corner_threshold_deg: 10.0

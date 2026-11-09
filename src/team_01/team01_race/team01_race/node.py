@@ -135,6 +135,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, CorridorPublisher, Mo
             self.ground_uv=scene.ground_uv
             self.ground_count=len(scene.ground_xy)
             self.ground_at=time.monotonic()
+            self.depth_msg_stamp=msg.header.stamp.sec+msg.header.stamp.nanosec*1e-9
             self._refresh_road()
         except Exception as exc:
             self.depth_valid=False
@@ -152,6 +153,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, CorridorPublisher, Mo
         try:
             self.road_image=decode_rgb(msg)
             self.road_at=time.monotonic()
+            self.road_msg_stamp=msg.header.stamp.sec+msg.header.stamp.nanosec*1e-9
             self._refresh_road()
         except Exception as exc:
             self.road_image=None
@@ -383,7 +385,6 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, CorridorPublisher, Mo
             self.last_log=now
 
 
-
 def main():
     rclpy.init()
     n=Racer()
@@ -394,6 +395,5 @@ def main():
         n.pub_steer.publish(Float32(data=0.))
         n.destroy_node()
         rclpy.shutdown()
-
 
 if __name__=='__main__':main()

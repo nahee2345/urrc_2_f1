@@ -20,6 +20,12 @@ class RoadPerception:
                 float(node.actual_speed or 0.),
                 float(node.p['road_sync_max_age_s'])):
             return
+        depth_stamp=getattr(node,'depth_msg_stamp',0.)
+        rgb_stamp=getattr(node,'road_msg_stamp',0.)
+        if (depth_stamp>0 and rgb_stamp>0 and
+                abs(depth_stamp-rgb_stamp)>
+                float(node.p.get('road_frame_sync_tolerance_s',.05))):
+            return
         depth_fov=float(node.p['camera_hfov_deg'])
         wide_fov=float(node.p['road_rgb_hfov_deg'])
         transform=dict(depth_shape=node.depth_shape,

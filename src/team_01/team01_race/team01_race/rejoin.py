@@ -22,10 +22,11 @@ class RejoinPlanner:
         self.base_offset=0.
 
     def _side_safe(self,road,points,side,lead,offset):
-        if not road.valid or lead is None:return False
+        if not road.valid or side not in (-1,1):return False
+        lookahead=float(lead) if lead is not None else 5.
         if road.bounds is not None:
             xs=road.bounds[:,0]; b=road.bounds
-            x=min(float(xs[-1]),max(float(xs[0]),lead))
+            x=min(float(xs[-1]),max(float(xs[0]),lookahead))
             middle=.5*(np.interp(x,xs,b[:,1])+np.interp(x,xs,b[:,2]))
             edge=np.interp(x,xs,b[:,2 if side>0 else 1])
             free=side*(edge-middle)
@@ -33,7 +34,7 @@ class RejoinPlanner:
         margin=self.cfg['path_half_width_m']+.18
         if free<abs(offset)+margin:return False
         cloud=np.asarray(points,dtype=float).reshape((-1,2))
-        candidate=cloud[(cloud[:,0]>.7)&(cloud[:,0]<min(lead+2.5,11.))]
+        candidate=cloud[(cloud[:,0]>.7)&(cloud[:,0]<min(lookahead+2.5,11.))]
         return not np.any(np.abs(candidate[:,1]-side*abs(offset))<margin)
 
     def update(self,road,points,lead,lead_speed,rear_gap,dt,speed,

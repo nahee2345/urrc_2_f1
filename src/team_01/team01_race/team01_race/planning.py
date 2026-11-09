@@ -23,13 +23,11 @@ class SafetyPlanner(PlannerGeometry):
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','gate or stale/missing forward sensor')
         dt=max(.01,min(dt,.25))
-        # Use Gazebo physics seconds for accumulated travelled distance.
         physics_dt=dt if distance_dt is None else max(0.,min(.25,float(distance_dt)))
         self.map_ready=bool(map_ready)
         depth_obstacles=np.asarray(depth_obstacles).reshape((-1,2))
         lidar_obstacles=np.asarray(lidar_obstacles).reshape((-1,2))
         pts=np.vstack((depth_obstacles,lidar_obstacles))
-        # Reject self-returns near bumper and points far behind front axle.
         pts=pts[(pts[:,0]>.28) & (pts[:,0]<15.7) & (np.abs(pts[:,1])<5.)]
         lidar_road=estimate_road_corridor(lidar_obstacles)
         vision_road=self._visual_corridor(road_bounds)
@@ -42,8 +40,6 @@ class SafetyPlanner(PlannerGeometry):
                 self.road,map_target,self.cfg['path_half_width_m']):
             self.map_ready=False
         if self.road_belief.rejected:
-            # No arbitrarily chosen sensor may authorize a path when both
-            # independent current corridors disagree with the recent road.
             self.reference_scheduler.reset()
             self.reference_geometry=None
             self.speed=0.
@@ -51,8 +47,6 @@ class SafetyPlanner(PlannerGeometry):
             self.steer_limiter.reset()
             self.last_mode='STOP'
             return Motion(0.,0.,'STOP','sensor disagreement: no verified road')
-        # Optional Gazebo wheel odometry is a diagnostic and corrects the
-        # commanded-distance dead reckoning; never use world pose or map XY.
         self.measured_speed=(float(actual_speed) if actual_speed is not None and
                              math.isfinite(float(actual_speed)) and float(actual_speed)>=0 else None)
         observed=self.measured_speed if self.measured_speed is not None else self.speed
@@ -60,8 +54,6 @@ class SafetyPlanner(PlannerGeometry):
                          else self.measured_speed or 0.)
         self.lap_learner.integrate(measured_motion,self.prev_steer,physics_dt,
                                    self.cfg['wheel_base_m'],self.road,self.last_mode)
-        # A stationary car is not evidence of a corner: require independently
-        # observed curvature in addition to a broad stationary front wall.
         early_curve=preview_curvature(self.road)
         bending=bool(self.road.valid and
                      (abs(self.road.heading_deg)>=self.cfg.get('corner_prelook_heading_deg',7.5)
@@ -83,7 +75,6 @@ class SafetyPlanner(PlannerGeometry):
                              and self.lap_learner.lap==1),
             center_requested=(bending or wall_bend or obstruction))
         info=self.racing_line.last_distances
-        # A visible road can still have the CAR outside its boundaries. v7
         # checked future arcs, but not the immediate base_link curb clearance.
         # Begin slowing while there is still room to make a correction.
         self.near_edge_m=(min(info.left_m,info.right_m) if info.valid else None)
