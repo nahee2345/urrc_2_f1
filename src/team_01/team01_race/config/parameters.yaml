@@ -106,3 +106,6 @@ team01_control:
     mapped_lap_speed_mps: 10.0
     # Advance only after independent Gazebo validation of preceding stage.
     validated_speed_stage_mps: 5.0
+    qa_approved_first_corner: false
+    qa_approved_monza_lap: false
+    qa_approved_8mps: false

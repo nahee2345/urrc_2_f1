@@ -24,8 +24,9 @@ from team01_race.road_roi import road_roi_metrics
 from team01_race.start_diagnostics import StartDiagnosticsMixin
 from team01_race.defaults import DEFAULTS
 from team01_race.motion_sensors import MotionSensors
+from team01_race.map_quality_node import MapQualityMixin
 
-class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionSensors):
+class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionSensors, MapQualityMixin):
     def __init__(self):
         super().__init__('team01_control')
         for k,v in DEFAULTS.items(): self.declare_parameter(k,v)
@@ -87,6 +88,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
         self.init_start_diagnostics()
         self.init_bev()
         self.init_motion_sensors()
+        self.init_map_quality()
         self.sub_start=self.create_subscription(Bool,self.get_parameter('race_start_topic').value,
                                                 self.on_start,10)
         self.create_subscription(Image,'/team01/front_depth',self.on_depth,qos_profile_sensor_data)
@@ -246,14 +248,17 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
                      abs(self.road_at-self.ground_at)<=self.p['road_sync_max_age_s']
                      else None)
         pose=self._map_pose()
-        mapped=self.track.target(pose,max(2.5,min(6.,2.+(self.actual_speed or 0.)*.35)))
+        map_ok=self.map_quality.ready(self.get_clock().now().nanoseconds*1e-9,
+                                      self.track.complete,pose is not None)
+        mapped=(self.track.target(pose,max(2.5,min(6.,2.+(self.actual_speed or 0.)*.35)))
+                if map_ok else None)
         sim_dt=self.simulated_elapsed_s()
         motion=self.planner.step(self.depth_obstacles,self.lidar_obstacles,
                                  rear_gap,dt,enabled,d_ok,l_ok,visual_road,
                                  actual_speed=(self.actual_speed if now-self.odom_at<.6 else None),
                                  actual_yaw_rate=self.feedback_yaw(now),
                                  actual_steering_rad=self.feedback_steer(now),
-                                 map_target=mapped,map_ready=(self.track.complete and mapped is not None and pose is not None),
+                                 map_target=mapped,map_ready=(map_ok and mapped is not None),
                                  distance_dt=sim_dt)
         motion=self.motion_guard.update(motion,sim_dt)
         if motion.mode=='RECOVER':
@@ -297,6 +302,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
                  'planner':self.planner.planner_type,
                  'painted_wall_matches':self.wall_color_matches,
                  'road_roi':road_roi_metrics(self.planner.road),
+                 'slam_quality':self.map_quality.diag(),
                  'road_disagreement_m':self.planner.road_belief.disagreement_m,
                  'road_innovation_m':self.planner.road_belief.innovation_m,
                  'road_conflict_reason':self.planner.road_belief.reason,
@@ -314,6 +320,7 @@ class Racer(Node, DiagnosticsMixin, StartDiagnosticsMixin, BEVPublisher, MotionS
                  'fault_transitions':self.motion_guard.transitions,
                  'recovery_hold':self.motion_guard.active,
                  'last_fault':self.motion_guard.last_fault,
+                 'speed_stage':self.planner.speed_stage.reason,
                  'cmd_speed':round(float(motion.speed),3),
                  'cmd_steer':round(float(motion.steering),5),
                  'odom_speed':self.actual_speed if now-self.odom_at<.6 else None,

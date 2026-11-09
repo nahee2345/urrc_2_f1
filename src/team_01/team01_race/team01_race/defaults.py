@@ -56,6 +56,8 @@ DEFAULTS = {
     'corner_center_bias_gain': .45, 'corner_center_bias_max_m': .10,
     'mapping_lap_speed_mps': 5.0, 'mapped_lap_speed_mps': 10.0,
     'validated_speed_stage_mps': 5.0,
+    'qa_approved_first_corner': False, 'qa_approved_monza_lap': False,
+    'qa_approved_8mps': False,
     'edge_caution_extra_m': .12, 'edge_caution_min_speed_mps': .45,
     'edge_caution_extra_speed_mps': 1.15,
 }

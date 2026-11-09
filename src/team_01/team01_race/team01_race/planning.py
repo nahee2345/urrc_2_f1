@@ -5,6 +5,7 @@ from team01_race.planning_gate import Motion, TrafficGate
 from team01_race.planning_road import RoadCorridor, estimate_road_corridor, fuse_verified_corridors
 from team01_race.planning_geometry import PlannerGeometry
 from team01_race.curved_path import adaptive_pursuit_candidate, preview_curvature
+from team01_race.map_quality import map_target_agrees
 
 
 class SafetyPlanner(PlannerGeometry):
@@ -32,15 +33,14 @@ class SafetyPlanner(PlannerGeometry):
         pts=pts[(pts[:,0]>.28) & (pts[:,0]<15.7) & (np.abs(pts[:,1])<5.)]
         lidar_road=estimate_road_corridor(lidar_obstacles)
         vision_road=self._visual_corridor(road_bounds)
-        # F1TENTH-style adaptive local lookahead: RGB/Depth proves nearby
-        # asphalt; continuous, cross-checked LiDAR barriers extend the *same*
-        # drivable corridor for high-speed braking and corner anticipation.
-        # A disagreement is NOT fused into a permissive drivable polygon.
         self.road=self.road_belief.update(
             vision_road,lidar_road,
             speed=(actual_speed if actual_speed is not None else self.speed),
             yaw_rate=actual_yaw_rate,dt=physics_dt)
         self.road_source=self.road_belief.source
+        if self.map_ready and not map_target_agrees(
+                self.road,map_target,self.cfg['path_half_width_m']):
+            self.map_ready=False
         if self.road_belief.rejected:
             # No arbitrarily chosen sensor may authorize a path when both
             # independent current corridors disagree with the recent road.
