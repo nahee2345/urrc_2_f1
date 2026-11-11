@@ -496,18 +496,32 @@ class Team11ThreeLane:public gz::sim::System,
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
     // instantly from 10 to 3 at a corner.
     speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
-    const auto pos=poseAt(s);
+    // The selected CSV lane is a lookahead reference, not an
+    // instantaneous pose command. Bicycle integration bounds actual
+    // turning curvature and yaw rate, including sudden map heading bends.
+    const double lookahead=clamp(2.5+.35*speed,3.,7.5);
+    const auto goal=poseAt(s+lookahead);
+    const auto onTrack=poseAt(s);
+    const auto actual=gz::sim::worldPose(ego,ecm);
+    const bounded::Pose current{actual.Pos().X(),actual.Pos().Y(),
+                                actual.Rot().Yaw()};
+    const auto command=bounded::follow(
+      current,goal.x,goal.y,speed,dt,wheelbase,maxSteer,maxYawRate);
+    const double trackError=std::hypot(current.x-onTrack.x,
+                                       current.y-onTrack.y);
     if(physicsContact){
       const auto body=gz::sim::Model(ego).LinkByName(ecm,"base_link");
       if(body!=gz::sim::kNullEntity){
         const auto desired=gz::math::Pose3d(
-          pos.x,pos.y,pos.z+.003,0.,0.,yaw0);
-        physics::guide(body,ecm,gz::sim::worldPose(ego,ecm),
-                       desired,speed,50.,dt,egoPhysicalDrive);
+          command.pose.x,command.pose.y,onTrack.z+.003,
+          0.,0.,command.pose.yaw);
+        physics::guide(body,ecm,actual,desired,speed,50.,dt,
+                       egoPhysicalDrive);
       }
     }else{
       gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
-          pos.x,pos.y,pos.z+.003,0,0,yaw0));
+          command.pose.x,command.pose.y,onTrack.z+.003,
+          0.,0.,command.pose.yaw));
     }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
@@ -525,8 +539,11 @@ class Team11ThreeLane:public gz::sim::System,
                <<" fixed="<<fixedLane
                <<" merge_progress_m="<<std::min(12.,traveledFromStart)
                <<" speed="<<speed
-               <<"m/s steer="<<steer*180./M_PI
-               <<"deg corner_mode="<<cornerMode<<" preview_curvature="
+               <<"m/s steer="<<command.steer*180./M_PI
+               <<"deg yaw_rate_deg_s="<<command.yawRate*180./M_PI
+               <<" max_steer_deg="<<maxSteer*180./M_PI
+               <<" track_error_m="<<trackError
+               <<" corner_mode="<<cornerMode<<" preview_curvature="
                <<futureCurvature<<" target="<<targetSpeed
                <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";
     }
