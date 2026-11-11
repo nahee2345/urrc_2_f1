@@ -16,8 +16,6 @@ from core import (TRACKS, load_centerline, closest_lane,
 from track_catalog import validate_bundle, map_file, metadata
 
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_contact=False):
-    if physics_contact and not practice_cars:
-        raise ValueError('physics_contact requires practice cars')
     if scenario not in ('normal', 'slow-ahead', 'late-pass', 'rear-fast', 'rear-contact'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario in ('slow-ahead','late-pass') and (not practice_cars or grid_position == 2):

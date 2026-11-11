@@ -51,18 +51,19 @@ def main():
     ap.add_argument("--scenario",choices=("normal","slow-ahead","late-pass","rear-fast","rear-contact"),default="normal",
                     help="slow-ahead: 5m/s red 25m ahead; late-pass: 5m/s red 45m ahead (generated-only)")
     ap.add_argument("--physics-contact",action="store_true",
-                    help="opt-in physical 50kg TEAM11 versus dynamic 1.5kg opponents; no scripted bounce")
+                    help="physical TEAM11 drive and contact, with optional practice cars")
+    ap.add_argument("--physics-drive",action="store_true",
+                    help="enable TEAM11 force/torque physical drive even in solo practice")
     ap.add_argument("--practice-cars",action="store_true",
                     help="enable original moving red/blue opponents after solo baseline")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
-    if args.physics_contact and not args.practice_cars:
-        ap.error("--physics-contact requires --practice-cars")
     if args.scenario!="normal" and not args.practice_cars:
         ap.error("staged scenarios require --practice-cars")
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
+    args.physics_contact = bool(args.physics_contact or args.physics_drive)
     effective_fixed_lane = args.fixed_lane  # default solo still safely enters route 2 at corners
     args.track=choose(args.track,world_file=args.world)
     src=Path(args.source).expanduser().resolve() if args.source else find_source()

@@ -39,7 +39,9 @@ struct Step {
 };
 inline Step follow(const Pose &current,double targetX,double targetY,
                    double speed,double dt,double wheelbase,
-                   double maxSteer=kSteer30,double maxYawRate=kMaxYawRate) {
+                   double maxSteer=kSteer30,double maxYawRate=kMaxYawRate,
+                   double previousSteer=std::numeric_limits<double>::quiet_NaN(),
+                   double maxSteerRate=1.57) {
   Step result;
   result.pose=current;
   const double dx=targetX-current.x,dy=targetY-current.y;
@@ -61,7 +63,16 @@ inline Step follow(const Pose &current,double targetX,double targetY,
   result.yawRate=limitedRate;
   result.curvature=velocity>1.e-5 ? limitedRate/velocity : 0.;
   result.steer=std::atan(wheelbase*result.curvature);
-  const double dYaw=limitedRate*dt;
+  if(std::isfinite(previousSteer) && maxSteerRate>0.){
+    result.steer=clamp(result.steer,
+      previousSteer-maxSteerRate*dt,previousSteer+maxSteerRate*dt);
+    result.steer=clamp(result.steer,-maxSteer,maxSteer);
+    result.curvature=std::tan(result.steer)/wheelbase;
+    result.yawRate=clamp(velocity*result.curvature,-maxYawRate,maxYawRate);
+    result.curvature=velocity>1.e-5 ? result.yawRate/velocity : 0.;
+    result.steer=std::atan(wheelbase*result.curvature);
+  }
+  const double dYaw=result.yawRate*dt;
   const double halfway=current.yaw+.5*dYaw;
   result.pose.x+=velocity*dt*std::cos(halfway);
   result.pose.y+=velocity*dt*std::sin(halfway);
