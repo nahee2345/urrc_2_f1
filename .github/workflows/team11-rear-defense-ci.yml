@@ -1,0 +1,164 @@
+name: TEAM11 rear LiDAR defense (independent)
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-rear-lidar-defense-v1]
+    paths:
+      - 'src/team_11/three_lane/**'
+      - '.github/workflows/team11-rear-defense-ci.yml'
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Original front passing and new rear-defense C++ regression
+        run: |
+          set -e
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            src/team_11/three_lane/plugin/test_overtake_planner.cc \
+            -o /tmp/test_front
+          /tmp/test_front
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            src/team_11/three_lane/plugin/test_rear_defense.cc \
+            -o /tmp/test_rear
+          /tmp/test_rear
+      - name: Existing Python regressions
+        run: |
+          python -m compileall -q src/team_11/three_lane
+          python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Validate baseline, normal practice and isolated rear LiDAR world
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --prepare-only --start-mode camera
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          base=Path('urrc_source/generated/team11/monza')
+          data=json.loads((base/'team11_manifest.json').read_text())
+          root=ET.parse(data['world_file']).getroot().find('world')
+          models={m.get('name') for m in root.findall('model')}
+          assert data['fixed_lane'] is True
+          assert 'urrc_pace_grid_01' in models
+          assert 'urrc_pace_grid_02' not in models
+          assert 'urrc_pace_grid_09' not in models
+          assert data['selected_lane_number']==3
+          ego=root.find("model[@name='urrc_pace_grid_01']")
+          rear=ego.find("./link[@name='base_link']/sensor[@name='team11_rear_lidar']")
+          assert rear is not None and rear.get('type')=='gpu_lidar'
+          assert rear.findtext('lidar/range/max')=='70'
+          assert abs(float(rear.findtext('pose').split()[5])-3.141592653589793)<1e-8
+          ctrl=next(p for p in root.findall('plugin') if p.get('name')=='urrc::Team11ThreeLane')
+          assert ctrl.findtext('rear_lidar_topic')==data['rear_lidar_topic']
+          assert ctrl.findtext('camera_topic')==data['start_camera_topic']
+          assert ctrl.findtext('base_speed_mps')=='15'
+          print('PASS original solo, camera, three routes and genuine rear LiDAR sensor')
+          PY
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --prepare-only --practice-cars --scenario normal
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          data=json.loads((Path('urrc_source/generated/team11/monza')/'team11_manifest.json').read_text())
+          assert sorted(data['practice_cars'])==['urrc_pace_grid_02','urrc_pace_grid_09']
+          assert data['practice_scenario']=='normal'
+          print('PASS original 10m/s red + 20m/s blue unchanged')
+          PY
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --prepare-only --practice-cars --scenario rear-fast
+          python - <<'PY'
+          import json,csv
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          base=Path('urrc_source/generated/team11/monza')
+          data=json.loads((base/'team11_manifest.json').read_text())
+          world=ET.parse(data['world_file']).getroot().find('world')
+          models={m.get('name') for m in world.findall('model')}
+          assert 'urrc_pace_grid_01' in models
+          assert 'urrc_pace_grid_02' not in models
+          assert 'urrc_pace_grid_09' in models
+          assert data['practice_cars']==['urrc_pace_grid_09']
+          pace=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
+          cars=pace.findall('car')
+          assert len(cars)==1
+          assert cars[0].findtext('speed_mps')=='20'
+          route=Path(cars[0].findtext('route_file'))
+          assert route.name=='team11_blue_20mps_behind.csv'
+          with route.open() as stream:rows=list(csv.reader(stream))
+          assert len(rows)>100
+          assert data['rear_lidar_topic'].endswith('rear_scan')
+          print('PASS rear-fast staged scenario, generated-world only')
+          PY
+  gazebo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Real gz-sim8 dependencies and compile
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/team11-def-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-def-build --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-bounce-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-bounce-build --parallel 2
+          test -s /tmp/team11-def-build/liburrc_team11.so
+          test -s /tmp/team11-bounce-build/liburrc_pace_cars.so
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Real Gazebo camera start, rear LiDAR and lane 3 to 2 defense
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 225s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+              --practice-cars --scenario rear-fast --server \
+            >/tmp/team11-rear-runner.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 210); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" &&
+               grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 DEFENSE]' "$log"; then
+              echo "PASS rear LiDAR-triggered lane-defense detected at $i sec"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          set -e
+          tail -n 80 /tmp/team11-rear-runner.log || true
+          test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
+          grep -E 'TEAM11 CAMERA|TEAM11 REAR|TEAM11 DEFENSE|TEAM11 AVOID|TEAM11.*start' "$log" | tail -n 80 || true
+          grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL camera RGB not received'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL original 5-lamp departure'; exit 1; }
+          grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" || { echo 'FAIL no real laser scan received'; exit 1; }
+          grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" || { echo 'FAIL no rear blocking transition'; exit 1; }
+          echo 'PASS real rear LiDAR triggered 3->2 route defense, RGB light gate retained'
+      - name: Upload independent real Gazebo evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-rear-defense-gazebo-logs
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-rear-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
