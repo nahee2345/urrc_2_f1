@@ -46,11 +46,18 @@ class LaneTests(unittest.TestCase):
         self.assertEqual(smoothstep5(1.),1.)
         self.assertAlmostEqual(smoothstep5(.5),.5)
     def test_speed(self):
-        self.assertEqual(commanded_speed(math.radians(10)),10)
-        self.assertEqual(commanded_speed(math.radians(10.1)),7)
-        self.assertEqual(commanded_speed(math.radians(-11)),7)
-        self.assertEqual(commanded_speed(math.radians(2), .04),6)
-        self.assertEqual(commanded_speed(math.radians(2), .11),3)
+        # Straight and gentle curves remain in the same 10-15 m/s band.
+        self.assertEqual(commanded_speed(math.radians(0), 0.), 15.)
+        self.assertEqual(commanded_speed(math.radians(2), .020), 15.)
+        self.assertEqual(commanded_speed(math.radians(9), .029), 15.)
+        # Ordinary corners: 7 down toward 5; sharp corners: 5.
+        self.assertEqual(commanded_speed(math.radians(2), .030), 7.)
+        self.assertAlmostEqual(commanded_speed(math.radians(2), .055), 6.)
+        self.assertEqual(commanded_speed(math.radians(2), .08), 5.)
+        self.assertEqual(commanded_speed(math.radians(2), .12), 5.)
+        # Large steering is an independent additional warning.
+        self.assertEqual(commanded_speed(math.radians(11), .01), 7.)
+        self.assertEqual(commanded_speed(math.radians(21), .01), 5.)
 
     def test_gradual_speed(self):
         self.assertAlmostEqual(rate_limited_speed(10.,3.,.1),9.6)
