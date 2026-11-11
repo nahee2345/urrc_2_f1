@@ -44,6 +44,8 @@ def main():
                     help="lane 1=left, 2=center, 3=right; auto=nearest")
     ap.add_argument("--fixed-lane",action="store_true",
                     help="ignore other cars for lane-change tests; stay on selected lane")
+    ap.add_argument("--grid",type=int,choices=(1,2),default=1,
+                    help="grid 1 defaults lane 3; grid 2 defaults lane 1")
     args=ap.parse_args()
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
@@ -59,7 +61,9 @@ def main():
             ap.error("Gazebo Harmonic 'gz' executable not found")
         pace_lib=build(pace_src,plugin_dir/"pace","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
-    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,args.fixed_lane)
+    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,args.fixed_lane,args.grid)
+    print("[TEAM11] grid:",manifest["grid_position"],
+          "default lane:",manifest["selected_lane_number"],flush=True)
     print("[TEAM11] 3 lanes:",manifest["routes"],flush=True)
     print("[TEAM11] spacing:",round(manifest["lane_spacing_m"],3),
           "m, selected lane:",manifest["selected_lane_number"],
