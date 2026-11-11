@@ -485,6 +485,27 @@ class Team11ThreeLane:public gz::sim::System,
     }
     return active;
   }
+  void OnRearScan(const gz::msgs::LaserScan &laser){
+    rear_scan::Scan next;
+    next.angleMin=laser.angle_min();
+    next.angleStep=laser.angle_step();
+    next.rangeMin=laser.range_min();
+    next.rangeMax=laser.range_max();
+    next.ranges.reserve(static_cast<size_t>(laser.ranges_size()));
+    for(int i=0;i<laser.ranges_size();i++)
+      next.ranges.push_back(static_cast<float>(laser.ranges(i)));
+    next.valid=!next.ranges.empty() && next.angleStep>0.;
+    if(!next.valid)return;
+    {
+      std::lock_guard<std::mutex> guard(rearMutex);
+      lastRearImage=std::move(next);
+      rearArrival=std::chrono::steady_clock::now();
+    }
+    if(rearFrames.fetch_add(1)==0)
+      std::cout<<"[TEAM11 REAR] first real LiDAR scan "
+               <<laser.ranges_size()<<" beams topic="<<rearTopic
+               <<std::endl;
+  }
   void OnImage(const gz::msgs::Image &image){
     const int lamps=CountRedLamps(image);
     if(lamps<0)return; // Invalid or incomplete image is NOT lights-off.
