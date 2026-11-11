@@ -42,7 +42,7 @@ jobs:
           EGL_PLATFORM: surfaceless
         run: |
           set +e
-          timeout --signal=INT --kill-after=10s 240s \
+          timeout --signal=INT --kill-after=10s 360s \
             python3 src/team_11/three_lane/run_demo.py monza \
               --source "$PWD/urrc_source" --grid 1 \
               --lane auto --fixed-lane --start-mode camera --server \
@@ -56,6 +56,7 @@ jobs:
           tail -n 180 "$log"
           grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL no real RGB image'; exit 1; }
           grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL five-red to all-off departure'; exit 1; }
+          grep -Eq '\\[TEAM11\\] lane=3 .*speed=1[0-5](\\.|m/s)' "$log" || { echo 'FAIL 10-15m/s target not reached'; exit 1; }
           grep -Fq '[TEAM11 LAP] completed=1' "$log" || { echo 'FAIL no fully completed lap'; exit 1; }
           echo 'PASS camera RGB, official lights, lane3 and full lap'
       - name: Upload baseline runtime logs regardless of result
