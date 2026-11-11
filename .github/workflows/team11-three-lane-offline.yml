@@ -70,3 +70,26 @@ jobs:
           print("PASS fixed lane",sys.argv[1])
           PY
           done
+      - name: Confirm camera gate and rigid-car limitations are explicit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import xml.etree.ElementTree as ET
+          src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
+          assert 'CountRedLamps' in src
+          assert 'lamps==5' in src and 'lamps==0' in src
+          assert '>=2' in src and '>=4' in src
+          assert 'cameraStarted.load()' in src
+          for track in ('monza','hungaroring'):
+              data=json.loads((Path('urrc_source/generated/team11')/track/'team11_manifest.json').read_text())
+              world=ET.parse(data['world_file']).getroot().find('world')
+              car=world.find("model[@name='urrc_pace_grid_01']")
+              assert car.findtext('static')=='true'
+              camera=car.find("./link[@name='base_link']/sensor[@name='team11_front_camera']")
+              assert camera is not None and camera.get('type')=='camera'
+              plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::Team11ThreeLane')
+              assert plugin.findtext('camera_topic')==data['start_camera_topic']
+              assert plugin.findtext('start_mode')=='camera'
+              print('PASS',track,'camera gate wiring, static vehicle limitations')
+          PY
