@@ -1,4 +1,5 @@
 // Exhibition pace cars: kinematic offset-lane tracking, not participant AI.
+#include "../plugin/ForcePathFollower.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -43,6 +44,7 @@ class PaceCars : public gz::sim::System,
     egoName=sdf->Get<std::string>("team11_ego_name","").first;
     egoMass=sdf->Get<double>("team11_mass_kg",50.).first;
     otherMass=sdf->Get<double>("pace_mass_kg",1.5).first;
+    physicsCollisions=sdf->Get<bool>("physics_collisions",false).first;
     const std::string topic = sdf->Get<std::string>("start_topic", "/urrc/pace/start").first;
     if (!this->node.Subscribe(topic, &PaceCars::OnStart, this))
       std::cerr << "[PACE] Cannot subscribe to " << topic << std::endl;
@@ -74,7 +76,7 @@ class PaceCars : public gz::sim::System,
         element=element->GetNextElement("car");
       }
     }
-    std::cout << "[PACE] Armed " << cars.size() << " cars, waiting for all five lights OFF" << std::endl;
+    std::cout << "[PACE] Armed " << cars.size() << " cars; physics_contact=" << physicsCollisions << " ego_mass=" << egoMass << " opponent_mass=" << otherMass << "; waiting for all five lights OFF" << std::endl;
   }
   void PreUpdate(const gz::sim::UpdateInfo &info,
                  gz::sim::EntityComponentManager &ecm) override {
@@ -130,7 +132,7 @@ class PaceCars : public gz::sim::System,
       gz::math::Pose3d pose(p1.x+(p2.x-p1.x)*t,p1.y+(p2.y-p1.y)*t,
                            p1.z+(p2.z-p1.z)*t+car.zOffset,
                            0,0,p1.yaw+dyaw*t);
-      if(hasEgo) {
+      if(hasEgo && !physicsCollisions) {
         const double dx=pose.Pos().X()-egoPose.Pos().X();
         const double dy=pose.Pos().Y()-egoPose.Pos().Y();
         const double d=std::hypot(dx,dy);
@@ -155,7 +157,31 @@ class PaceCars : public gz::sim::System,
           pose.Rot()=gz::math::Quaterniond(0.,0.,pose.Rot().Yaw()+.9*std::sin(M_PI*t/2.)*weight);
         }
       }
-      gz::sim::Model(car.entity).SetWorldPoseCmd(ecm,pose);
+      if(physicsCollisions){
+        // Dynamic body receives bounded actual force/torque. Contacts and
+        // mass ratio are computed by Gazebo's physics solver; no teleport.
+        const gz::sim::Link base(
+          gz::sim::Model(car.entity).LinkByName(ecm,"base_link"));
+        const auto actual=gz::sim::worldPose(car.entity,ecm);
+        physical::apply(base,ecm,actual,{
+            pose.Pos().X(),pose.Pos().Y(),pose.Rot().Yaw(),car.speed},
+            otherMass,.060,9.);
+        if(hasEgo){
+          const double d=std::hypot(
+            actual.Pos().X()-egoPose.Pos().X(),
+            actual.Pos().Y()-egoPose.Pos().Y());
+          if(d<.39 && now-car.lastHit>1.){
+            car.lastHit=now;
+            std::cout<<"[PACE PHYSICS NEAR CONTACT] "<<car.name
+                     <<" distance_m="<<d
+                     <<" masses_kg="<<egoMass<<":"<<otherMass
+                     <<" (contact impulse resolved by Gazebo solver)"
+                     <<std::endl;
+          }
+        }
+      }else{
+        gz::sim::Model(car.entity).SetWorldPoseCmd(ecm,pose);
+      }
     }
   }
  private:
@@ -172,6 +198,7 @@ class PaceCars : public gz::sim::System,
   std::string egoName;
   gz::sim::Entity egoEntity{gz::sim::kNullEntity};
   double egoMass{50.},otherMass{1.5};
+  bool physicsCollisions{false};
 };
 } // namespace urrc
 GZ_ADD_PLUGIN(urrc::PaceCars, gz::sim::System,
