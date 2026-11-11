@@ -46,7 +46,8 @@ class GeometryPolicyTests(unittest.TestCase):
 
     def test_road_boundary_and_physical_grid_side(self):
         for left,right,expected in [(1.3,-1.3,1),
-                                    (1.6,-.4,2),(.4,-1.6,0)]:
+                                    (1.6,-.4,2),(.4,-1.6,0),
+                                    (1.75,-.25,2),(.25,-1.75,0)]:
             data,a,d=scan_box(left,right)
             corridor,_,_=interpret_scan(data,a,d,.1,55.)
             self.assertIsNotNone(corridor)
