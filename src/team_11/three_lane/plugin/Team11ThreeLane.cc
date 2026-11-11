@@ -6,6 +6,7 @@
 #include "RearScan.hh"
 #include "PhysicsDrive.hh"
 #include "CornerPlanner.hh"
+#include "SpeedProfile.hh"
 #include "BoundedTracker.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
@@ -357,7 +358,7 @@ class Team11ThreeLane:public gz::sim::System,
       // Front overtaking priority > corner merge > rear defense.
       const auto cornerDecision=corner::evaluate(
         state,preview,traffic,decision.nextLane>=0 || decision.blocked,
-        avoidIndex>=0,fixedLane);
+        avoidIndex>=0,fixedLane,maxDecel);
       cornerApproachCap=cornerDecision.speedCap;
       if(decision.nextLane>=0 && !changing){
         changeReason=ShiftReason::Front;
@@ -368,11 +369,25 @@ class Team11ThreeLane:public gz::sim::System,
         changeLength=decision.changeLength;
         lastChangeTravel=traveledFromStart;
         avoidIndex=decision.returning?-1:decision.avoidId;
+        double leadGap=std::numeric_limits<double>::infinity();
+        double leadTtc=std::numeric_limits<double>::infinity();
+        if(!decision.returning){
+          for(const auto &car:traffic){
+            if(car.id!=decision.avoidId)continue;
+            leadGap=avoid::signedGap(s,car.s,lap);
+            const double closing=speed-car.speed;
+            if(closing>avoid::kMinClosingMps)
+              leadTtc=std::max(0.,leadGap-avoid::kVehicleOverlapM)/closing;
+            break;
+          }
+        }
         std::cout<<"[TEAM11 AVOID] "
                  <<(decision.returning?"return ":"pass ")
                  <<(oldLane+1)<<" -> "<<(target+1)
                  <<" length_m="<<changeLength
                  <<" current_mps="<<speed
+                 <<" front_gap_m="<<leadGap
+                 <<" collision_ttc_s="<<leadTtc
                  <<" road_curve="<<roadCurve<<std::endl;
       }else if(!changing && cornerDecision.nextLane>=0 &&
                !decision.blocked){
@@ -454,6 +469,10 @@ class Team11ThreeLane:public gz::sim::System,
     // Earlier raw yaw preview reported spurious ~1.5rad/m on straights.
     // Braking from 15 to 3m/s at 4m/s2 needs 27m.
     double futureCurvature=std::abs(curvature);
+    // Avoid applying apex curvature to CURRENT speed when the apex is
+    // still 20-36m away. Each point gives its own braking envelope.
+    double profileSpeedLimit=speed_profile::allowedNow(
+        std::abs(curvature),0.,maxDecel,wheelbase,maxSteer,maxYawRate);
     for(double look=0.;look<=36.;look+=3.){
       const auto a=poseAt(s+look);
       const auto b=poseAt(s+look+2.);
@@ -463,17 +482,18 @@ class Team11ThreeLane:public gz::sim::System,
       const double turn=std::atan2(std::sin(second-first),
                                    std::cos(second-first));
       const double distance=std::max(.4,std::hypot(c.x-b.x,c.y-b.y));
-      futureCurvature=std::max(futureCurvature,std::abs(turn)/distance);
+      const double k=std::abs(turn)/distance;
+      futureCurvature=std::max(futureCurvature,k);
+      profileSpeedLimit=std::min(profileSpeedLimit,
+        speed_profile::allowedNow(
+          k,look+2.,maxDecel,wheelbase,maxSteer,maxYawRate));
     }
     // Straight and gentle curves use the same 10-15 m/s policy.
     // Ordinary and sharp curves both use a 5-7 m/s target.
     // Hysteresis prevents repeated acceleration/braking at the threshold.
-    double targetSpeed=baseSpeed;
-    if(cornerMode){
-      const double blend=clamp((futureCurvature-corner::kEnterCurvature)/
-                               (corner::kSharpCurvature-corner::kEnterCurvature),0.,1.);
-      targetSpeed=7.-2.*blend; // 7 m/s ordinary; 5 m/s sharp
-    }
+    double targetSpeed=std::min(baseSpeed,profileSpeedLimit);
+    // The corner flags and 52m lookahead are for safe merging. Braking
+    // is tied to remaining DISTANCE, not the worst peak in a long window.
     targetSpeed=std::min(targetSpeed,cornerApproachCap);
     // Excessive commanded steering still reduces speed even if a noisy
     // preview momentarily classifies the road as straight.
@@ -490,14 +510,8 @@ class Team11ThreeLane:public gz::sim::System,
     }
     if(std::isfinite(followingSpeed))
       targetSpeed=std::min(targetSpeed,followingSpeed);
-    // Limit curvature, available yaw rate and lateral acceleration on
-    // the REAL target trajectory (including its 5th-order lane merge).
-    const double maxKappa=bounded::curvatureLimit(wheelbase,maxSteer);
-    if(futureCurvature>maxKappa+1.e-6)
-      targetSpeed=0.; // requested path is geometrically impossible
-    else
-      targetSpeed=std::min(targetSpeed,
-        bounded::speedForCurvature(futureCurvature,maxYawRate));
+    // Curvature/yaw/lateral caps are enforced at the point where the
+    // curvature occurs (SpeedProfile.hh), then again in BoundedTracker.
     targetSpeed=clamp(targetSpeed,0.,baseSpeed);
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
@@ -550,6 +564,8 @@ class Team11ThreeLane:public gz::sim::System,
                <<"deg yaw_rate_deg_s="<<command.yawRate*180./M_PI
                <<" max_steer_deg="<<maxSteer*180./M_PI
                <<" track_error_m="<<trackError
+               <<" speed_profile_cap="<<profileSpeedLimit
+               <<" corner_approach_cap="<<cornerApproachCap
                <<" corner_mode="<<cornerMode<<" preview_curvature="
                <<futureCurvature<<" target="<<targetSpeed
                <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";

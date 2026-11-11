@@ -28,27 +28,42 @@ int main() {
   close(urrc::avoid::curvatureSpeed(.12),5.);
   assert(urrc::avoid::distanceToChange(15.,.765)>18.);
   {
+    // Far in front does NOT authorize passing, even if moving slowly.
+    const auto far=evaluate(car(),{{1,130.,laneOffset(2,.765),10.}});
+    assert(far.nextLane==-1 && !far.blocked);
+    // TTC uses center distance minus 2m collision overlap, / closing 5m/s.
+    // At 18m ahead TTC = 3.2s -> no passing; at 17m TTC = 3.0s.
+    const auto safe=evaluate(car(),{{1,118.,laneOffset(2,.765),10.}});
+    const auto near=evaluate(car(),{{1,117.,laneOffset(2,.765),10.}});
+    assert(safe.nextLane==-1 && !safe.blocked);
+    assert(near.nextLane==1 && near.blocked);
+    // Closing speed <= 2m/s: a distant or same-speed car is no threat.
+    assert(evaluate(car(),{{1,116.,laneOffset(2,.765),14.}}).nextLane==-1);
+    // Lead car with 20m gap is too far for a 3-second 5m/s collision.
+    assert(evaluate(car(),{{1,120.,laneOffset(2,.765),10.}}).nextLane==-1);
+  }
+  {
     // From lane 3 prefer nearest free lane 2 over also-free lane 1.
-    const auto result=evaluate(car(),{{1,130.,laneOffset(2,.765),10.}});
+    const auto result=evaluate(car(),{{1,116.,laneOffset(2,.765),10.}});
     assert(result.nextLane==1 && result.avoidId==1);
     assert(result.changeLength>=18.);
   }
   {
     // From central lane, equal-cost free targets -> left lane 1.
-    const auto result=evaluate(car(1),{{1,130.,0.,10.}});
+    const auto result=evaluate(car(1),{{1,116.,0.,10.}});
     assert(result.nextLane==0);
   }
   {
     // Rear car 20 m/s approaching left from 25m behind blocks lane 1.
     const auto result=evaluate(car(1),{
-      {1,130.,0.,10.},
+      {1,116.,0.,10.},
       {2,75.,laneOffset(0,.765),20.}});
     assert(result.nextLane==2);
   }
   {
     // No jumping over an occupied intermediate lane.
     const auto result=evaluate(car(2),{
-      {1,125.,laneOffset(2,.765),10.},
+      {1,116.,laneOffset(2,.765),10.},
       {2,116.,0.,0.}});
     assert(result.nextLane==-1);
   }
@@ -74,7 +89,7 @@ int main() {
   {
     // Sharp corner: stopped obstacle may be passed at <=7m/s.
     auto state=car();state.curve=.09;state.roadSpeed=5.;state.speed=5.;
-    const auto result=evaluate(state,{{1,120.,laneOffset(2,.765),0.}});
+    const auto result=evaluate(state,{{1,116.,laneOffset(2,.765),0.}});
     assert(result.nextLane==1);
   }
   {
@@ -93,9 +108,9 @@ int main() {
     assert(result.followSpeed<15.);
   }
   {
-    // Initial route merge and recent change inhibit oscillation.
+    // Initial route merge and recent change inhibit oscillation even at 3s TTC.
     auto state=car();state.travelled=11.;
-    assert(evaluate(state,{{1,125.,laneOffset(2,.765),10.}}).nextLane==-1);
+    assert(evaluate(state,{{1,116.,laneOffset(2,.765),10.}}).nextLane==-1);
     state.travelled=80.;state.sinceChange=15.;
     assert(evaluate(state,{{1,125.,laneOffset(2,.765),10.}}).nextLane==-1);
   }

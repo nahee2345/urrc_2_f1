@@ -1,5 +1,6 @@
 #include "CornerPlanner.hh"
 #include "BoundedTracker.hh"
+#include "SpeedProfile.hh"
 #include "RearDefense.hh"
 #include "OvertakePlanner.hh"
 #include <cassert>
@@ -19,13 +20,15 @@ int main(){
   using namespace urrc;
   corner::Preview bend;
   bend.maxCurvature=.06;
-  bend.firstBendDistance=31.;
+  bend.firstBendDistance=12.;
   bend.bendAhead=true;
   for(int lane:{0,2}){
     auto s=road(lane);
     const auto move=corner::evaluate(s,bend,{},false,false,false);
     assert(move.approach && move.nextLane==1);
-    assert(move.speedCap==7.);
+    // Braking from 15m/s is distance-aware; at 12m until the bend,
+    // we need not already be down to 7m/s while merging.
+    assert(move.speedCap>10. && move.speedCap<11.);
     assert(move.length>=18.);
     assert(std::abs(lane-move.nextLane)==1);
     // The next route becomes 2 and no automatic return is produced.
@@ -35,6 +38,9 @@ int main(){
   {
     auto s=road(2);
     bend.maxCurvature=.10;
+    assert(corner::evaluate(s,bend,{},false,false,false).speedCap>9.);
+    assert(corner::evaluate(s,bend,{},false,false,false).speedCap<10.);
+    bend.firstBendDistance=4.;
     assert(corner::evaluate(s,bend,{},false,false,false).speedCap==5.);
     assert(corner::evaluate(s,bend,{},true,false,false).nextLane==-1);
     assert(corner::evaluate(s,bend,{},false,true,false).nextLane==-1);
@@ -87,6 +93,21 @@ int main(){
     assert(bounded::speedForCurvature(.3)<=
            bounded::kMaxYawRate/.3+1e-10);
     assert(std::isinf(bounded::speedForCurvature(0.)));
+    // Sharp apex is 36m ahead: do NOT brake to 2.4m/s immediately.
+    const auto far=speed_profile::allowedNow(
+        .43,36.,4.,wheelbase,bounded::kSteer30,bounded::kMaxYawRate);
+    const auto near=speed_profile::allowedNow(
+        .43,4.,4.,wheelbase,bounded::kSteer30,bounded::kMaxYawRate);
+    assert(far>14. && near<3.);
+    // Approach braking with 12m to bend allows >7m/s, but only
+    // 7m/s when the bend is within the 4m safety margin.
+    assert(speed_profile::cornerApproach(7.,12.,4.)>10.);
+    assert(speed_profile::cornerApproach(7.,4.,4.)==7.);
+    assert(speed_profile::curveTarget(.0,wheelbase,
+        bounded::kSteer30,bounded::kMaxYawRate)==15.);
+    // Hard 30deg geometry remains an absolute requirement.
+    assert(speed_profile::curveTarget(2.,wheelbase,
+        bounded::kSteer30,bounded::kMaxYawRate)==0.);
   }
   std::cout<<"PASS outer routes 1/3 -> center route 2 on corner, front priority,"
              " collision-safe merge, +/-30 steer, curvature and yaw limits\n";

@@ -46,8 +46,8 @@ def main():
                     help="hold one exact route for QA; disables all overtaking and center-corner merge")
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="legacy switch (lane changes and automatic corner-center merge now default)")
-    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast","rear-contact"),default="normal",
-                    help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
+    ap.add_argument("--scenario",choices=("normal","slow-ahead","late-pass","rear-fast","rear-contact"),default="normal",
+                    help="slow-ahead: 5m/s red 25m ahead; late-pass: 5m/s red 45m ahead (generated-only)")
     ap.add_argument("--physics-contact",action="store_true",
                     help="opt-in physical 50kg TEAM11 versus dynamic 1.5kg opponents; no scripted bounce")
     ap.add_argument("--practice-cars",action="store_true",
