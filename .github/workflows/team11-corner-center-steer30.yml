@@ -116,7 +116,7 @@ jobs:
           lines=Path(sys.argv[1]).read_text(errors='replace').splitlines()
           measured=[]
           for line in lines:
-            m=re.search(r'\bm/s steer=([-+0-9.eE]+)deg yaw_rate_deg_s=([-+0-9.eE]+) max_steer_deg=([-+0-9.eE]+) track_error_m=([-+0-9.eE]+)',line)
+            m=re.search(r'm/s steer=([-+0-9.eE]+)deg yaw_rate_deg_s=([-+0-9.eE]+) max_steer_deg=([-+0-9.eE]+) track_error_m=([-+0-9.eE]+)',line)
             if m: measured.append(tuple(map(float,m.groups())))
           assert len(measured)>=4,("Missing actual steering/position diagnostics",len(measured))
           assert max(abs(row[0]) for row in measured)<=30.001
