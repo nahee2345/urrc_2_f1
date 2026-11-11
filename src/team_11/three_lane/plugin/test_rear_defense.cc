@@ -72,10 +72,10 @@ int main(){
   }
   {
     auto s=ego(1);
-    // The rear car is already in the same middle route: holding lane
-    // is sufficient. No gratuitous side-to-side movement.
+    // Imminent faster car already on our lane: no separate route to block.
+    // User requested a stepped S path in this specific case.
     auto d=evaluate(s,{{9,24.,20.,0.,true,false}},{{9,126.,0.,20.}});
-    assert(d.active && d.nextLane==-1);
+    assert(d.active && d.zigzag && d.nextLane==0);
   }
   {
     auto s=ego();
