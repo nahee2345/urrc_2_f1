@@ -569,6 +569,11 @@ class Team11ThreeLane:public gz::sim::System,
     return active;
   }
   void OnContact(const gz::msgs::Contacts &report){
+    if(report.contact_size()>0 && rawContactCount.fetch_add(1)==0)
+      std::cout<<"[TEAM11 PHYSICS RAW CONTACT] count="
+               <<report.contact_size()<<" first="
+               <<report.contact(0).collision1().name()<<" vs "
+               <<report.contact(0).collision2().name()<<std::endl;
     for(int i=0;i<report.contact_size();i++){
       const auto &c=report.contact(i);
       const auto first=c.collision1().name();
@@ -671,7 +676,7 @@ class Team11ThreeLane:public gz::sim::System,
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
   std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic,contactTopic;
-  std::atomic<unsigned int> physicsContactCount{0};
+  std::atomic<unsigned int> physicsContactCount{0},rawContactCount{0};
   std::mutex rearMutex;
   rear_scan::Scan lastRearImage;
   std::chrono::steady_clock::time_point rearArrival{};
