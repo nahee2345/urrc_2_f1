@@ -5,6 +5,8 @@
 #include "RearDefense.hh"
 #include "RearScan.hh"
 #include "PhysicsDrive.hh"
+#include "CornerPlanner.hh"
+#include "BoundedTracker.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -53,6 +55,13 @@ class Team11ThreeLane:public gz::sim::System,
     physicsContact=cfg->Get<bool>("physics_contact_mode",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
+    maxSteer=cfg->Get<double>("maximum_steering_deg",30.).first*M_PI/180.;
+    maxYawRate=cfg->Get<double>("maximum_yaw_rate_deg_s",68.754935).first*M_PI/180.;
+    if(wheelbase<=0. || maxSteer<=0. || maxSteer>M_PI/6.+1.e-8 ||
+       maxYawRate<=0. || maxYawRate>bounded::kMaxYawRate+1.e-5){
+      std::cerr<<"[TEAM11 ERROR] Invalid steering / yaw rate safety cap\n";
+      return;
+    }
     baseSpeed=cfg->Get<double>("base_speed_mps");
     slowThreshold=cfg->Get<double>("steering_slow_threshold_deg")*M_PI/180.;
     slowFactor=cfg->Get<double>("slow_factor");
@@ -290,17 +299,28 @@ class Team11ThreeLane:public gz::sim::System,
     }
     // Classify the road before deciding whether a safe passing gap exists.
     // This is independent of temporary target lane selection.
-    double roadCurve=0.;
-    for(double look=0.;look<=36.;look+=3.){
+    // Inspect original road bends ahead of steering decisions; lateral
+    // lane-shift geometry is not a new road corner.
+    corner::Preview preview;
+    for(double look=0.;look<=corner::kPreviewM;look+=2.){
       const auto a=sample(1,s+look);
       const auto b=sample(1,s+look+2.);
       const auto c=sample(1,s+look+4.);
       const double ya=std::atan2(b.y-a.y,b.x-a.x);
       const double yb=std::atan2(c.y-b.y,c.x-b.x);
       const double delta=std::atan2(std::sin(yb-ya),std::cos(yb-ya));
-      roadCurve=std::max(roadCurve,std::abs(delta)/
-                            std::max(.4,std::hypot(c.x-b.x,c.y-b.y)));
+      const double k=std::abs(delta)/
+                      std::max(.4,std::hypot(c.x-b.x,c.y-b.y));
+      preview.maxCurvature=std::max(preview.maxCurvature,k);
+      if(k>=corner::kEnterCurvature &&
+         !std::isfinite(preview.firstBendDistance))
+        preview.firstBendDistance=look;
     }
+    const double roadCurve=preview.maxCurvature;
+    if(!cornerMode && roadCurve>=corner::kEnterCurvature)cornerMode=true;
+    else if(cornerMode && roadCurve<=corner::kExitCurvature)cornerMode=false;
+    preview.bendAhead=cornerMode;
+
     if(changing && avoid::signedGap(changeStart,s,lap)>=changeLength-1e-5){
       changing=false;lane=target;
       std::cout<<"[TEAM11 AVOID] finished lane="<<(lane+1)<<std::endl;
@@ -641,6 +661,7 @@ class Team11ThreeLane:public gz::sim::System,
   double trackedAt{-100.};
   double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
+  double maxSteer{bounded::kSteer30},maxYawRate{bounded::kMaxYawRate};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
   double maxDecel{4.},maxAccel{2.},cameraTrace{0.},lampSpacingPx{0.};
