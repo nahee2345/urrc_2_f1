@@ -3,6 +3,7 @@
 // It observes model poses in Gazebo and logs equivalent bicycle steering.
 #include "OvertakePlanner.hh"
 #include "RearDefense.hh"
+#include "RearThreatHistory.hh"
 #include "RearScan.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
@@ -248,6 +249,31 @@ class Team11ThreeLane:public gz::sim::System,
                                car.lateral,seen,weaving});
       }
     }
+    // Debounce rear targets ONLY on newly received LiDAR frames.
+    // Physics ticks can run hundreds of times per one sensor frame.
+    const auto scanGeneration=rearFrames.load();
+    if(freshRear && scanGeneration!=lastProcessedRearFrame){
+      lastProcessedRearFrame=scanGeneration;
+      rearThreatConfirmed.fill(false);
+      for(auto &rear:rearTargets){
+        const auto idx=static_cast<size_t>(rear.id);
+        if(idx>=rearHistories.size())continue;
+        const double closing=rear.speed-speed;
+        const double ttc=closing>=defense::kClosingMinMps ?
+            rear.behindM/closing : std::numeric_limits<double>::infinity();
+        const bool confirmed=rearHistories[idx].update(
+          rear.id,now,ttc,rear.lateral,rear.uncertain);
+        rearThreatConfirmed[idx]=confirmed;
+      }
+    }
+    rearTargets.erase(std::remove_if(rearTargets.begin(),rearTargets.end(),
+      [&](defense::RearTarget &rear){
+        const auto idx=static_cast<size_t>(rear.id);
+        if(idx>=rearThreatConfirmed.size() || !rearThreatConfirmed[idx])
+          return true;
+        rear.uncertain=rearHistories[idx].weaving();
+        return false;
+      }),rearTargets.end());
     // Classify the road before deciding whether a safe passing gap exists.
     // This is independent of temporary target lane selection.
     double roadCurve=0.;
@@ -323,22 +349,9 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" zigzag="<<rearDecision.zigzag
                  <<" rear_lidar_frames="<<rearFrames.load()
                  <<std::endl;
-      }else if(!changing && defending &&
-               !rearDecision.active && target!=homeLane &&
-               traveledFromStart-lastDefenseTravel>=18. &&
-               !decision.blocked){
-        const int restore=(target<homeLane?target+1:target-1);
-        const double length=avoid::distanceToChange(
-          std::max(speed,state.roadSpeed),spacing);
-        if(avoid::trajectoryClear(state,restore,length,traffic)){
-          lane=target;target=restore;
-          changing=true;changeStart=s;changeLength=length;
-          lastChangeTravel=traveledFromStart;
-          lastDefenseTravel=traveledFromStart;
-          if(target==homeLane)defending=false;
-          std::cout<<"[TEAM11 DEFENSE] clear -> return "
-                   <<(lane+1)<<" -> "<<(target+1)<<std::endl;
-        }
+      // NO automatic return after a completed defense:
+      // keep the selected safe lane until front passing or another
+      // fully-confirmed rear threat chooses a new lane.
       }else if(decision.blocked && !changing &&
                trackedAt<now-.8){
         trackedAt=now;
@@ -594,6 +607,9 @@ class Team11ThreeLane:public gz::sim::System,
   std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};
   std::array<double,2> measuredSpeed{10.,20.};
   double trackedAt{-100.};
+  std::array<defense::ThreatHistory,2> rearHistories{};
+  std::array<bool,2> rearThreatConfirmed{false,false};
+  unsigned int lastProcessedRearFrame{0};
   double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
