@@ -1,0 +1,231 @@
+name: TEAM11 three-lane offline
+on:
+  pull_request:
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-three-lane-offline.yml'
+  push:
+    branches: ['team11-three-lane-practice']
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-three-lane-offline.yml'
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python syntax
+        run: python -m compileall -q src/team_11/three_lane
+      - name: Run tests
+        run: python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - name: Checkout exact practice map source
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Install road geometry validator
+        run: python -m pip install shapely
+      - name: Check 3 safe lanes on real Monza and Hungaroring
+        run: python src/team_11/three_lane/validate_tracks.py --source urrc_source
+      - name: Generate independent Monza world and routes
+        run: python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only
+      - name: Generate independent Hungaroring world and routes
+        run: python src/team_11/three_lane/run_demo.py hungaroring --source urrc_source --prepare-only
+      - name: Verify grid 01 camera start and zero synthetic blockers
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for track in ('monza', 'hungaroring'):
+              base=Path('urrc_source/generated/team11')/track
+              data=json.loads((base/'team11_manifest.json').read_text())
+              root=ET.parse(data['world_file']).getroot()
+              world=root.find('world')
+              models={m.get('name') for m in world.findall('model')}
+              assert 'urrc_pace_grid_01' in models
+              assert 'urrc_pace_grid_02' not in models
+              assert 'urrc_pace_grid_09' not in models
+              assert 'urrc_pace_grid_99' not in models
+              assert data['grid_position']==1 and data['start_mode']=='camera'
+              plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::Team11ThreeLane')
+              assert plugin.find('obstacle_name') is None
+              print('PASS',track,'grid1 camera start, no opponent vehicles')
+          PY
+      - name: Validate selectable left center right lanes
+        run: |
+          for lane in 1 2 3; do
+            python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --start-mode immediate --lane "$lane" --fixed-lane >/dev/null
+            python - "$lane" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          data=json.loads((Path("urrc_source/generated/team11/monza")/"team11_manifest.json").read_text())
+          assert data["selected_lane_number"]==int(sys.argv[1])
+          assert data["first_lane"]==int(sys.argv[1])-1
+          assert data["fixed_lane"] is True
+          assert data["grid_position"]==1
+          assert len(data["routes"])==3
+          print("PASS fixed lane",sys.argv[1])
+          PY
+          done
+      - name: Confirm camera gate and rigid-car limitations are explicit
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --start-mode camera >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import xml.etree.ElementTree as ET
+          src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
+          assert 'CountRedLamps' in src
+          assert 'lamps==5' in src and 'lamps==0' in src
+          assert '>=2' in src and '>=4' in src
+          assert 'cameraStarted.load()' in src
+          for track in ('monza','hungaroring'):
+              data=json.loads((Path('urrc_source/generated/team11')/track/'team11_manifest.json').read_text())
+              world=ET.parse(data['world_file']).getroot().find('world')
+              car=world.find("model[@name='urrc_pace_grid_01']")
+              assert car.findtext('static')=='true'
+              camera=car.find("./link[@name='base_link']/sensor[@name='team11_front_camera']")
+              assert camera is not None and camera.get('type')=='camera'
+              plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::Team11ThreeLane')
+              assert plugin.findtext('camera_topic')==data['start_camera_topic']
+              assert plugin.findtext('start_mode')=='camera'
+              print('PASS',track,'camera gate wiring, static vehicle limitations')
+          PY
+      - name: Verify odd and even grids 1-12, no opponents in baseline
+        run: |
+          for track in monza hungaroring; do
+            for grid in $(seq 1 12); do
+              python src/team_11/three_lane/run_demo.py "$track" --source urrc_source --prepare-only --grid "$grid" --lane auto --start-mode camera >/dev/null
+              python - "$track" "$grid" <<'PY'
+          from pathlib import Path
+          import json,sys,xml.etree.ElementTree as ET
+          track=sys.argv[1];grid=int(sys.argv[2])
+          data=json.loads((Path("urrc_source/generated/team11")/track/"team11_manifest.json").read_text())
+          assert data['grid_position']==grid
+          assert data['selected_lane_number']==(3 if grid%2 else 1)
+          assert data['grid_physical_side']==('right' if grid%2 else 'left')
+          assert (data['grid_signed_lateral_m']<0)==(grid%2==1)
+          world=ET.parse(data['world_file']).getroot().find('world')
+          models={e.get('name') for e in world.findall('model')}
+          ego=f"urrc_pace_grid_{grid:02d}"
+          assert ego in models
+          assert len([m for m in world.findall('model') if m.get('name')==ego])==1
+          plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
+          registered=sorted(e.findtext('name') for e in plugin.findall('car'))
+          expected=[]
+          assert not data["practice_cars_enabled"]
+          for number in (2,9):
+              if number!=grid: assert f"urrc_pace_grid_{number:02d}" not in models
+          assert registered==expected,(registered,expected)
+          assert plugin.findtext('team11_ego_name')==ego
+          assert plugin.findtext('team11_mass_kg')=='50'
+          assert plugin.findtext('pace_mass_kg')=='1.5'
+          assert data['collision_mode']=='scripted_asymmetric_bounce'
+          print('PASS',track,grid,data['selected_lane_number'])
+          PY
+            done
+          done
+      - name: Check self vehicle invariant and opponent bounce source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source=Path("src/team_11/three_lane/pace_bounce/PaceCars.cc").read_text()
+          ego=Path("src/team_11/three_lane/plugin/Team11ThreeLane.cc").read_text()
+          assert 'd<0.39' in source
+          assert '[PACE BOUNCE]' in source
+          assert 'SetWorldPoseCmd(ecm,pose)' in source
+          assert 'SetWorldPoseCmd(ecm' in ego
+          assert 'otherMass' in source and 'egoMass' in source
+          print('PASS source-level collision mode wiring (runtime Gazebo test pending)')
+          PY
+      - name: Verify default grid1 lane3 center corner-merge enabled for solo practice
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --grid 1 --lane auto --start-mode immediate >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import xml.etree.ElementTree as ET
+          path=Path("urrc_source/generated/team11/monza/team11_manifest.json")
+          data=json.loads(path.read_text())
+          assert data["grid_position"]==1
+          assert data["selected_lane_number"]==3
+          assert data["fixed_lane"] is False
+          world=ET.parse(data["world_file"]).getroot().find("world")
+          controller=next(p for p in world.findall("plugin") if p.get("name")=="urrc::Team11ThreeLane")
+          assert controller.findtext("initial_lane")=="2"
+          assert controller.findtext("fixed_lane")=="false"
+          print("PASS solo grid 1 -> initial lane 3 (automatic corner merge to 2)")
+          PY
+      - name: Validate camera aim at gantry across all twelve grids
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,math,subprocess,sys,xml.etree.ElementTree as ET
+          for track in ("monza","hungaroring"):
+              for grid in range(1,13):
+                  subprocess.run([sys.executable,
+                      "src/team_11/three_lane/run_demo.py",track,
+                      "--source","urrc_source","--prepare-only","--grid",str(grid),
+                      "--start-mode","camera"],check=True,capture_output=True,text=True)
+                  base=Path("urrc_source/generated/team11")/track
+                  data=json.loads((base/"team11_manifest.json").read_text())
+                  world=ET.parse(data["world_file"]).getroot().find("world")
+                  car=world.find(f"model[@name='urrc_pace_grid_{grid:02d}']")
+                  sensor=car.find("./link[@name='base_link']/sensor[@name='team11_front_camera']")
+                  values=[float(v) for v in sensor.findtext("pose").split()]
+                  assert abs(values[4]-data["camera_pitch_rad"])<1e-6
+                  assert abs(values[5]-data["camera_yaw_rad"])<1e-6
+                  assert sensor.findtext("camera/image/width")=="1280"
+                  assert sensor.findtext("camera/image/height")=="720"
+                  assert abs(float(sensor.findtext("camera/horizontal_fov"))-.52)<1e-6
+                  assert -1.5 < values[4] < 0.
+                  assert -1.5 < values[5] < 1.5
+                  print("PASS camera aim",track,grid,round(data["camera_target_distance_m"],2))
+          PY
+      - name: Verify target speed and overtaking controller wiring
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --lane auto --prepare-only >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          data=json.loads(Path('urrc_source/generated/team11/monza/team11_manifest.json').read_text())
+          root=ET.parse(data['world_file']).getroot()
+          controller=next(x for x in root.find('world').findall('plugin') if x.get('name')=='urrc::Team11ThreeLane')
+          assert data['speed_mps']==15
+          assert data['straight_speed_range_mps']==[10,15]
+          assert data['corner_speed_range_mps']==[5,7]
+          assert data['gentle_corner_speed_range_mps']==[10,15]
+          assert data['corner_enter_curvature_per_m']==0.030
+          assert data['corner_exit_curvature_per_m']==0.022
+          assert data['fixed_lane'] is False
+          assert controller.findtext('base_speed_mps')=='15'
+          assert controller.findtext('lane_change_length_m')=='18'
+          src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
+          for token in ('[TEAM11 AVOID]','avoid::evaluate','followingSpeed','roadCurve'):
+              assert token in src,token
+          assert 'distanceToChange' in Path('src/team_11/three_lane/plugin/OvertakePlanner.hh').read_text()
+          print('PASS 15m/s target, 5-7m/s corners, future-gap overtake integration')
+          PY
+      - name: Check opt-in practice cars preserve collision demonstration
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --lane auto --practice-cars --prepare-only >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import json, xml.etree.ElementTree as ET
+          base=Path('urrc_source/generated/team11/monza')
+          data=json.loads((base/'team11_manifest.json').read_text())
+          assert data['practice_cars_enabled'] is True
+          assert data['fixed_lane'] is False
+          world=ET.parse(data['world_file']).getroot().find('world')
+          models={m.get('name') for m in world.findall('model')}
+          assert {'urrc_pace_grid_01','urrc_pace_grid_02','urrc_pace_grid_09'}<=models
+          plugin=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
+          assert sorted(c.findtext('name') for c in plugin.findall('car'))==[
+              'urrc_pace_grid_02','urrc_pace_grid_09']
+          print('PASS optional collision demo remains available')
+          PY

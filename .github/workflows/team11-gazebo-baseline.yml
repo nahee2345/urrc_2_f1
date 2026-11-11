@@ -1,0 +1,71 @@
+name: TEAM11 Gazebo baseline reality check
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-three-lane-practice]
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-gazebo-baseline.yml'
+jobs:
+  compile-plugins:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Build TEAM11 controller and opponent collision plugins
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/team11-controller -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-controller --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-bounce -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-bounce --parallel 2
+      - name: Confirm both real Gazebo libraries
+        run: |
+          test -s /tmp/team11-controller/liburrc_team11.so
+          test -s /tmp/team11-bounce/liburrc_pace_cars.so
+          echo "PASS: compiled real gz-sim8 plugins"
+      - name: Checkout original map in isolated folder
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Run 1st-grid real-camera departure and fixed 3rd lane
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 360s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 \
+              --lane auto --fixed-lane --start-mode camera --server \
+            > /tmp/team11-baseline-runner.log 2>&1
+          status=$?
+          set -e
+          echo "Runner exit: $status (timeout 124 is acceptable ONLY if all checks pass)"
+          cat /tmp/team11-baseline-runner.log
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
+          tail -n 180 "$log"
+          grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL no real RGB image'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL five-red to all-off departure'; exit 1; }
+          grep -Eq '\\[TEAM11\\] lane=3 .*speed=1[0-5](\\.|m/s)' "$log" || { echo 'FAIL 10-15m/s target not reached'; exit 1; }
+          grep -Fq '[TEAM11 LAP] completed=1' "$log" || { echo 'FAIL no fully completed lap'; exit 1; }
+          echo 'PASS camera RGB, official lights, lane3 and full lap'
+      - name: Upload baseline runtime logs regardless of result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-gazebo-baseline-logs
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-baseline-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
