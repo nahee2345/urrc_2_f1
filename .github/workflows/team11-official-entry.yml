@@ -1,0 +1,76 @@
+name: TEAM11 official submission portability
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-official-entry-v1]
+    paths:
+      - 'src/team_11/team11/**'
+      - '.github/workflows/team11-official-entry.yml'
+jobs:
+  submission-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy setuptools
+      - name: ROS package syntax and portable LiDAR-only policy
+        run: |
+          python -m compileall -q src/team_11/team11/src/team11_race
+          PYTHONPATH=src/team_11/team11/src/team11_race \
+            python -m unittest discover -v \
+              -s src/team_11/team11/src/team11_race/tests -p 'test_*.py'
+      - name: Checkout actual competition organizer intake tooling
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_f1_ws
+          path: official
+      - name: Validate the real organizer's ZIP submission format
+        run: |
+          python official/race/scripts/pack_entry.py \
+            src/team_11/team11 --output /tmp/team11-official.zip
+          python - <<'PY'
+          import io,zipfile,json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          path=Path('/tmp/team11-official.zip')
+          with zipfile.ZipFile(path) as z:
+              files=set(z.namelist())
+              assert 'race_entry.json' in files
+              meta=json.loads(z.read('race_entry.json'))
+              assert meta['entry_id']=='team11'
+              assert meta['ros_package']=='team11_race'
+              assert meta['base_link_name']=='base_link'
+              assert meta['algorithm_launch_file']=='race.launch.py'
+              assert meta['lidar_topic']=='/team11/front_scan'
+              root=ET.fromstring(z.read(meta['vehicle_model_file']))
+              model=root.find('model')
+              assert model.get('name')=='team11'
+              assert model.findtext('static')=='false'
+              assert model.find("./link[@name='base_link']") is not None
+              assert model.find(".//sensor[@name='front_lidar']") is not None
+              assert model.find(".//sensor[@name='front_rgb']") is not None
+              assert model.find(".//sensor[@name='rear_lidar']") is None
+              assert any(p.get('name')=='gz::sim::systems::AckermannSteering'
+                         for p in model.findall('plugin'))
+              launch=z.read('src/team11_race/launch/race.launch.py').decode()
+              for name in ('race_start_mode','race_start_topic','speed_topic',
+                           'steering_topic','lidar_topic','use_sim_time'):
+                  assert name in launch
+              for illegal in ('gz sim','ros_gz_sim create','/clock@',
+                              'run_world.py','traffic_lights_v10.py'):
+                  assert illegal not in launch,illegal
+              control=z.read('src/team11_race/team11_race/controller.py').decode()
+              for illegal in ('worldPose','get_world_pose','/world/',
+                              'model_states','monza_centerline.csv','/race/timing',
+                              'operator_pose'):
+                  assert illegal not in control,illegal
+              print('PASS actual organizer packer, complete source-only car+ROS package, no world/grid operations')
+          PY
+      - name: Keep official ZIP as QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-portable-official-zip
+          path: /tmp/team11-official.zip
+          if-no-files-found: error
