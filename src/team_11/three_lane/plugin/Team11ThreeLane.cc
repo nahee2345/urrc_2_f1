@@ -369,11 +369,25 @@ class Team11ThreeLane:public gz::sim::System,
         changeLength=decision.changeLength;
         lastChangeTravel=traveledFromStart;
         avoidIndex=decision.returning?-1:decision.avoidId;
+        double leadGap=std::numeric_limits<double>::infinity();
+        double leadTtc=std::numeric_limits<double>::infinity();
+        if(!decision.returning){
+          for(const auto &car:traffic){
+            if(car.id!=decision.avoidId)continue;
+            leadGap=avoid::signedGap(s,car.s,lap);
+            const double closing=speed-car.speed;
+            if(closing>avoid::kMinClosingMps)
+              leadTtc=std::max(0.,leadGap-avoid::kVehicleOverlapM)/closing;
+            break;
+          }
+        }
         std::cout<<"[TEAM11 AVOID] "
                  <<(decision.returning?"return ":"pass ")
                  <<(oldLane+1)<<" -> "<<(target+1)
                  <<" length_m="<<changeLength
                  <<" current_mps="<<speed
+                 <<" front_gap_m="<<leadGap
+                 <<" collision_ttc_s="<<leadTtc
                  <<" road_curve="<<roadCurve<<std::endl;
       }else if(!changing && cornerDecision.nextLane>=0 &&
                !decision.blocked){
