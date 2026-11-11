@@ -46,7 +46,7 @@ def main():
                     help="keep selected lane, disable overtaking")
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="enable overtaking (now the default; retained for compatibility)")
-    ap.add_argument("--scenario",choices=("normal","slow-ahead"),default="normal",
+    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast"),default="normal",
                     help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
     ap.add_argument("--practice-cars",action="store_true",
                     help="enable original moving red/blue opponents after solo baseline")
@@ -54,7 +54,7 @@ def main():
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
     if args.scenario!="normal" and not args.practice_cars:
-        ap.error("--scenario slow-ahead requires --practice-cars")
+        ap.error("staged scenarios require --practice-cars")
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
     effective_fixed_lane = args.fixed_lane or not args.practice_cars
