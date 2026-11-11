@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-TRACKS = ("monza", "hungaroring")
+TRACKS = ("monza", "spa", "monaco", "cota", "hungaroring", "baku")
 CAR_WIDTH_M = .25
 WALL_MARGIN_M = .08
 EXTRA_CLEARANCE_M = .03
