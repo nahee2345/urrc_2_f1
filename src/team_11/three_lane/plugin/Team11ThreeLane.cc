@@ -4,6 +4,7 @@
 #include "OvertakePlanner.hh"
 #include "RearDefense.hh"
 #include "RearScan.hh"
+#include "PhysicsDrive.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -49,6 +50,7 @@ class Team11ThreeLane:public gz::sim::System,
     target=lane;
     homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
+    physicsContact=cfg->Get<bool>("physics_contact_mode",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -226,26 +228,64 @@ class Team11ThreeLane:public gz::sim::System,
           continue;
         const bool seen=rear_scan::verifiedReturn(
           rearImage,localX,localY);
-        if(!seen)continue;
+        if(!seen){
+          if(now-lastRearSample[static_cast<size_t>(car.id)]>.7)
+            rearEvidence[static_cast<size_t>(car.id)]=0;
+          continue;
+        }
         // Same rear target is tracked across multiple simulation frames.
         const size_t idx=static_cast<size_t>(car.id);
-        const bool betweenLanes=std::none_of(
-          offsets.begin(),offsets.end(),[&](double o){
-            return std::abs(o-car.lateral)<.30;
-          });
-        bool weaving=betweenLanes;
+        // A single sideways deviation is NOT proof of S-shaped weaving.
+        // Require repeated lateral direction reversals at meaningful speed.
         const double age=now-lastLateralUpdate[idx];
         if(lastLateralUpdate[idx]<0. || age>=.18){
-          if(lastLateralUpdate[idx]>=0. && age<2.){
-            const double rate=std::abs(
-              car.lateral-lastLateral[idx])/std::max(.01,age);
-            if(rate>.55)weaving=true;
+          if(lastLateralUpdate[idx]>=0. && age<1.){
+            const double rate=(car.lateral-lastLateral[idx])/
+                              std::max(.01,age);
+            if(std::abs(rate)>.55 &&
+               std::abs(lastLateralRate[idx])>.55 &&
+               rate*lastLateralRate[idx]<0.)
+              weaveEvidence[idx]=std::min(6,weaveEvidence[idx]+1);
+            else if(std::abs(rate)<.25)
+              weaveEvidence[idx]=std::max(0,weaveEvidence[idx]-1);
+            lastLateralRate[idx]=rate;
+          }else{
+            weaveEvidence[idx]=0;
+            lastLateralRate[idx]=0.;
           }
           lastLateralUpdate[idx]=now;
           lastLateral[idx]=car.lateral;
         }
+        const bool weaving=weaveEvidence[idx]>=2;
+        // Do not count many Gazebo physics steps from the same scan as
+        // independent evidence. Require >=3 spaced observations.
+        const double closing=car.speed-speed;
+        const double ttc=closing>0.1?behind/closing:1e9;
+        // Only accept independent LiDAR frames, not repeated physics
+        // updates that inspect one cached scan many times.
+        const unsigned int frameId=rearFrames.load();
+        if(now-lastRearSample[idx]>=.15 &&
+           frameId!=lastRearFrameId[idx]){
+          if(now-lastRearSample[idx]>1.0)rearEvidence[idx]=0;
+          lastRearSample[idx]=now;
+          lastRearFrameId[idx]=frameId;
+          const bool urgent=behind<=defense::kRearDetectM &&
+             closing>=defense::kClosingMinMps &&
+             ttc<=defense::kThreatTtcS;
+          rearDeclining[idx]=urgent && rearEvidence[idx]>=1 &&
+              ttc<=lastRearTtc[idx]-.10;
+          rearEvidence[idx]=urgent?
+              std::min(12,rearEvidence[idx]+1):0;
+          lastRearTtc[idx]=ttc;
+        }
+        // Three urgent observations OR two with demonstrably falling TTC.
+        const bool confirmed=(
+          rearEvidence[idx]>=3 ||
+          (rearEvidence[idx]>=2 && rearDeclining[idx])) &&
+          now-lastRearSample[idx]<.5;
         rearTargets.push_back({car.id,behind,car.speed,
-                               car.lateral,seen,weaving});
+                               car.lateral,seen,weaving,
+                               confirmed,rearDeclining[idx]});
       }
     }
     // Classify the road before deciding whether a safe passing gap exists.
@@ -323,22 +363,8 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" zigzag="<<rearDecision.zigzag
                  <<" rear_lidar_frames="<<rearFrames.load()
                  <<std::endl;
-      }else if(!changing && defending &&
-               !rearDecision.active && target!=homeLane &&
-               traveledFromStart-lastDefenseTravel>=18. &&
-               !decision.blocked){
-        const int restore=(target<homeLane?target+1:target-1);
-        const double length=avoid::distanceToChange(
-          std::max(speed,state.roadSpeed),spacing);
-        if(avoid::trajectoryClear(state,restore,length,traffic)){
-          lane=target;target=restore;
-          changing=true;changeStart=s;changeLength=length;
-          lastChangeTravel=traveledFromStart;
-          lastDefenseTravel=traveledFromStart;
-          if(target==homeLane)defending=false;
-          std::cout<<"[TEAM11 DEFENSE] clear -> return "
-                   <<(lane+1)<<" -> "<<(target+1)<<std::endl;
-        }
+      // A successfully defended route is the new normal route.
+      // No automatic 2 -> 3 return when the rear contact disappears.
       }else if(decision.blocked && !changing &&
                trackedAt<now-.8){
         trackedAt=now;
@@ -423,8 +449,18 @@ class Team11ThreeLane:public gz::sim::System,
     // instantly from 10 to 3 at a corner.
     speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
     const auto pos=poseAt(s);
-    gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
-        pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    if(physicsContact){
+      const auto body=gz::sim::Model(ego).LinkByName(ecm,"base_link");
+      if(body!=gz::sim::kNullEntity){
+        const auto desired=gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0.,0.,yaw0);
+        physics::guide(body,ecm,gz::sim::worldPose(ego,ecm),
+                       desired,speed,50.,dt,egoPhysicalDrive);
+      }
+    }else{
+      gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
     const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
@@ -582,6 +618,8 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
+  bool physicsContact{false};
+  physics::DriveState egoPhysicalDrive;
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
   bool defending{false};
@@ -589,6 +627,13 @@ class Team11ThreeLane:public gz::sim::System,
   double lastDefenseTravel{-100.};
   std::array<double,2> lastLateral{0.,0.};
   std::array<double,2> lastLateralUpdate{-1.,-1.};
+  std::array<double,2> lastLateralRate{0.,0.};
+  std::array<int,2> weaveEvidence{0,0};
+  std::array<int,2> rearEvidence{0,0};
+  std::array<double,2> lastRearSample{-100.,-100.};
+  std::array<double,2> lastRearTtc{1e9,1e9};
+  std::array<bool,2> rearDeclining{false,false};
+  std::array<unsigned int,2> lastRearFrameId{0,0};
   std::array<bool,2> observed{false,false};
   std::array<size_t,2> lastNearest{0,0};
   std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};

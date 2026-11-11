@@ -46,13 +46,17 @@ def main():
                     help="keep selected lane, disable overtaking")
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="enable overtaking (now the default; retained for compatibility)")
-    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast"),default="normal",
+    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast","rear-contact"),default="normal",
                     help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
+    ap.add_argument("--physics-contact",action="store_true",
+                    help="opt-in physical 50kg TEAM11 versus dynamic 1.5kg opponents; no scripted bounce")
     ap.add_argument("--practice-cars",action="store_true",
                     help="enable original moving red/blue opponents after solo baseline")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
+    if args.physics_contact and not args.practice_cars:
+        ap.error("--physics-contact requires --practice-cars")
     if args.scenario!="normal" and not args.practice_cars:
         ap.error("staged scenarios require --practice-cars")
     if args.fixed_lane and args.allow_lane_change:
@@ -72,7 +76,7 @@ def main():
             ap.error("Gazebo Harmonic 'gz' executable not found")
         pace_lib=build(pace_src,plugin_dir/"pace_bounce","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
-    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,effective_fixed_lane,args.grid,args.practice_cars,args.scenario)
+    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,effective_fixed_lane,args.grid,args.practice_cars,args.scenario,args.physics_contact)
     print("[TEAM11] grid:",manifest["grid_position"],
           "default lane:",manifest["selected_lane_number"],flush=True)
     print("[TEAM11] 3 lanes:",manifest["routes"],flush=True)
@@ -81,7 +85,8 @@ def main():
           "nearest lane:",manifest["nearest_lane_number"],
           "fixed:",effective_fixed_lane,
           "practice cars:",args.practice_cars,
-          "scenario:",args.scenario,flush=True)
+          "scenario:",args.scenario,
+          "physics contact:",args.physics_contact,flush=True)
     if args.prepare_only:
         print("[TEAM11] world prepared; not run in Gazebo",flush=True)
         return 0

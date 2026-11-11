@@ -148,3 +148,31 @@ TEAM11 후방 약 110m에 배치하고, 전방 추월 충돌을 피하려고
 `TEAM11 DEFENSE`(방어 경로 이동/복귀),
 `TEAM11 AVOID`(기존 전방 추월),
 `PACE BOUNCE`(상대차 충돌 연출).
+
+## 9. 후방 방어 안정화 및 물리 충돌 시험 (v2)
+
+- 개발 브랜치: team11-defense-physics-v2 (기존 고정 주행 및 전방 추월 브랜치는 변경하지 않았습니다).
+- 후방 LiDAR는 서로 다른 시간에서 세 번 이상의 유효한 차량 반사 확인 후에만 TTC 5초 이하 방어를 시작합니다.
+- 3번→2번 방어 경로 변경 후 자동으로 3번 복귀하지 않습니다. 2번 경로에서 정상 주행합니다.
+- 실제 S자 접근 또는 추월 임박한 뒤차에 대해 차단 가능한 단일 경로가 없을 때 조건부 S자 주행 후보를 만듭니다.
+- 기존 전방 추월 및 복귀, 3경로 좌표 추종, 5등 RGB 출발 및 코너 속도 정책이 우선합니다.
+- 후방 차량을 차단할 때 직접 충돌하도록 좌우 급조향하지 않으며, 단계적 5차 경로 이동만 허용합니다.
+
+### 물리 충돌 실험 모드 (기본값 유지)
+
+```bash
+cd ~/urrc_2_f1
+git fetch origin team11-defense-physics-v2
+git switch team11-defense-physics-v2
+git pull --ff-only origin team11-defense-physics-v2
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --practice-cars \
+  --scenario rear-fast --physics-contact --start-mode camera
+```
+
+- 기본 주행은 과거와 똑같이 키네마틱/스크립트 튕김 연출입니다. 새로운 물리 시험은 --physics-contact를 지정한 경우에만 활성화됩니다.
+- 물리 시험 모델은 TEAM11=50kg, 연습차량=1.5kg, 동적 강체와 관성·마찰·실제 충돌 형상을 사용합니다.
+- 물리 모드는 두 차량을 위치 텔레포트로 이동하지 않고 제한된 힘과 요 토크로 주행시킵니다. 실제 충돌이 두 차량 모두에 영향을 미칠 수 있습니다.
+- 기존 스크립트로 상대 차량만 튕기는 기능은 물리 모드에서 꺼지며, 완전한 충돌 무반동은 보장되지 않습니다.
+- 물리 힘 기반 15m/s 주행의 완주·안정성·충돌 결과는 실제 Gazebo 시험을 통과해야만 인정합니다.
+- 변경되는 맵은 generated/team11 아래의 생성 월드뿐이며, 원본 맵·그리드는 변경하지 않습니다.
