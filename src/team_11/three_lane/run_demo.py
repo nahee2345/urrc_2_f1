@@ -14,6 +14,7 @@ import threading
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 from prepare import TRACKS, prepare
+from track_catalog import choose, find_source
 
 def build(src, dest, name):
     subprocess.run(["cmake","-S",str(src),"-B",str(dest),
@@ -34,8 +35,9 @@ def stop(proc):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("track",choices=TRACKS)
-    ap.add_argument("--source",default="~/urrc_2")
+    ap.add_argument("track",choices=(*TRACKS, "auto"))
+    ap.add_argument("--world",default=None,help="SDF world for automatic map selection")
+    ap.add_argument("--source",default=None)
     ap.add_argument("--prepare-only",action="store_true")
     ap.add_argument("--server",action="store_true",help="headless Gazebo server")
     ap.add_argument("--start-mode",choices=("camera","immediate"),default="camera",
@@ -49,22 +51,24 @@ def main():
     ap.add_argument("--scenario",choices=("normal","slow-ahead","late-pass","rear-fast","rear-contact"),default="normal",
                     help="slow-ahead: 5m/s red 25m ahead; late-pass: 5m/s red 45m ahead (generated-only)")
     ap.add_argument("--physics-contact",action="store_true",
-                    help="opt-in physical 50kg TEAM11 versus dynamic 1.5kg opponents; no scripted bounce")
+                    help="physical TEAM11 drive and contact, with optional practice cars")
+    ap.add_argument("--physics-drive",action="store_true",
+                    help="enable TEAM11 force/torque physical drive even in solo practice")
     ap.add_argument("--practice-cars",action="store_true",
                     help="enable original moving red/blue opponents after solo baseline")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
-    if args.physics_contact and not args.practice_cars:
-        ap.error("--physics-contact requires --practice-cars")
     if args.scenario!="normal" and not args.practice_cars:
         ap.error("staged scenarios require --practice-cars")
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
+    args.physics_contact = bool(args.physics_contact or args.physics_drive)
     effective_fixed_lane = args.fixed_lane  # default solo still safely enters route 2 at corners
-    src=Path(args.source).expanduser().resolve()
-    if not (src/"race/pace_cars/routes.py").exists():
-        ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")
+    args.track=choose(args.track,world_file=args.world)
+    src=Path(args.source).expanduser().resolve() if args.source else find_source()
+    if not (src/"src/urrc_track_gazebo/tracks/processed"/(args.track+"_centerline.csv")).exists():
+        ap.error("Official source world missing: initialize upstream/urrc_f1_ws submodule")
     dest=src/"generated/team11"/args.track
     plugin_dir=src/"generated/team11"/"build"
     pace_src=HERE/"pace_bounce"
@@ -90,7 +94,7 @@ def main():
     if args.prepare_only:
         print("[TEAM11] world prepared; not run in Gazebo",flush=True)
         return 0
-    sys.path.insert(0,str(src/"race/pace_cars"))
+    sys.path.insert(0,str(HERE/"pace_source"))
     from run import start_signal, fire_start, confirmed_all_off
     env=os.environ.copy()
     env["GZ_PARTITION"]=f"urrc_team11_{os.getuid()}"
@@ -112,7 +116,7 @@ def main():
         with log.open("wb") as fd:
             sim=subprocess.Popen(cmd,cwd=src,env=env,stdout=fd,
                                  stderr=subprocess.STDOUT,start_new_session=True)
-            ready=f"/urrc/{args.track}/pace/start/ready"
+            ready=f"/urrc/{args.track}/team11/pace_start_11_ready_11"
             for _ in range(100):
                 if sim.poll() is not None:
                     raise RuntimeError("Gazebo quit. Inspect "+str(log))

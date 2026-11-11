@@ -11,12 +11,11 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from core import (TRACKS, load_centerline, export_routes, closest_lane,
-                  lane_spacing, projected_obstacle)
+from core import (TRACKS, load_centerline, closest_lane,
+                  projected_obstacle)
+from track_catalog import validate_bundle, map_file, metadata
 
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_contact=False):
-    if physics_contact and not practice_cars:
-        raise ValueError('physics_contact requires practice cars')
     if scenario not in ('normal', 'slow-ahead', 'late-pass', 'rear-fast', 'rear-contact'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario in ('slow-ahead','late-pass') and (not practice_cars or grid_position == 2):
@@ -33,7 +32,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         raise ValueError('TEAM11 start grid must be 1..12')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
-    pace = source / "race/pace_cars"
+    validate_bundle(track, source=source)
+    pace = HERE / "pace_source"
     sys.path.insert(0, str(pace))
     from routes import add_car, generate
     # Source pace generator independently restores grids 02 and 09 for every run.
@@ -43,10 +43,15 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     world = doc.getroot().find("world")
     if world is None:
         raise RuntimeError("Missing Gazebo world")
-    csv_file = source / "src/urrc_track_gazebo/tracks/processed" / (track + "_centerline.csv")
+    csv_file = map_file(track, "centerline.csv")
     points = load_centerline(csv_file)
-    spacing = export_routes(points, destination / "team11_routes")
-    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][grid_position-1]
+    routes = destination / "team11_routes"
+    routes.mkdir(parents=True, exist_ok=True)
+    import shutil
+    for i in range(3):
+        shutil.copy2(map_file(track, f"lane_{i}.csv"), routes / f"lane_{i}.csv")
+    spacing = float(metadata(track)["route_spacing_m"])
+    grid = metadata(track)["grid"][grid_position-1]
     def keep_pace_car(slot):
         if not practice_cars or slot == grid_position:
             return False
@@ -103,7 +108,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Physical contact mode is opt-in; default scripted mode stays identical.
     ET.SubElement(pace_plugin, "physics_contact_mode").text = str(physics_contact).lower()
     if physics_contact:
-        ET.SubElement(pace_plugin, "physics_contact_topic").text = f"/urrc/{track}/team11/physics_contact"
+        ET.SubElement(pace_plugin, "physics_contact_topic").text = f"/urrc/{track}/team11/physics_contact_11"
     if physics_contact:
         ET.SubElement(world, "plugin", filename="gz-sim-contact-system",
                       name="gz::sim::systems::Contact")
@@ -131,7 +136,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 sensor = ET.SubElement(body, "sensor", name="team11_collision_contacts", type="contact")
                 ET.SubElement(sensor, "always_on").text = "true"
                 ET.SubElement(sensor, "update_rate").text = "60"
-                contact_topic = f"/urrc/{track}/team11/physics_contact"
+                contact_topic = f"/urrc/{track}/team11/physics_contact_11"
                 ET.SubElement(sensor, "topic").text = contact_topic
                 contact_conf = ET.SubElement(sensor, "contact")
                 ET.SubElement(contact_conf, "collision").text = "body_collision"
@@ -144,7 +149,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 ET.SubElement(ode, "mu2").text = "0.9"
 
     link = ego_model.find("link[@name='base_link']")
-    camera_topic = f"/urrc/{track}/team11/front/image"
+    camera_topic = f"/urrc/{track}/team11/front_image_11"
     camera_ready_file = destination / "camera_ready.flag"
     camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
     # Aim TEAM11's camera toward the actual gantry from the chosen grid.
@@ -182,7 +187,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ET.SubElement(clip, "near").text = "0.1"
     ET.SubElement(clip, "far").text = "80"
     # Genuine rear-facing Gazebo LiDAR on the very same TEAM11 vehicle.
-    rear_topic = f"/urrc/{track}/team11/rear_scan"
+    rear_topic = f"/urrc/{track}/team11/rear_scan_11"
     rear = ET.SubElement(link, "sensor", name="team11_rear_lidar", type="gpu_lidar")
     ET.SubElement(rear, "pose").text = "-0.20 0 0.16 0 0 3.141592653589793"
     ET.SubElement(rear, "always_on").text = "true"
@@ -304,9 +309,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                            for slot in (2,9) if keep_pace_car(slot))
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
-    grid_data = json.loads(
-        (source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text()
-    )["grid"]
+    grid_data = metadata(track)["grid"]
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
@@ -368,7 +371,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("track", choices=TRACKS)
-    parser.add_argument("--source", default="~/urrc_2")
+    parser.add_argument("--source", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--plugin", default="liburrc_team11.so")
     parser.add_argument("--pace-plugin", default="liburrc_pace_cars.so")
@@ -380,7 +383,8 @@ def main():
     parser.add_argument("--physics-contact", action="store_true")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
-    root = Path(args.source).expanduser().resolve()
+    from track_catalog import find_source
+    root = Path(args.source).expanduser().resolve() if args.source else find_source()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
     result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario, args.physics_contact)
     print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -8,6 +8,7 @@
 #include "CornerPlanner.hh"
 #include "SpeedProfile.hh"
 #include "BoundedTracker.hh"
+#include "LapVerifier.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -104,6 +105,10 @@ class Team11ThreeLane:public gz::sim::System,
     // Centerline s coordinate is common to all three lanes.
     auto &r=routes[1];
     lap=r.back().s+std::hypot(r.back().x-r.front().x,r.back().y-r.front().y);
+    std::vector<lapcheck::Point> actualRoute;
+    actualRoute.reserve(r.size());
+    for(const auto &p:r) actualRoute.push_back({p.s,p.x,p.y,p.z});
+    lapVerifier.Configure(std::move(actualRoute),lap,spacing+.065);
     ready=true;
     std::cout<<"[TEAM11] 3 routes armed, spacing "<<spacing
              <<"m; target_lane="<<(target+1)
@@ -129,7 +134,7 @@ class Team11ThreeLane:public gz::sim::System,
       }
       if(fiveObserved.load() && !redReported){
         redReported=true;
-        std::cout<<"[TEAM11] CAMERA all FIVE red lights confirmed; waiting zero red lamps\n";
+        std::cout<<"[TEAM11] CAMERA at least FOUR red lights confirmed; waiting zero red lamps\n";
       }
       return;
     }
@@ -513,6 +518,7 @@ class Team11ThreeLane:public gz::sim::System,
     // Curvature/yaw/lateral caps are enforced at the point where the
     // curvature occurs (SpeedProfile.hh), then again in BoundedTracker.
     targetSpeed=clamp(targetSpeed,0.,baseSpeed);
+    if(lapVerifier.invalid())targetSpeed=0.; // hard safety hold
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
     // instantly from 10 to 3 at a corner.
@@ -527,7 +533,9 @@ class Team11ThreeLane:public gz::sim::System,
     const bounded::Pose current{actual.Pos().X(),actual.Pos().Y(),
                                 actual.Rot().Yaw()};
     const auto command=bounded::follow(
-      current,goal.x,goal.y,speed,dt,wheelbase,maxSteer,maxYawRate);
+      current,goal.x,goal.y,speed,dt,wheelbase,maxSteer,maxYawRate,
+      lastCommandSteer,1.57);
+    lastCommandSteer=command.steer;
     const double trackError=std::hypot(current.x-onTrack.x,
                                        current.y-onTrack.y);
     if(physicsContact){
@@ -546,12 +554,31 @@ class Team11ThreeLane:public gz::sim::System,
     }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
-    const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
-    if(completedLaps>lapCount){
-      lapCount=completedLaps;
-      std::cout<<"[TEAM11 LAP] completed="<<lapCount
-               <<" distance_m="<<traveledFromStart
-               <<" route="<<(target+1)<<std::endl;
+    const int estimatedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
+    if(estimatedLaps>estimatedLapCount){
+      estimatedLapCount=estimatedLaps;
+      std::cout<<"[TEAM11 ESTIMATED LAP] completed="<<estimatedLapCount
+               <<" commanded_distance_m="<<traveledFromStart<<std::endl;
+    }
+    // Real base_link position, not commanded odometry, owns official practice
+    // completion reporting. Reject off-track, backward or teleported runs.
+    lapObserveClock+=dt;
+    if(lapObserveClock>=.05){
+      const auto valid=lapVerifier.Observe(current.x,current.y,actual.Pos().Z(),
+                                           lapObserveClock,speed);
+      lapObserveClock=0.;
+      if(valid.invalid && !invalidReported){
+        invalidReported=true;
+        std::cout<<"[TEAM11 QA] INVALID reason="<<valid.reason
+                 <<" actual_progress_m="<<valid.progress<<std::endl;
+      }
+      if(valid.lap){
+        lapCount=valid.completed;
+        std::cout<<"[TEAM11 LAP] completed="<<lapCount
+                 <<" actual_progress_m="<<valid.progress
+                 <<" route="<<(target+1)
+                 <<" off_track=0"<<std::endl;
+      }
     }
     trace+=dt;
     if(trace>=1.){
@@ -563,6 +590,8 @@ class Team11ThreeLane:public gz::sim::System,
                <<"m/s steer="<<command.steer*180./M_PI
                <<"deg yaw_rate_deg_s="<<command.yawRate*180./M_PI
                <<" max_steer_deg="<<maxSteer*180./M_PI
+               <<" physical_progress_m="<<lapVerifier.progress()
+               <<" physical_mode="<<physicsContact
                <<" track_error_m="<<trackError
                <<" speed_profile_cap="<<profileSpeedLimit
                <<" corner_approach_cap="<<cornerApproachCap
@@ -650,7 +679,7 @@ class Team11ThreeLane:public gz::sim::System,
     }
     lastLampCount.store(lamps);
     if(cameraStarted.load())return;
-    if(lamps==5){
+    if(lamps==5 || lamps==4){
       offFrames.store(0);
       if(redFrames.fetch_add(1)+1>=2)fiveObserved.store(true);
     }else{
@@ -709,6 +738,11 @@ class Team11ThreeLane:public gz::sim::System,
   bool physicsContact{false};
   ShiftReason changeReason{ShiftReason::Front};
   physics::DriveState egoPhysicalDrive;
+  lapcheck::Verifier lapVerifier;
+  bool invalidReported{false};
+  int estimatedLapCount{0};
+  double lapObserveClock{0.};
+  double lastCommandSteer{0.};
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
   bool defending{false};

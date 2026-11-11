@@ -53,10 +53,10 @@ class PaceCars : public gz::sim::System,
     }
     egoMass=sdf->Get<double>("team11_mass_kg",50.).first;
     otherMass=sdf->Get<double>("pace_mass_kg",1.5).first;
-    const std::string topic = sdf->Get<std::string>("start_topic", "/urrc/pace/start").first;
+    const std::string topic = sdf->Get<std::string>("start_topic", "/urrc/team11/pace_start_11").first;
     if (!this->node.Subscribe(topic, &PaceCars::OnStart, this))
       std::cerr << "[PACE] Cannot subscribe to " << topic << std::endl;
-    this->readyPublisher = this->node.Advertise<gz::msgs::Boolean>(topic + "/ready");
+    this->readyPublisher = this->node.Advertise<gz::msgs::Boolean>(topic + "_ready_11");
     if (sdf->HasElement("car")) {
       auto element=sdf->FindElement("car");
       while (element) {

@@ -5,7 +5,7 @@
 - **연습차량 없는 단독 주행이 기본값**입니다. TEAM 11 차량 1대만 생성합니다.
 - 원본 Monza/Hungaroring 맵, 벽, 그리드 표시와 교통신호는 수정하지 않습니다.
 - Gazebo가 카메라 토픽을 공개하고 TEAM 11의 RGB 이미지 콜백에서 **유효한 첫 프레임을 실제 수신**해야 신호등 점등을 시작합니다.
-- 차에 달린 RGB 카메라에서 빨간불 5개 점등을 연속 **2프레임**, 이후 0개 소등을 연속 **4프레임** 확인하면 출발합니다. 시간이 지나기만 해서 자동 출발하지 않습니다.
+- 차에 달린 RGB 카메라에서 빨간불 4개 이상 점등을 연속 **2프레임**, 이후 0개 소등을 연속 **4프레임** 확인하면 출발합니다. 시간이 지나기만 해서 자동 출발하지 않습니다.
 - 카메라 시야각은 시작 그리드의 신호등 상대 좌표로 계산합니다. 해상도 1280×720, 수평 화각 0.52rad이며 개별 램프의 예상 영상 위치를 이용해 인식합니다.
 - 1번 그리드의 실제 Gazebo 카메라 출발은 이전 시연에서 확인했습니다. **그리드 1~12 전체에서 영상 인식 성공은 아직 검증되지 않았습니다.**
 
@@ -231,7 +231,34 @@ python3 src/team_11/three_lane/run_demo.py monza \
 
 코너 속도 보정만 확인하려면 `--practice-cars --scenario late-pass`를 생략하고 실행합니다. 생성된 연습 월드와 원본 트랙은 분리됩니다.
 
-## 12. 6개 맵 내장 경로 라이브러리 (연습 전용)
+
+## 12. 6개 트랙 내장 및 독립 실행 (2026-11-12)
+
+최신 개발 브랜치에는 6개 트랙별 `maps/<트랙>/centerline.csv`, `lane_0.csv`,
+`lane_1.csv`, `lane_2.csv`, `track.json`이 있습니다. 이 파일로 경로를
+읽고 원본과 해시가 다르면 시작을 중단합니다. 공식 맵 모델과 신호등 리소스는
+`upstream/urrc_f1_ws` 서브모듈을 읽으며, `~/urrc_2`는 필요하지 않습니다.
+
+```bash
+cd ~/urrc_2_f1
+git submodule update --init --recursive
+python3 src/team_11/three_lane/run_demo.py monaco --grid 1 --prepare-only
+python3 src/team_11/three_lane/run_demo.py monza --grid 1 --start-mode camera
+python3 src/team_11/three_lane/run_demo.py monza --grid 1 --start-mode immediate --physics-drive
+```
+
+`--world`로 실제 SDF 파일을 주면 `auto`가 해당 world name과 내장 맵을
+일치시킵니다. 기존 `--physics-contact`도 유지하고 단독 실험용
+`--physics-drive`를 추가했습니다.
+
+**실제 대회 규정과 불일치:** 공식 대회에서는 저장된 경로·월드 pose를 이용한
+주행 판단이 금지됩니다. 이 프로젝트의 해당 실행기는 연습·시연 전용입니다.
+
+**주의:** `[TEAM11 LAP]`은 이제 실제 모델의 위치 기반 연속 진행,
+도로 이탈 및 위치 점프 검사를 통과할 때만 출력합니다.
+`[TEAM11 ESTIMATED LAP]`은 내부 명령상 계산 기록이며 완주로 간주하지 않습니다.
+
+## 13. 기존 map_library 경로 생성기 (연습용) (연습 전용)
 
 TEAM 11의 maps/에 Monza, Spa, Monaco, COTA, Hungaroring, Baku 중앙선 및 그리드 데이터를 저장합니다.
 기준: nahee2345/urrc_f1_ws 커밋 a23c7eec41b98b67ec3a3a2a46f9d7ed957f8290. 원본 월드와 맵은 변경하지 않습니다.
@@ -245,8 +272,9 @@ python3 src/team_11/three_lane/map_library.py --world-name monaco_race --output 
 python3 src/team_11/three_lane/map_library.py --track auto --output /tmp/team11_routes
 ```
 
-경로 생성은 외부 경로 저장소를 필요로 하지 않습니다. 다만 기존 run_demo.py는 외부 시뮬레이션 월드 및
-연습차량 생성기에 아직 의존하므로, 경로 라이브러리만으로 공식 참가 패키지가 완성되는 것은 아닙니다.
+경로 생성은 외부 경로 저장소를 필요로 하지 않습니다. 다만 run_demo.py는 서브모듈의 시뮬레이션 월드 및
+팀 내부 pace_source 연습차량 생성기를 사용하므로, 경로 라이브러리만으로 공식 참가 패키지가 완성되는 것은 아닙니다.
 
 **대회 규정:** urrc_f1_ws/race/README_KO.md의 공식 규칙은 저장된 트랙 좌표 및 Gazebo world pose
 기반 주행을 금지하며 주행 판단에 차량 LiDAR만 허용합니다. 이 라이브러리는 연습 시뮬레이션 전용입니다.
+
