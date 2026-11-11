@@ -679,7 +679,7 @@ class Team11ThreeLane:public gz::sim::System,
     }
     lastLampCount.store(lamps);
     if(cameraStarted.load())return;
-    if(lamps>=4){
+    if(lamps==5 || lamps==4){
       offFrames.store(0);
       if(redFrames.fetch_add(1)+1>=2)fiveObserved.store(true);
     }else{
