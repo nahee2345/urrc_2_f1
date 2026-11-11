@@ -43,15 +43,15 @@ def main():
     ap.add_argument("--lane",choices=("auto","1","2","3"),default="auto",
                     help="lane 1=left, 2=center, 3=right; auto=nearest")
     ap.add_argument("--fixed-lane",action="store_true",
-                    help="lock selected lane (default for --lane auto)")
+                    help="keep selected lane, disable overtaking")
     ap.add_argument("--allow-lane-change",action="store_true",
-                    help="opt in to opponent avoidance after the launch merge")
+                    help="enable overtaking (now the default; retained for compatibility)")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
-    effective_fixed_lane = not args.allow_lane_change
+    effective_fixed_lane = args.fixed_lane
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
         ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")
