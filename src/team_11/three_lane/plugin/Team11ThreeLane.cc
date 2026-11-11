@@ -283,6 +283,13 @@ class Team11ThreeLane:public gz::sim::System,
         pos.x,pos.y,pos.z+.003,0,0,yaw0));
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
+    const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
+    if(completedLaps>lapCount){
+      lapCount=completedLaps;
+      std::cout<<"[TEAM11 LAP] completed="<<lapCount
+               <<" distance_m="<<traveledFromStart
+               <<" route="<<(target+1)<<std::endl;
+    }
     trace+=dt;
     if(trace>=1.){
       trace=0.;
@@ -405,7 +412,7 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false};
-  int lane{1},target{1},homeLane{1};
+  int lane{1},target{1},homeLane{1},lapCount{0};
   gz::sim::Entity avoidEntity{gz::sim::kNullEntity};
   double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
