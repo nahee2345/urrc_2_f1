@@ -17,9 +17,9 @@ from core import (TRACKS, load_centerline, export_routes, closest_lane,
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_contact=False):
     if physics_contact and not practice_cars:
         raise ValueError('physics_contact requires practice cars')
-    if scenario not in ('normal', 'slow-ahead', 'rear-fast', 'rear-contact'):
+    if scenario not in ('normal', 'slow-ahead', 'late-pass', 'rear-fast', 'rear-contact'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
-    if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
+    if scenario in ('slow-ahead','late-pass') and (not practice_cars or grid_position == 2):
         raise ValueError('slow-ahead requires --practice-cars and grid other than 2')
     if scenario == 'rear-contact' and (not physics_contact or grid_position == 9):
         raise ValueError('rear-contact requires --physics-contact and grid other than 9')
@@ -47,13 +47,22 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
     grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][grid_position-1]
+    def keep_pace_car(slot):
+        if not practice_cars or slot == grid_position:
+            return False
+        if scenario in ('rear-fast','rear-contact'):
+            return slot == 9
+        if scenario == 'late-pass':
+            return slot == 2
+        return True
+
     # The baseline requested by the user has NO practice traffic.
     # With --practice-cars, restore all original cars except the one
     # occupying TEAM11's selected spawn slot.
     pace_plugin = next(p for p in world.findall("plugin")
                        if p.get("name") == "urrc::PaceCars")
     for slot in (2, 9):
-        if practice_cars and slot != grid_position and (scenario not in ('rear-fast', 'rear-contact') or slot == 9):
+        if keep_pace_car(slot):
             continue
         name = f"urrc_pace_grid_{slot:02d}"
         model = world.find(f"model[@name='{name}']")
@@ -219,7 +228,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Optional reproducible integration test: move the RED 5m/s test car
     # onto TEAM11's selected lane 25m ahead. This changes GENERATED world only;
     # original painted grids and source tracks are never edited.
-    if scenario == 'slow-ahead':
+    if scenario in ('slow-ahead','late-pass'):
         red = world.find("model[@name='urrc_pace_grid_02']")
         red_config = next(c for c in pace_plugin.findall("car")
                           if c.findtext("name") == "urrc_pace_grid_02")
@@ -229,12 +238,12 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
         lap_distance = points[-1].s + math.hypot(
             points[-1].x - points[0].x, points[-1].y - points[0].y)
-        start_s = (grid_s + 25.) % lap_distance
+        start_s = (grid_s + (25. if scenario == 'slow-ahead' else 45.)) % lap_distance
         first = next((i for i, row in enumerate(rows)
                       if float(row[0]) >= start_s), 0)
         rotated = rows[first:] + rows[:first]
         origin_s = float(rotated[0][0])
-        staged_file = destination / "team11_red_5mps_ahead.csv"
+        staged_file = destination / ("team11_red_5mps_ahead.csv" if scenario == "slow-ahead" else "team11_red_5mps_45m_ahead.csv")
         with staged_file.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(["distance_m", "x_m", "y_m", "z_m", "yaw_rad"])
@@ -278,7 +287,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
     expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
     for slot in (2,9):
-        if practice_cars and slot != grid_position and (scenario not in ("rear-fast","rear-contact") or slot == 9):
+        if keep_pace_car(slot):
             expected[f"urrc_pace_grid_{slot:02d}"] = slot
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
@@ -292,8 +301,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         raise RuntimeError(f"Expected exactly one pace plugin; found {len(pace_plugins)}")
     names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
     expected_pace = sorted(f"urrc_pace_grid_{slot:02d}"
-                           for slot in (2,9) if practice_cars and slot != grid_position
-                           and (scenario not in ("rear-fast","rear-contact") or slot == 9))
+                           for slot in (2,9) if keep_pace_car(slot))
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
     grid_data = json.loads(
@@ -302,7 +310,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
-        if (scenario == "slow-ahead" and name == "urrc_pace_grid_02") or (scenario in ("rear-fast","rear-contact") and name == "urrc_pace_grid_09"):
+        if (scenario in ("slow-ahead","late-pass") and name == "urrc_pace_grid_02") or (scenario in ("rear-fast","rear-contact") and name == "urrc_pace_grid_09"):
             continue
         if (abs(pose[0] - original["x"]) > 1e-6 or
             abs(pose[1] - original["y"]) > 1e-6 or
@@ -338,8 +346,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "practice_scenario": scenario,
         "rear_lidar_topic": rear_topic,
         "rear_lidar_enabled": True,
-        "scenario_target_speed_mps": 5 if scenario == "slow-ahead" else None,
-        "scenario_target_initial_gap_m": 25 if scenario == "slow-ahead" else None,
+        "scenario_target_speed_mps": 5 if scenario in ("slow-ahead","late-pass") else None,
+        "scenario_target_initial_gap_m": (25 if scenario == "slow-ahead" else 45 if scenario == "late-pass" else None),
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 15,
         "straight_speed_range_mps": [10, 15],
@@ -368,7 +376,7 @@ def main():
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
-    parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast","rear-contact"), default="normal")
+    parser.add_argument("--scenario", choices=("normal","slow-ahead","late-pass","rear-fast","rear-contact"), default="normal")
     parser.add_argument("--physics-contact", action="store_true")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
