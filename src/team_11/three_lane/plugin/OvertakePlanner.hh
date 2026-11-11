@@ -111,7 +111,7 @@ inline Decision evaluate(const State &state,const std::vector<Car> &cars) {
     }
     return decision;
   }
-  const double preferred=std::max(0.,std::min(state.roadSpeed,15.));
+
   const Car *front=nullptr,*avoided=nullptr;
   double nearest=kDetectM+.001;
   for(const auto &car:cars){
@@ -127,7 +127,10 @@ inline Decision evaluate(const State &state,const std::vector<Car> &cars) {
   if(front){
     const double followingSpeed=std::sqrt(std::max(0.,
       front->speed*front->speed+2.*4.*std::max(0.,nearest-kFrontGapM)));
-    decision.followSpeed=std::min(preferred,followingSpeed);
+    // Do not slow to a distant corner's 5-7m/s target just because a
+    // lead car is visible at 30-50m. The separate distance-aware corner
+    // profile governs safe braking at the actual turn.
+    decision.followSpeed=followingSpeed;
     // A far target does not trigger passing or suppress defense: only
     // confirmed imminent collision authorizes front overtaking.
     const double closing=state.speed-front->speed;
