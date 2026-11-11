@@ -94,7 +94,7 @@ def find_source() -> Path:
 
 
 def _git_blob_sha(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + bytes([0]) + data).hexdigest()
 
 
 def validate_bundle(track: str, source=None) -> dict:

@@ -14,6 +14,7 @@ import threading
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 from prepare import TRACKS, prepare
+from track_catalog import choose, find_source
 
 def build(src, dest, name):
     subprocess.run(["cmake","-S",str(src),"-B",str(dest),
@@ -34,8 +35,9 @@ def stop(proc):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("track",choices=TRACKS)
-    ap.add_argument("--source",default="~/urrc_2")
+    ap.add_argument("track",choices=(*TRACKS, "auto"))
+    ap.add_argument("--world",default=None,help="SDF world for automatic map selection")
+    ap.add_argument("--source",default=None)
     ap.add_argument("--prepare-only",action="store_true")
     ap.add_argument("--server",action="store_true",help="headless Gazebo server")
     ap.add_argument("--start-mode",choices=("camera","immediate"),default="camera",
@@ -62,9 +64,10 @@ def main():
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
     effective_fixed_lane = args.fixed_lane  # default solo still safely enters route 2 at corners
-    src=Path(args.source).expanduser().resolve()
-    if not (src/"race/pace_cars/routes.py").exists():
-        ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")
+    args.track=choose(args.track,world_file=args.world)
+    src=Path(args.source).expanduser().resolve() if args.source else find_source()
+    if not (src/"src/urrc_track_gazebo/tracks/processed"/(args.track+"_centerline.csv")).exists():
+        ap.error("Official source world missing: initialize upstream/urrc_f1_ws submodule")
     dest=src/"generated/team11"/args.track
     plugin_dir=src/"generated/team11"/"build"
     pace_src=HERE/"pace_bounce"
@@ -90,7 +93,7 @@ def main():
     if args.prepare_only:
         print("[TEAM11] world prepared; not run in Gazebo",flush=True)
         return 0
-    sys.path.insert(0,str(src/"race/pace_cars"))
+    sys.path.insert(0,str(HERE/"pace_source"))
     from run import start_signal, fire_start, confirmed_all_off
     env=os.environ.copy()
     env["GZ_PARTITION"]=f"urrc_team11_{os.getuid()}"

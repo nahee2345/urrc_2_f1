@@ -11,8 +11,9 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from core import (TRACKS, load_centerline, export_routes, closest_lane,
-                  lane_spacing, projected_obstacle)
+from core import (TRACKS, load_centerline, closest_lane,
+                  projected_obstacle)
+from track_catalog import validate_bundle, map_file, metadata
 
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_contact=False):
     if physics_contact and not practice_cars:
@@ -33,7 +34,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         raise ValueError('TEAM11 start grid must be 1..12')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
-    pace = source / "race/pace_cars"
+    validate_bundle(track, source=source)
+    pace = HERE / "pace_source"
     sys.path.insert(0, str(pace))
     from routes import add_car, generate
     # Source pace generator independently restores grids 02 and 09 for every run.
@@ -43,10 +45,15 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     world = doc.getroot().find("world")
     if world is None:
         raise RuntimeError("Missing Gazebo world")
-    csv_file = source / "src/urrc_track_gazebo/tracks/processed" / (track + "_centerline.csv")
+    csv_file = map_file(track, "centerline.csv")
     points = load_centerline(csv_file)
-    spacing = export_routes(points, destination / "team11_routes")
-    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][grid_position-1]
+    routes = destination / "team11_routes"
+    routes.mkdir(parents=True, exist_ok=True)
+    import shutil
+    for i in range(3):
+        shutil.copy2(map_file(track, f"lane_{i}.csv"), routes / f"lane_{i}.csv")
+    spacing = float(metadata(track)["route_spacing_m"])
+    grid = metadata(track)["grid"][grid_position-1]
     def keep_pace_car(slot):
         if not practice_cars or slot == grid_position:
             return False
@@ -304,9 +311,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                            for slot in (2,9) if keep_pace_car(slot))
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
-    grid_data = json.loads(
-        (source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text()
-    )["grid"]
+    grid_data = metadata(track)["grid"]
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
@@ -368,7 +373,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("track", choices=TRACKS)
-    parser.add_argument("--source", default="~/urrc_2")
+    parser.add_argument("--source", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--plugin", default="liburrc_team11.so")
     parser.add_argument("--pace-plugin", default="liburrc_pace_cars.so")
@@ -380,7 +385,8 @@ def main():
     parser.add_argument("--physics-contact", action="store_true")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
-    root = Path(args.source).expanduser().resolve()
+    from track_catalog import find_source
+    root = Path(args.source).expanduser().resolve() if args.source else find_source()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
     result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario, args.physics_contact)
     print(json.dumps(result, ensure_ascii=False, indent=2))
