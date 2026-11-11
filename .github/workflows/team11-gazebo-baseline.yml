@@ -1,0 +1,32 @@
+name: TEAM11 Gazebo baseline reality check
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-three-lane-practice]
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-gazebo-baseline.yml'
+jobs:
+  compile-plugins:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Build TEAM11 controller and opponent collision plugins
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/team11-controller -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-controller --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-bounce -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-bounce --parallel 2
+      - name: Confirm both real Gazebo libraries
+        run: |
+          test -s /tmp/team11-controller/liburrc_team11.so
+          test -s /tmp/team11-bounce/liburrc_pace_cars.so
+          echo "PASS: compiled real gz-sim8 plugins"
