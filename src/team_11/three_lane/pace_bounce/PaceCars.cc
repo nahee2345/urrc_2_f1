@@ -30,6 +30,7 @@ struct Car {
   gz::sim::Entity entity{gz::sim::kNullEntity};
   double speed{0}, zOffset{0.003};
   double lastHit{-100.};
+  bool gravityReleased{false};
   double hitX{0},hitY{0};
 };
 class PaceCars : public gz::sim::System,
@@ -162,6 +163,12 @@ class PaceCars : public gz::sim::System,
         // mass ratio are computed by Gazebo's physics solver; no teleport.
         const gz::sim::Link base(
           gz::sim::Model(car.entity).LinkByName(ecm,"base_link"));
+        if(!car.gravityReleased){
+          base.SetGravityEnabled(ecm,true);
+          car.gravityReleased=true;
+          std::cout<<"[PACE PHYSICS] released gravity on start for "
+                   <<car.name<<std::endl;
+        }
         const auto actual=gz::sim::worldPose(car.entity,ecm);
         physical::apply(base,ecm,actual,{
             pose.Pos().X(),pose.Pos().Y(),pose.Rot().Yaw(),car.speed},
