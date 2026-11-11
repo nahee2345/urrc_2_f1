@@ -6,7 +6,7 @@ on:
       - 'src/team_11/**'
       - '.github/workflows/team11-six-map-bundle.yml'
   push:
-    branches: [main, 'feature/team11-race-lidar-only-v1']
+    branches: [main, 'feature/team11-six-map-practice']
     paths:
       - 'src/team_11/**'
       - '.github/workflows/team11-six-map-bundle.yml'
