@@ -162,6 +162,7 @@ class Team11ThreeLane:public gz::sim::System,
     const std::array<double,3> offsets{spacing,0.,-spacing};
     std::vector<avoid::Car> traffic;
     const auto &middle=routes[1];
+    const double now=std::chrono::duration<double>(info.simTime).count();
     if(physicsCollisions){
       // Re-project REAL physics position to the existing 3-route arc length.
       // Do not use motor time as a substitute for movement after an impact.
@@ -191,7 +192,6 @@ class Team11ThreeLane:public gz::sim::System,
       }
     }
 
-    const double now=std::chrono::duration<double>(info.simTime).count();
     for(size_t j=0;j<practice.size();j++){
       const auto other=practice[j];
       if(other==gz::sim::kNullEntity || other==ego)continue;
