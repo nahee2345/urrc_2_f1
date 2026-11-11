@@ -179,10 +179,10 @@ python3 src/team_11/three_lane/run_demo.py monza \
 # 실제 20m/s 연습차량을 내 경로 후방 18m에 배치해 접촉 확인
 python3 src/team_11/three_lane/run_demo.py monza \
   --source ~/urrc_2 --grid 1 --practice-cars --fixed-lane \
-  --physics-collisions --scenario physics-impact
+  --physics-collisions --scenario physics-impact --start-mode immediate
 ```
 
-둘 다 원본 트랙과 원본 그리드는 수정하지 않고 `generated/team11` 월드만 생성합니다.
+두 명령 모두 원본 트랙과 원본 그리드는 수정하지 않고 `generated/team11` 월드만 생성합니다. `physics-impact --start-mode immediate`는 충돌 시험을 위해 두 동적 차량만 즉시 출발시키는 테스트 전용 모드이며, 정상 주행의 5등 신호 출발 기능은 유지됩니다.
 
 **판정 기준:** `[TEAM11 PHYSICS CONTACT]`는 실제 Gazebo 접촉 센서의
 `gz.msgs.Contacts` 메시지에 **연습차량 충돌체가 포함된 경우에만** 출력합니다.
