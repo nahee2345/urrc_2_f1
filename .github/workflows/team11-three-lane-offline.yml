@@ -154,3 +154,29 @@ jobs:
           assert controller.findtext("fixed_lane")=="true"
           print("PASS grid 1 -> fixed lane 3")
           PY
+      - name: Validate camera aim at gantry across all twelve grids
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,math,subprocess,sys,xml.etree.ElementTree as ET
+          for track in ("monza","hungaroring"):
+              for grid in range(1,13):
+                  subprocess.run([sys.executable,
+                      "src/team_11/three_lane/run_demo.py",track,
+                      "--source","urrc_source","--prepare-only","--grid",str(grid),
+                      "--start-mode","camera"],check=True,capture_output=True,text=True)
+                  base=Path("urrc_source/generated/team11")/track
+                  data=json.loads((base/"team11_manifest.json").read_text())
+                  world=ET.parse(data["world_file"]).getroot().find("world")
+                  car=world.find(f"model[@name='urrc_pace_grid_{grid:02d}']")
+                  sensor=car.find("./link[@name='base_link']/sensor[@name='team11_front_camera']")
+                  values=[float(v) for v in sensor.findtext("pose").split()]
+                  assert abs(values[4]-data["camera_pitch_rad"])<1e-6
+                  assert abs(values[5]-data["camera_yaw_rad"])<1e-6
+                  assert sensor.findtext("camera/image/width")=="1280"
+                  assert sensor.findtext("camera/image/height")=="720"
+                  assert abs(float(sensor.findtext("camera/horizontal_fov"))-.52)<1e-6
+                  assert -1.5 < values[4] < 0.
+                  assert -1.5 < values[5] < 1.5
+                  print("PASS camera aim",track,grid,round(data["camera_target_distance_m"],2))
+          PY
