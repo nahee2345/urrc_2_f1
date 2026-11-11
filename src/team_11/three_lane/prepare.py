@@ -55,6 +55,19 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
     ego_model = world.find(f"model[@name='{ego_name}']")
+    # Heavy ego mass is descriptive in this static kinematic demonstration.
+    ego_link = ego_model.find("link[@name='base_link']")
+    inertial = ET.SubElement(ego_link, "inertial")
+    ET.SubElement(inertial, "mass").text = "50"
+    tensor = ET.SubElement(inertial, "inertia")
+    for tag, value in (("ixx","0.1294"),("iyy","1.1483"),
+                       ("izz","1.2621"),("ixy","0"),("ixz","0"),("iyz","0")):
+        ET.SubElement(tensor,tag).text=value
+    pace_plugin = next(p for p in world.findall("plugin")
+                       if p.get("name") == "urrc::PaceCars")
+    ET.SubElement(pace_plugin, "team11_ego_name").text = ego_name
+    ET.SubElement(pace_plugin, "team11_mass_kg").text = "50"
+    ET.SubElement(pace_plugin, "pace_mass_kg").text = "1.5"
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
     camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
@@ -138,6 +151,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "start_mode": start_mode,
         "grid_position": grid_position, "start_camera_topic": camera_topic,
         "grid_lane_policy": "odd=3,even=1",
+        "collision_mode": "scripted_asymmetric_bounce",
+        "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
         "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
