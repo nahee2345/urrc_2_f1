@@ -100,9 +100,24 @@ def main():
                 time.sleep(.5)
             else:
                 raise RuntimeError("Pace plugin not ready; inspect "+str(log))
-            # TEAM11 ego starts immediately in the Gazebo plugin.
+            if args.start_mode=="camera":
+                # Do not turn on the five lights before the ego camera is advertised.
+                camera_topic=manifest["start_camera_topic"]
+                for _ in range(100):
+                    if sim.poll() is not None:
+                        raise RuntimeError("Gazebo exited while waiting for camera")
+                    response=subprocess.run(["gz","topic","-l"],env=env,
+                                            capture_output=True,text=True,timeout=6)
+                    if camera_topic in response.stdout.splitlines():
+                        print("[TEAM11 CAMERA] topic ready:",camera_topic,flush=True)
+                        break
+                    time.sleep(.5)
+                else:
+                    raise RuntimeError("TEAM11 camera topic not ready: "+camera_topic)
+            # Camera mode gates only TEAM11 using actual image analysis.
+
             # The original pace cars may start after the regular light sequence;
-            # light-camera/service failure must NOT terminate the ego run.
+            # pace-car light failures are logged and are not overridden by synthetic start.
             def run_pace_signal():
                 nonlocal lights
                 try:
