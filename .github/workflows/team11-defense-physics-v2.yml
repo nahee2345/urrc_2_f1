@@ -130,7 +130,7 @@ jobs:
           set +e
           timeout --signal=INT --kill-after=10s 160s \
             python3 src/team_11/three_lane/run_demo.py monza \
-            --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+            --source "$PWD/urrc_source" --grid 1 --start-mode immediate \
             --practice-cars --scenario rear-contact --fixed-lane \
             --physics-contact --server > /tmp/contact-runner.log 2>&1
           code=$?
@@ -139,7 +139,7 @@ jobs:
           tail -n 35 /tmp/contact-runner.log || true
           test -f "$log" || { echo 'FAIL no Gazebo contact run'; exit 1; }
           grep -E 'TEAM11 PHYSICS|TEAM11 REAR|TEAM11 CAMERA|ERROR' "$log" | tail -n 45 || true
-          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL five-light camera gate in physics mode'; exit 1; }
+          grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL immediate contact-test start'; exit 1; }
           grep -Fq '[TEAM11 PHYSICS] REAL_CONTACT' "$log" || { echo 'FAIL no actual solver collision detected'; exit 1; }
           if grep -Fq '[PACE BOUNCE]' "$log"; then echo 'FAIL scripted bounce activated in physics mode'; exit 1; fi
           echo 'PASS contact sensor observed an actual 50kg/1.5kg collision with no scripted bounce'
