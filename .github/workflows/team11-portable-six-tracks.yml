@@ -25,6 +25,12 @@ jobs:
         run: |
           python -m compileall -q src/team_11/three_lane
           (cd src/team_11/three_lane && python -m unittest -v test_core test_track_catalog)
+      - name: Standalone C++ route, steering and lap-verifier regressions
+        run: |
+          for test in test_overtake_planner test_corner_bounded test_rear_defense test_lap_verifier; do
+            g++ -std=c++17 -Wall -Wextra -Werror -O2 "src/team_11/three_lane/plugin/${test}.cc" -o "/tmp/${test}"
+            "/tmp/${test}"
+          done
       - name: Verify exact official source-map revisions
         run: |
           python - <<'PY'
@@ -70,3 +76,61 @@ jobs:
           assert len([q for q in world.findall('plugin') if q.get('name')=='urrc::Team11ThreeLane'])==1
           print('PASS: isolated world and three bundled routes for',track)
           PY
+
+  gazebo-smoke:
+    needs: [catalog, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [kinematic, physical]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - name: Real Gazebo bounded drive smoke test
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          args=""
+          if [ "${{ matrix.mode }}" = "physical" ]; then args="--physics-drive"; fi
+          timeout --signal=INT --kill-after=10s 110s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source upstream/urrc_f1_ws --grid 1 --start-mode immediate \
+              --server $args >/tmp/team11-gazebo-run.log 2>&1
+          status=$?
+          set -e
+          tail -n 50 /tmp/team11-gazebo-run.log || true
+          log="$PWD/upstream/urrc_f1_ws/generated/team11/monza/team11_gazebo.log"
+          test -f "$log" || { echo 'FAIL: Gazebo log missing'; exit 1; }
+          grep -E 'TEAM11|ERROR|invalid' "$log" | tail -n 40 || true
+          python3 - "$log" <<'PY'
+          import sys,re
+          from pathlib import Path
+          text=Path(sys.argv[1]).read_text(errors="replace")
+          assert '[TEAM11] IMMEDIATE start' in text, 'No physical Gazebo model start'
+          sample=[float(x) for x in re.findall(r'physical_progress_m=([0-9.eE+-]+)',text)]
+          assert sample and max(sample)>1.0, ('No verified physical forward movement',sample)
+          assert '[TEAM11 QA] INVALID' not in text, 'Vehicle left road or jumped'
+          print('PASS physical location progress',max(sample))
+          PY
+      - name: Save Gazebo diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-six-track-${{ matrix.mode }}-gazebo-smoke
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-gazebo-run.log
+            upstream/urrc_f1_ws/generated/team11/monza/team11_gazebo.log

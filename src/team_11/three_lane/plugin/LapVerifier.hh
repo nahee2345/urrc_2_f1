@@ -93,6 +93,7 @@ class Verifier {
     return result;
   }
   bool invalid()const{return invalid_;}
+  double progress()const{return progress_;}
   const char * reason()const{return reason_;}
  private:
   Result Fail(const char *why) {

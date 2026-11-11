@@ -590,6 +590,8 @@ class Team11ThreeLane:public gz::sim::System,
                <<"m/s steer="<<command.steer*180./M_PI
                <<"deg yaw_rate_deg_s="<<command.yawRate*180./M_PI
                <<" max_steer_deg="<<maxSteer*180./M_PI
+               <<" physical_progress_m="<<lapVerifier.progress()
+               <<" physical_mode="<<physicsContact
                <<" track_error_m="<<trackError
                <<" speed_profile_cap="<<profileSpeedLimit
                <<" corner_approach_cap="<<cornerApproachCap
