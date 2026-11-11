@@ -143,7 +143,7 @@ jobs:
           assert 'otherMass' in source and 'egoMass' in source
           print('PASS source-level collision mode wiring (runtime Gazebo test pending)')
           PY
-      - name: Verify default grid1 lane3 fixed for solo practice
+      - name: Verify default grid1 lane3 center corner-merge enabled for solo practice
         run: |
           python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --grid 1 --lane auto --start-mode immediate >/dev/null
           python - <<'PY'
@@ -154,12 +154,12 @@ jobs:
           data=json.loads(path.read_text())
           assert data["grid_position"]==1
           assert data["selected_lane_number"]==3
-          assert data["fixed_lane"] is True
+          assert data["fixed_lane"] is False
           world=ET.parse(data["world_file"]).getroot().find("world")
           controller=next(p for p in world.findall("plugin") if p.get("name")=="urrc::Team11ThreeLane")
           assert controller.findtext("initial_lane")=="2"
-          assert controller.findtext("fixed_lane")=="true"
-          print("PASS solo grid 1 -> fixed lane 3")
+          assert controller.findtext("fixed_lane")=="false"
+          print("PASS solo grid 1 -> initial lane 3 (automatic corner merge to 2)")
           PY
       - name: Validate camera aim at gantry across all twelve grids
         run: |
@@ -202,7 +202,7 @@ jobs:
           assert data['gentle_corner_speed_range_mps']==[10,15]
           assert data['corner_enter_curvature_per_m']==0.030
           assert data['corner_exit_curvature_per_m']==0.022
-          assert data['fixed_lane'] is True
+          assert data['fixed_lane'] is False
           assert controller.findtext('base_speed_mps')=='15'
           assert controller.findtext('lane_change_length_m')=='18'
           src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
