@@ -18,6 +18,7 @@
 #include <gz/msgs/boolean.pb.h>
 #include <gz/msgs/image.pb.h>
 #include <gz/msgs/laserscan.pb.h>
+#include <gz/msgs/contacts.pb.h>
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
 #include <algorithm>
@@ -52,6 +53,13 @@ class Team11ThreeLane:public gz::sim::System,
     homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
     physicsCollisions=cfg->Get<bool>("physics_collisions",false).first;
+    contactTopic=cfg->Get<std::string>("contact_topic","").first;
+    if(physicsCollisions && !contactTopic.empty() &&
+       !node.Subscribe(contactTopic,&Team11ThreeLane::OnContact,this)){
+      std::cerr<<"[TEAM11 PHYSICS ERROR] contact sensor subscription failed: "
+               <<contactTopic<<std::endl;
+      return;
+    }
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -541,6 +549,22 @@ class Team11ThreeLane:public gz::sim::System,
     }
     return active;
   }
+  void OnContact(const gz::msgs::Contacts &report){
+    for(int i=0;i<report.contact_size();i++){
+      const auto &c=report.contact(i);
+      const auto first=c.collision1().name();
+      const auto second=c.collision2().name();
+      const bool pace=(first.find("urrc_pace_grid_02")!=std::string::npos ||
+                       first.find("urrc_pace_grid_09")!=std::string::npos ||
+                       second.find("urrc_pace_grid_02")!=std::string::npos ||
+                       second.find("urrc_pace_grid_09")!=std::string::npos);
+      if(!pace)continue;
+      if(physicsContactCount.fetch_add(1)==0)
+        std::cout<<"[TEAM11 PHYSICS CONTACT] real Gazebo contact pair "
+                 <<first<<" || "<<second<<" (no scripted bounce)"
+                 <<std::endl;
+    }
+  }
   void OnRearScan(const gz::msgs::LaserScan &laser){
     rear_scan::Scan next;
     next.angleMin=laser.angle_min();
@@ -627,7 +651,8 @@ class Team11ThreeLane:public gz::sim::System,
   gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic;
+  std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic,contactTopic;
+  std::atomic<unsigned int> physicsContactCount{0};
   std::mutex rearMutex;
   rear_scan::Scan lastRearImage;
   std::chrono::steady_clock::time_point rearArrival{};
