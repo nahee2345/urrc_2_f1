@@ -187,7 +187,11 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "lane_spacing_m": spacing, "speed_mps": 15,
         "straight_speed_range_mps": [10, 15],
         "lane_change_length_m": 12,
-        "steering_threshold_deg": 10, "corner_speed_range_mps": [3, 7],
+        "steering_threshold_deg": 10, "corner_speed_range_mps": [5, 7],
+        "gentle_corner_speed_range_mps": [10, 15],
+        "corner_enter_curvature_per_m": 0.030,
+        "corner_exit_curvature_per_m": 0.022,
+        "sharp_corner_curvature_per_m": 0.080,
         "max_deceleration_mps2": 4.0, "max_acceleration_mps2": 2.0,
         "routes": [str(destination/"team11_routes"/f"lane_{j}.csv") for j in range(3)],
         "note": "Kinematic demonstration: pose control, not force/steering joint simulation"
