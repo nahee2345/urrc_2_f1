@@ -13,7 +13,7 @@ constexpr double kClosingMinMps=2.;
 constexpr double kThreatTtcS=5.;
 constexpr double kLaneTolerance=.40;
 constexpr double kShiftEndGapM=7.;
-constexpr double kDefenseCooldownM=8.;
+constexpr double kDefenseCooldownM=28.;
 
 struct RearTarget {
   int id{-1};
@@ -38,7 +38,7 @@ struct Decision {
   double length{18.};
   bool active{false};
   bool zigzag{false};
-  bool returnHome{false};
+  // A completed defense stays on its chosen lane: no home-lane return.
   double ttc{std::numeric_limits<double>::infinity()};
   const char* reason{"NO_THREAT"};
 };
@@ -108,7 +108,7 @@ inline Decision evaluate(const State &s,
   d.ttc=soonest;
   d.rearId=threat->id;
   d.zigzag=threat->uncertain;
-  d.reason=threat->uncertain?"ZIGZAG_THREAT":"REAR_PASS_IMMINENT";
+  d.reason=threat->uncertain?"ZIGZAG_CONFIRMED":"REAR_PASS_IMMINENT";
 
   int desired=-1;
   if(threat->uncertain) {
@@ -128,10 +128,15 @@ inline Decision evaluate(const State &s,
       }
     }
   }
+  // If the faster approaching car has no OTHER lane we can intercept,
+  // the only available defensive pattern is the user-requested stepped S.
+  // It is still subject to the same continuous TTC and safe-entry gate.
   if(desired<0 || desired==s.car.lane){
-    d.reason="LANE_ALREADY_COVERED_OR_UNKNOWN";
-    return d;
+    d.zigzag=true;
+    d.reason="FAST_REAR_NO_BLOCKABLE_ROUTE";
+    desired=(s.car.lane==1 ? s.zigzagEndpoint : 1);
   }
+  if(desired==s.car.lane || desired<0 || desired>2)return d;
   // Only move to an adjacent candidate on the way to the desired target.
   const int candidate=s.car.lane+(desired>s.car.lane?1:-1);
   const double length=avoid::distanceToChange(
