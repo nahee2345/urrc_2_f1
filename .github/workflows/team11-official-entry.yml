@@ -74,3 +74,44 @@ jobs:
           name: team11-portable-official-zip
           path: /tmp/team11-official.zip
           if-no-files-found: error
+  gazebo-sdf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Parse real Gazebo Harmonic vehicle file
+        run: |
+          gz sdf -p src/team_11/team11/src/team11_race/models/team11_car/model.sdf >/tmp/team11-expanded.sdf
+          grep -q 'team11' /tmp/team11-expanded.sdf
+          grep -q 'AckermannSteering' /tmp/team11-expanded.sdf
+          echo 'PASS Gazebo Harmonic SDF parser'
+  ros-jazzy-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+      - name: Install ROS 2 Jazzy participant build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions \
+            ros-jazzy-rclpy ros-jazzy-launch-ros ros-jazzy-ros-gz-bridge \
+            ros-jazzy-sensor-msgs ros-jazzy-geometry-msgs ros-jazzy-std-msgs python3-numpy
+      - name: Compile independently from the submission folder
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --base-paths src/team_11/team11/src \
+            --packages-select team11_race --build-base /tmp/team11-build \
+            --install-base /tmp/team11-install --log-base /tmp/team11-log
+          source /tmp/team11-install/setup.bash
+          python3 -c 'import team11_race.controller; import team11_race.adapter'
+          ros2 pkg prefix team11_race
+          echo 'PASS standalone ROS 2 package built from official submission only'
