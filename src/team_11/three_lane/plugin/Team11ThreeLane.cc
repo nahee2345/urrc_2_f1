@@ -56,6 +56,7 @@ class Team11ThreeLane:public gz::sim::System,
     startMode=cfg->Get<std::string>("start_mode","camera").first;
     cameraTopic=cfg->Get<std::string>("camera_topic","").first;
     cameraReadyFile=cfg->Get<std::string>("camera_ready_file","").first;
+    lampSpacingPx=cfg->Get<double>("lamp_spacing_px",0.).first;
     if(startMode!="immediate" && startMode!="camera"){
       std::cerr<<"[TEAM11 ERROR] Invalid start mode "<<startMode<<"\n";return;
     }
@@ -295,70 +296,42 @@ class Team11ThreeLane:public gz::sim::System,
     }
   }
  private:
-  // The gantry has FIVE horizontally separated red lamps.
-  // A single red-pixel count cannot establish that all five were on.
-  // Count coherent red columns and reject unrelated red objects.
-  static int CountRedLamps(const gz::msgs::Image &image) {
+  // Camera is calibrated per grid to point at the five-lamp housing.
+  // Test each individual expected lens, instead of requiring five clean
+  // connected components; emissive glow can merge neighboring red blobs.
+  int CountRedLamps(const gz::msgs::Image &image)const{
     const int w=static_cast<int>(image.width());
     const int h=static_cast<int>(image.height());
     const size_t stride=static_cast<size_t>(image.step());
     const auto &bytes=image.data();
-    if(w<100 || h<80 || stride<3u*static_cast<size_t>(w) ||
+    if(w<200 || h<100 || lampSpacingPx<2. ||
+       stride<3u*static_cast<size_t>(w) ||
        bytes.size()<stride*static_cast<size_t>(h))return -1;
-    const int x0=w/5,x1=w*4/5,y0=h/12,y1=h*2/3;
-    std::vector<int> column(w,0);
-    std::vector<double> rowSum(w,0.);
-    for(int y=y0;y<y1;y++) {
-      for(int x=x0;x<x1;x++) {
-        const size_t i=static_cast<size_t>(y)*stride+3u*x;
-        const int r=static_cast<unsigned char>(bytes[i]);
-        const int g=static_cast<unsigned char>(bytes[i+1]);
-        const int b=static_cast<unsigned char>(bytes[i+2]);
-        if(r>=135 && r>g*2 && r>b*2 && g<95 && b<95){
-          column[x]++;
-          rowSum[x]+=y;
+    const double dx=lampSpacingPx*w/1280.;
+    if(dx<3. || 4.*dx>w*.70)return -1; // The five lamps cannot be resolved.
+    const int centerX=w/2,centerY=h/2;
+    const int radiusX=std::max(2,static_cast<int>(std::round(dx*.32)));
+    const int radiusY=std::max(5,static_cast<int>(std::round(dx*.65)));
+    int active=0;
+    for(int lamp=0;lamp<5;lamp++){
+      const int cx=static_cast<int>(std::round(centerX+(lamp-2)*dx));
+      int redPixels=0;
+      const int x0=std::max(0,cx-radiusX),x1=std::min(w-1,cx+radiusX);
+      const int y0=std::max(0,centerY-radiusY),y1=std::min(h-1,centerY+radiusY);
+      for(int y=y0;y<=y1;y++){
+        for(int x=x0;x<=x1;x++){
+          const size_t i=static_cast<size_t>(y)*stride+3u*x;
+          const int r=static_cast<unsigned char>(bytes[i]);
+          const int g=static_cast<unsigned char>(bytes[i+1]);
+          const int b=static_cast<unsigned char>(bytes[i+2]);
+          if(r>=100 && r>g*1.6 && r>b*1.6 &&
+             r-g>=55 && r-b>=55)redPixels++;
         }
       }
+      if(redPixels>=std::max(3,static_cast<int>((x1-x0+1)*(y1-y0+1)*.004)))
+        active++;
     }
-    struct Blob {double x,y;int pixels,width;};
-    std::vector<Blob> blobs;
-    int left=-1,pixels=0;double totalY=0.;
-    for(int x=x0;x<=x1;x++){
-      const bool active=x<x1 && column[x]>=2;
-      if(active){
-        if(left<0){left=x;pixels=0;totalY=0.;}
-        pixels+=column[x];totalY+=rowSum[x];
-      }else if(left>=0){
-        const int width=x-left;
-        if(width>=2 && width<=w/12 && pixels>=8){
-          blobs.push_back({(left+x-1)*.5,totalY/pixels,pixels,width});
-        }
-        left=-1;
-      }
-    }
-    // Lamps share one row and have approximately even horizontal spacing.
-    // Noise may create extra blobs; look for a five-lamp subset.
-    if(blobs.size()<5)return static_cast<int>(std::min<size_t>(blobs.size(),4));
-    for(size_t a=0;a+4<blobs.size();a++){
-      for(size_t b=a+4;b<blobs.size();b++){
-        const double gap=(blobs[b].x-blobs[a].x)/4.;
-        if(gap<4. || gap>w/10.)continue;
-        int matched=0;
-        for(int j=0;j<5;j++){
-          const double center=blobs[a].x+j*gap;
-          bool found=false;
-          for(const auto &candidate:blobs){
-            if(std::abs(candidate.x-center)<=std::max(2.,gap*.22) &&
-               std::abs(candidate.y-blobs[a].y)<std::max(6.,h*.025)){
-              found=true;break;
-            }
-          }
-          if(found)matched++;
-        }
-        if(matched==5)return 5;
-      }
-    }
-    return 0;
+    return active;
   }
   void OnImage(const gz::msgs::Image &image){
     const int lamps=CountRedLamps(image);
@@ -438,7 +411,7 @@ class Team11ThreeLane:public gz::sim::System,
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
-  double maxDecel{4.},maxAccel{2.},cameraTrace{0.};
+  double maxDecel{4.},maxAccel{2.},cameraTrace{0.},lampSpacingPx{0.};
   double initialDx{0.},initialDy{0.},initialS{0.},traveledFromStart{0.};
 };
 }
