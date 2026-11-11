@@ -9,6 +9,7 @@
 #include <gz/sim/components/ParentEntity.hh>
 #include <gz/transport/Node.hh>
 #include <gz/msgs/boolean.pb.h>
+#include <gz/msgs/contacts.pb.h>
 #include <gz/plugin/Register.hh>
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
@@ -44,6 +45,12 @@ class PaceCars : public gz::sim::System,
     this->worldEntity=world;
     egoName=sdf->Get<std::string>("team11_ego_name","").first;
     physicsContact=sdf->Get<bool>("physics_contact_mode",false).first;
+    if(physicsContact){
+      physicsContactTopic=sdf->Get<std::string>("physics_contact_topic","").first;
+      if(!physicsContactTopic.empty() &&
+          !node.Subscribe(physicsContactTopic,&PaceCars::OnContact,this))
+        std::cerr<<"[TEAM11 PHYSICS] Cannot subscribe to contact sensor"<<std::endl;
+    }
     egoMass=sdf->Get<double>("team11_mass_kg",50.).first;
     otherMass=sdf->Get<double>("pace_mass_kg",1.5).first;
     const std::string topic = sdf->Get<std::string>("start_topic", "/urrc/pace/start").first;
@@ -172,6 +179,21 @@ class PaceCars : public gz::sim::System,
     }
   }
  private:
+  void OnContact(const gz::msgs::Contacts &msg){
+    for(int i=0;i<msg.contact_size();i++){
+      const auto &hit=msg.contact(i);
+      const std::string first=hit.collision1();
+      const std::string second=hit.collision2();
+      const std::string both=first+" "+second;
+      if(both.find(egoName)==std::string::npos)continue;
+      if(both.find("urrc_pace_grid_02")==std::string::npos &&
+         both.find("urrc_pace_grid_09")==std::string::npos)continue;
+      if(contactEvents.fetch_add(1)==0)
+        std::cout<<"[TEAM11 PHYSICS] REAL_CONTACT ego="<<egoName
+                 <<" collision1="<<first<<" collision2="<<second
+                 <<" (Gazebo contact solver)"<<std::endl;
+    }
+  }
   void OnStart(const gz::msgs::Boolean &msg){
     if(msg.data())this->startRequested.store(true);
   }
@@ -186,6 +208,8 @@ class PaceCars : public gz::sim::System,
   gz::sim::Entity egoEntity{gz::sim::kNullEntity};
   double egoMass{50.},otherMass{1.5};
   bool physicsContact{false};
+  std::string physicsContactTopic;
+  std::atomic<unsigned int> contactEvents{0};
 };
 } // namespace urrc
 GZ_ADD_PLUGIN(urrc::PaceCars, gz::sim::System,
