@@ -132,7 +132,7 @@ class Team11ThreeLane:public gz::sim::System,
     bool blocked[3]={false,false,false};
     const auto &middle=routes[1];
     for(const auto other: practice){
-      if(other==gz::sim::kNullEntity)continue;
+      if(other==gz::sim::kNullEntity || other==ego)continue;
       const auto pose=gz::sim::worldPose(other,ecm);
       const double ox=pose.Pos().X(),oy=pose.Pos().Y();
       double best=1e99, obsS=0;
@@ -338,7 +338,7 @@ class Team11ThreeLane:public gz::sim::System,
   }
   void findEntities(gz::sim::EntityComponentManager &ecm){
     if(ego!=gz::sim::kNullEntity &&
-       practice[0]!=gz::sim::kNullEntity && practice[1]!=gz::sim::kNullEntity)return;
+       practice[1]!=gz::sim::kNullEntity)return;
     ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
              gz::sim::components::ParentEntity>(
       [&](const gz::sim::Entity &ent,const gz::sim::components::Model *,
