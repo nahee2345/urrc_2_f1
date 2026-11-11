@@ -441,7 +441,8 @@ class Team11ThreeLane:public gz::sim::System,
     const double yaw1=std::atan2(p2.y-p1.y,p2.x-p1.x);
     double yawChange=std::atan2(std::sin(yaw1-yaw0),std::cos(yaw1-yaw0));
     const double curvature=yawChange/std::max(.05,std::hypot(p1.x-p0.x,p1.y-p0.y));
-    const double steer=std::atan(wheelbase*curvature);
+    const double steer=clamp(std::atan(wheelbase*curvature),
+                             -maxSteer,maxSteer);
     // Preview 36m of ACTUAL XY trajectory geometry, not waypoint yaw.
     // Earlier raw yaw preview reported spurious ~1.5rad/m on straights.
     // Braking from 15 to 3m/s at 4m/s2 needs 27m.
@@ -460,17 +461,13 @@ class Team11ThreeLane:public gz::sim::System,
     // Straight and gentle curves use the same 10-15 m/s policy.
     // Ordinary and sharp curves both use a 5-7 m/s target.
     // Hysteresis prevents repeated acceleration/braking at the threshold.
-    constexpr double kCornerEnter=0.030;
-    constexpr double kCornerExit=0.022;
-    constexpr double kSharp=0.080;
-    if(!cornerMode && futureCurvature>=kCornerEnter)cornerMode=true;
-    else if(cornerMode && futureCurvature<=kCornerExit)cornerMode=false;
     double targetSpeed=baseSpeed;
     if(cornerMode){
-      const double blend=clamp((futureCurvature-kCornerEnter)/
-                               (kSharp-kCornerEnter),0.,1.);
+      const double blend=clamp((futureCurvature-corner::kEnterCurvature)/
+                               (corner::kSharpCurvature-corner::kEnterCurvature),0.,1.);
       targetSpeed=7.-2.*blend; // 7 m/s ordinary; 5 m/s sharp
     }
+    targetSpeed=std::min(targetSpeed,cornerApproachCap);
     // Excessive commanded steering still reduces speed even if a noisy
     // preview momentarily classifies the road as straight.
     if(std::abs(steer)>slowThreshold)targetSpeed=std::min(targetSpeed,7.);
@@ -486,6 +483,14 @@ class Team11ThreeLane:public gz::sim::System,
     }
     if(std::isfinite(followingSpeed))
       targetSpeed=std::min(targetSpeed,followingSpeed);
+    // Limit curvature, available yaw rate and lateral acceleration on
+    // the REAL target trajectory (including its 5th-order lane merge).
+    const double maxKappa=bounded::curvatureLimit(wheelbase,maxSteer);
+    if(futureCurvature>maxKappa+1.e-6)
+      targetSpeed=0.; // requested path is geometrically impossible
+    else
+      targetSpeed=std::min(targetSpeed,
+        bounded::speedForCurvature(futureCurvature,maxYawRate));
     targetSpeed=clamp(targetSpeed,0.,baseSpeed);
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
