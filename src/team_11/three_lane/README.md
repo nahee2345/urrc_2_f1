@@ -176,3 +176,31 @@ python3 src/team_11/three_lane/run_demo.py monza \
 - 기존 스크립트로 상대 차량만 튕기는 기능은 물리 모드에서 꺼지며, 완전한 충돌 무반동은 보장되지 않습니다.
 - 물리 힘 기반 15m/s 주행의 완주·안정성·충돌 결과는 실제 Gazebo 시험을 통과해야만 인정합니다.
 - 변경되는 맵은 generated/team11 아래의 생성 월드뿐이며, 원본 맵·그리드는 변경하지 않습니다.
+
+## 10. 코너 중앙 합류 / 최대 조향 ±30° (별도 개발 브랜치)
+
+- 현재 개발 브랜치: `team11-corner-center-steer30-v1`.
+- 본 변경에서는 기존 3경로 CSV, 전방 추월 `OvertakePlanner.hh`, 후방 방어 `RearDefense.hh`, RGB 신호등 출발 및 연습차량 물리 시험 코드를 삭제하지 않습니다.
+- 새 `CornerPlanner.hh`는 원본 도로 중앙선의 52m 앞 곡률을 미리 검사해 코너가 가까우면 1번/3번 경로에서 **2번(중앙) 경로**로 합류를 계획합니다.
+- 합류 전부터 7m/s(급코너 5m/s) 이하로 감속하며, 진행 중인 전방 추월과 경로변경을 우선합니다. 중앙 경로가 충돌 위험이 있으면 강제 합류하지 않습니다.
+- 2번 경로 진입 완료 후에는 중앙 경로를 유지하며 코너 통과 뒤 자동으로 기존 1/3번 경로에 돌아가지 않습니다. 다음 전방 추월이나 새로운 안전한 방어 상황은 기존 정책으로 판단합니다.
+- 사용자 요청에 맞춰 **연습차량 없는 기본 솔로 주행도 코너 중앙 합류를 실행합니다.** 특정 경로 고정 시험이 필요하면 `--fixed-lane`을 지정합니다.
+- `BoundedTracker.hh`는 경로 CSV의 위치와 방향을 즉시 강제하지 않고, **키네마틱 바이시클 모델**로 다음 위치·방향을 계산합니다. 조향각 ±30°와 최대 회전속도 약 68.75°/s(1.2rad/s)를 지키도록 경로 곡률을 제한합니다.
+- 차량 축거 0.33m 기준 실행 가능한 최대 곡률은 tan(30°)/0.33m ≈ **1.75m⁻¹**, 최소 회전반경은 약 **0.572m**입니다. 횡가속도 기준 2.5m/s²도 적용하며, 도달 불가능한 곡률을 요구하면 진행을 중단합니다.
+- 목표 속도·조향각은 실제 목표 경로와 실시간 추적 오차에 따라 낮아질 수 있습니다. 현재 `--physics-contact` 모드는 별도 힘/토크 동역학 시험이며, 실제 접촉에 의한 추가 회전까지 절대 제한하는 것을 의미하지 않습니다.
+- 진단 로그: `TEAM11 CORNER`(코너 중앙 합류), `yaw_rate_deg_s`, `max_steer_deg`, `track_error_m`, `steer`, `preview_curvature`.
+
+### 실행
+
+```bash
+cd ~/urrc_2_f1
+git fetch origin
+git switch team11-corner-center-steer30-v1
+git pull --ff-only origin team11-corner-center-steer30-v1
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --start-mode camera
+```
+
+코너 합류만 검증하려면 `--start-mode immediate --server`로 실행할 수 있습니다. 기본 `--start-mode camera`에서는 기존의 5등 적색 신호등 소등 인식 후 출발합니다.
+
+기존 전방/후방 추월·충돌 연습은 `--practice-cars` 옵션을 추가합니다. 원본 맵은 수정하지 않으며 실제 주행 중 도로 이탈 여부는 별도의 Gazebo 장시간 시험으로 검증해야 합니다.
