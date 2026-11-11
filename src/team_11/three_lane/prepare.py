@@ -14,7 +14,9 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing, projected_obstacle)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal'):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_contact=False):
+    if physics_contact and not practice_cars:
+        raise ValueError('physics_contact requires practice cars')
     if scenario not in ('normal', 'slow-ahead', 'rear-fast'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
@@ -87,6 +89,37 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ET.SubElement(pace_plugin, "team11_ego_name").text = ego_name
     ET.SubElement(pace_plugin, "team11_mass_kg").text = "50"
     ET.SubElement(pace_plugin, "pace_mass_kg").text = "1.5"
+    # Physical contact mode is opt-in; default scripted mode stays identical.
+    ET.SubElement(pace_plugin, "physics_contact_mode").text = str(physics_contact).lower()
+    if physics_contact:
+        for model in world.findall("model"):
+            name = model.get("name", "")
+            if name not in (ego_name, "urrc_pace_grid_02", "urrc_pace_grid_09"):
+                continue
+            is_ego = name == ego_name
+            mass = 50. if is_ego else 1.5
+            model.find("static").text = "false"
+            body = model.find("link[@name='base_link']")
+            assert body is not None
+            if body.find("inertial") is None:
+                inertial = ET.SubElement(body, "inertial")
+                ET.SubElement(inertial, "mass").text = str(mass)
+                tensor = ET.SubElement(inertial, "inertia")
+                # Solid rectangular body dimensions 0.50 x .23 x .16m.
+                dims = (.50, .23, .16)
+                for axis, value in (("ixx",mass*(dims[1]**2+dims[2]**2)/12.),
+                                    ("iyy",mass*(dims[0]**2+dims[2]**2)/12.),
+                                    ("izz",mass*(dims[0]**2+dims[1]**2)/12.),
+                                    ("ixy",0.),("ixz",0.),("iyz",0.)):
+                    ET.SubElement(tensor, axis).text = f"{value:.8f}"
+            collision = body.find("collision[@name='body_collision']")
+            if collision is not None:
+                surface = ET.SubElement(collision, "surface")
+                friction = ET.SubElement(surface, "friction")
+                ode = ET.SubElement(friction, "ode")
+                ET.SubElement(ode, "mu").text = "0.9"
+                ET.SubElement(ode, "mu2").text = "0.9"
+
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
     camera_ready_file = destination / "camera_ready.flag"
@@ -158,6 +191,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("spacing_m", str(spacing)),
         ("wheelbase_m", ".33"),
         ("base_speed_mps", "15"),
+        ("physics_contact_mode", str(physics_contact).lower()),
         ("steering_slow_threshold_deg", "10"),
         ("slow_factor", ".8"),
         ("max_deceleration_mps2", "4.0"),
@@ -280,7 +314,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "grid_lane_policy": "physical side (original grids odd-right/even-left)",
         "grid_signed_lateral_m": grid_lateral,
         "grid_physical_side": "left" if grid_lateral > 0 else "right",
-        "collision_mode": "scripted_asymmetric_bounce",
+        "collision_mode": "gazebo_dynamic_contact" if physics_contact else "scripted_asymmetric_bounce",
+        "physics_contact_mode": physics_contact,
         "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
         "practice_cars": [name for name in sorted(names)],
         "practice_cars_enabled": practice_cars,
@@ -318,11 +353,12 @@ def main():
     parser.add_argument("--fixed-lane", action="store_true")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
     parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast"), default="normal")
+    parser.add_argument("--physics-contact", action="store_true")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario, args.physics_contact)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
