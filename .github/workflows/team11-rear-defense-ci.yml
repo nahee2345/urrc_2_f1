@@ -134,7 +134,7 @@ jobs:
             if test -f "$log" &&
                grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" &&
                grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" &&
-               grep -Fq '[TEAM11 DEFENSE]' "$log"; then
+               grep -Fq '[TEAM11 AVOID] finished lane=2' "$log"; then
               echo "PASS rear LiDAR-triggered lane-defense detected at $i sec"
               break
             fi
@@ -151,7 +151,8 @@ jobs:
           grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL original 5-lamp departure'; exit 1; }
           grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" || { echo 'FAIL no real laser scan received'; exit 1; }
           grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" || { echo 'FAIL no rear blocking transition'; exit 1; }
-          echo 'PASS real rear LiDAR triggered 3->2 route defense, RGB light gate retained'
+          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || { echo 'FAIL defense maneuver did not finish on lane 2'; exit 1; }
+          echo 'PASS real rear LiDAR triggered completed 3->2 defense, RGB light gate retained'
       - name: Upload independent real Gazebo evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -160,5 +161,70 @@ jobs:
           if-no-files-found: ignore
           path: |
             /tmp/team11-rear-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
+  original-front-real-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Install original Gazebo dependencies
+        run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Retain original RGB departure, front 3 to 2 passing and 2 to 3 rejoin
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 225s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+              --practice-cars --scenario slow-ahead --server \
+            > /tmp/team11-front-regression.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 210); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" &&
+               grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log" &&
+               grep -Fq '[TEAM11 AVOID] finished lane=3' "$log"; then
+              echo 'PASS original 3->2 passing and 2->3 rejoin'
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          set -e
+          test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
+          grep -E 'TEAM11 CAMERA|TEAM11 REAR|TEAM11 AVOID|TEAM11 DEFENSE' "$log" | tail -n 50 || true
+          grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL RGB camera'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL official five-red departure'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" || { echo 'FAIL original front overtake disappeared'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || { echo 'FAIL original pass change unfinished'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log" || { echo 'FAIL original rejoin disappeared'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] finished lane=3' "$log" || { echo 'FAIL original rejoin unfinished'; exit 1; }
+          echo 'PASS original front passing/rejoin physically executed in Gazebo'
+      - name: Upload original-front integration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-front-regression-gazebo-logs
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-front-regression.log
             urrc_source/generated/team11/monza/team11_gazebo.log
             urrc_source/generated/team11/monza/team11_manifest.json
