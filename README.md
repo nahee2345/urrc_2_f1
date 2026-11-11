@@ -65,10 +65,8 @@ bash watch_v10.sh monaco
 
 맵 종료: 맵 실행 터미널에서 `Ctrl+C`.
 
+## TEAM 11 주행 시연
 
-## TEAM 01 개발·검증 인수인계
-
-- [제작 변경사항·현재 구현 범위·검증 담당자 체크리스트](src/team_01/team01_race/docs/TEAM01_BUILDER_HANDOFF_KO.md)
-- [검증 결과 보고서 표준 양식](src/team_01/team01_race/docs/TEAM01_VALIDATION_REPORT_TEMPLATE_KO.md)
-
-제작 담당자는 **코드 구현·수정·GitHub 업로드**를 수행합니다. 별도 검증 담당자는 **실제 Gazebo 실행·측정·결과 보고**를 수행합니다. 문서에 기재된 목표와 제안 기준은 실주행 PASS를 의미하지 않습니다.
+- [TEAM 11 3경로 주행·신호등·코너·추월·후방 방어 실행 안내](src/team_11/three_lane/README.md)
+- 기본 시연은 TEAM 11 차량만 생성하고, `--practice-cars` 옵션을 지정한 경우에만 연습 상대차량을 추가합니다.
+- 실제 Gazebo 1랩 완주 및 안전성 검증은 별도 수행해야 합니다.
