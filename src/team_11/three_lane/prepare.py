@@ -266,6 +266,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                     ("ixx","0.018"),("iyy","0.055"),("izz","0.060"),
                     ("ixy","0"),("ixz","0"),("iyz","0")):
                     ET.SubElement(tensor,tag).text=val
+            # Keep the dynamically simulated model still until the official
+            # five-lamp camera start. Gravity is enabled via Link API at start.
+            ET.SubElement(link,"gravity").text="false"
             # The official road mesh and source world are unchanged.
             collision=link.find("collision[@name='body_collision']")
             if collision is not None:
