@@ -17,8 +17,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         raise ValueError(f'Unsupported start mode: {start_mode}')
     if str(lane) not in ('auto','1','2','3'):
         raise ValueError(f'Invalid lane {lane}; expected auto or 1..3')
-    if grid_position not in (1, 2):
-        raise ValueError('TEAM11 start grid must be 1 or 2')
+    if not 1 <= grid_position <= 12:
+        raise ValueError('TEAM11 start grid must be 1..12')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     pace = source / "race/pace_cars"
@@ -35,20 +35,22 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
     grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][grid_position-1]
-    if grid_position == 2:
-        # Prevent exact overlap with the original red practice car.
-        original = world.find("model[@name='urrc_pace_grid_02']")
+    # TEAM11 occupies its own selected grid. Suppress an original pace car
+    # only if the selected grid is also a pace-car starting position.
+    if grid_position in (2,9):
+        original_name = f"urrc_pace_grid_{grid_position:02d}"
+        original = world.find(f"model[@name='{original_name}']")
         if original is None:
-            raise RuntimeError('Original grid-02 practice car not found')
+            raise RuntimeError(f'Original grid practice car not found: {original_name}')
         world.remove(original)
         pace_plugin = next(p for p in world.findall('plugin')
                            if p.get('name') == 'urrc::PaceCars')
         for car in list(pace_plugin.findall('car')):
-            if car.findtext('name') == 'urrc_pace_grid_02':
+            if car.findtext('name') == original_name:
                 pace_plugin.remove(car)
     nearest_lane = closest_lane(points, grid["x"], grid["y"])
     # Fixed starting-grid mapping, with explicit --lane overriding for diagnostics.
-    initial_lane = (2 if grid_position == 1 else 0) if str(lane) == "auto" else int(lane) - 1
+    initial_lane = (2 if grid_position % 2 else 0) if str(lane) == "auto" else int(lane) - 1
     runner = {"position": grid_position, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
@@ -92,9 +94,10 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ):
         ET.SubElement(ctrl, tag).text = val
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
-    expected = ({"urrc_pace_grid_01": 1, "urrc_pace_grid_02": 2,
-                 "urrc_pace_grid_09": 9} if grid_position == 1 else
-                {"urrc_pace_grid_02": 2, "urrc_pace_grid_09": 9})
+    expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
+    for slot in (2,9):
+        if slot != grid_position:
+            expected[f"urrc_pace_grid_{slot:02d}"] = slot
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
         if name not in models:
@@ -106,8 +109,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     if len(pace_plugins) != 1:
         raise RuntimeError(f"Expected exactly one pace plugin; found {len(pace_plugins)}")
     names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
-    expected_pace = (["urrc_pace_grid_02", "urrc_pace_grid_09"]
-                     if grid_position == 1 else ["urrc_pace_grid_09"])
+    expected_pace = sorted(f"urrc_pace_grid_{slot:02d}"
+                           for slot in (2,9) if slot != grid_position)
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
     grid_data = json.loads(
@@ -134,7 +137,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "fixed_lane": fixed_lane,
         "start_mode": start_mode,
         "grid_position": grid_position, "start_camera_topic": camera_topic,
-        "grid_lane_policy": {"1": 3, "2": 1},
+        "grid_lane_policy": "odd=3,even=1",
         "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
@@ -157,7 +160,7 @@ def main():
     parser.add_argument("--start-mode", choices=("camera", "immediate"), default="camera")
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
-    parser.add_argument("--grid", type=int, choices=(1,2), default=1)
+    parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
