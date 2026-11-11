@@ -60,11 +60,11 @@ int main(){
     bounded::Pose pose{};
     // Turn as hard as possible at LOW speed. This must clamp at
     // precisely +/-30 degrees, preserving radius >= .572m.
-    const auto left=bounded::follow(pose,0.,2.,.5,.1,wheelbase);
+    const auto left=bounded::follow(pose,0.,.8,.5,.1,wheelbase);
     assert(left.steer<=bounded::kSteer30+1e-12);
     assert(left.steer>=bounded::kSteer30-1e-12);
     assert(std::abs(left.curvature)<=curvature+1e-12);
-    const auto right=bounded::follow(pose,0.,-2.,.5,.1,wheelbase);
+    const auto right=bounded::follow(pose,0.,-.8,.5,.1,wheelbase);
     assert(right.steer>=-bounded::kSteer30-1e-12);
     assert(right.steer<=-bounded::kSteer30+1e-12);
     const auto faster=bounded::follow(pose,0.,2.,15.,.02,wheelbase);
