@@ -1,4 +1,5 @@
 // Exhibition pace cars: kinematic offset-lane tracking, not participant AI.
+#include "../plugin/PhysicsDrive.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -28,6 +29,7 @@ struct Car {
   std::vector<Point> points;
   gz::sim::Entity entity{gz::sim::kNullEntity};
   double speed{0}, zOffset{0.003};
+  urrc::physics::DriveState dynamicDrive;
   double lastHit{-100.};
   double hitX{0},hitY{0};
 };
@@ -41,6 +43,7 @@ class PaceCars : public gz::sim::System,
                  gz::sim::EventManager &) override {
     this->worldEntity=world;
     egoName=sdf->Get<std::string>("team11_ego_name","").first;
+    physicsContact=sdf->Get<bool>("physics_contact_mode",false).first;
     egoMass=sdf->Get<double>("team11_mass_kg",50.).first;
     otherMass=sdf->Get<double>("pace_mass_kg",1.5).first;
     const std::string topic = sdf->Get<std::string>("start_topic", "/urrc/pace/start").first;
@@ -79,6 +82,7 @@ class PaceCars : public gz::sim::System,
   void PreUpdate(const gz::sim::UpdateInfo &info,
                  gz::sim::EntityComponentManager &ecm) override {
     if (info.paused)return;
+    const double dt=std::chrono::duration<double>(info.dt).count();
     if(egoEntity==gz::sim::kNullEntity && !egoName.empty()){
       ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
                gz::sim::components::ParentEntity>(
@@ -130,7 +134,7 @@ class PaceCars : public gz::sim::System,
       gz::math::Pose3d pose(p1.x+(p2.x-p1.x)*t,p1.y+(p2.y-p1.y)*t,
                            p1.z+(p2.z-p1.z)*t+car.zOffset,
                            0,0,p1.yaw+dyaw*t);
-      if(hasEgo) {
+      if(!physicsContact && hasEgo) {
         const double dx=pose.Pos().X()-egoPose.Pos().X();
         const double dy=pose.Pos().Y()-egoPose.Pos().Y();
         const double d=std::hypot(dx,dy);
@@ -155,7 +159,16 @@ class PaceCars : public gz::sim::System,
           pose.Rot()=gz::math::Quaterniond(0.,0.,pose.Rot().Yaw()+.9*std::sin(M_PI*t/2.)*weight);
         }
       }
-      gz::sim::Model(car.entity).SetWorldPoseCmd(ecm,pose);
+      if(physicsContact){
+        const auto base=gz::sim::Model(car.entity).LinkByName(ecm,"base_link");
+        if(base!=gz::sim::kNullEntity){
+          const auto actual=gz::sim::worldPose(car.entity,ecm);
+          physics::guide(base,ecm,actual,pose,car.speed,otherMass,
+                         dt,car.dynamicDrive);
+        }
+      }else{
+        gz::sim::Model(car.entity).SetWorldPoseCmd(ecm,pose);
+      }
     }
   }
  private:
@@ -172,6 +185,7 @@ class PaceCars : public gz::sim::System,
   std::string egoName;
   gz::sim::Entity egoEntity{gz::sim::kNullEntity};
   double egoMass{50.},otherMass{1.5};
+  bool physicsContact{false};
 };
 } // namespace urrc
 GZ_ADD_PLUGIN(urrc::PaceCars, gz::sim::System,
