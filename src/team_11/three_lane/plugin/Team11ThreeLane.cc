@@ -2,6 +2,8 @@
 // Vehicle moves by pose command, not physical steering joints.
 // It observes model poses in Gazebo and logs equivalent bicycle steering.
 #include "OvertakePlanner.hh"
+#include "RearDefense.hh"
+#include "RearScan.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -13,6 +15,7 @@
 #include <gz/transport/Node.hh>
 #include <gz/msgs/boolean.pb.h>
 #include <gz/msgs/image.pb.h>
+#include <gz/msgs/laserscan.pb.h>
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
 #include <algorithm>
@@ -23,6 +26,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -58,6 +62,13 @@ class Team11ThreeLane:public gz::sim::System,
     startMode=cfg->Get<std::string>("start_mode","camera").first;
     cameraTopic=cfg->Get<std::string>("camera_topic","").first;
     cameraReadyFile=cfg->Get<std::string>("camera_ready_file","").first;
+    rearTopic=cfg->Get<std::string>("rear_lidar_topic","").first;
+    if(!rearTopic.empty() &&
+       !node.Subscribe(rearTopic,&Team11ThreeLane::OnRearScan,this)){
+      std::cerr<<"[TEAM11 REAR ERROR] Failed rear LiDAR subscription "
+               <<rearTopic<<"\n";
+      return;
+    }
     lampSpacingPx=cfg->Get<double>("lamp_spacing_px",0.).first;
     if(startMode!="immediate" && startMode!="camera"){
       std::cerr<<"[TEAM11 ERROR] Invalid start mode "<<startMode<<"\n";return;
@@ -186,6 +197,57 @@ class Team11ThreeLane:public gz::sim::System,
                             +(oy-p.y)*std::cos(p.yaw);
       traffic.push_back({static_cast<int>(j),obsS,lateral,measuredSpeed[j]});
     }
+    // Only confirmed, fresh rear LiDAR returns become defensive targets.
+    // The demo retains the pre-existing Gazebo pose speed / lane tracker
+    // solely for associating a rear scan with known pace cars.
+    rear_scan::Scan rearImage;
+    bool freshRear=false;
+    {
+      std::lock_guard<std::mutex> guard(rearMutex);
+      const auto age=std::chrono::duration<double>(
+        std::chrono::steady_clock::now()-rearArrival).count();
+      freshRear=(rearFrames.load()>0 && age<.85);
+      if(freshRear)rearImage=lastRearImage;
+    }
+    std::vector<defense::RearTarget> rearTargets;
+    if(freshRear){
+      const auto egoPose=gz::sim::worldPose(ego,ecm);
+      const double yaw=egoPose.Rot().Yaw();
+      for(const auto &car:traffic){
+        const auto other=practice[static_cast<size_t>(car.id)];
+        if(other==gz::sim::kNullEntity)continue;
+        const auto otherPose=gz::sim::worldPose(other,ecm);
+        const double dx=otherPose.Pos().X()-egoPose.Pos().X();
+        const double dy=otherPose.Pos().Y()-egoPose.Pos().Y();
+        const double localX=dx*std::cos(yaw)+dy*std::sin(yaw);
+        const double localY=-dx*std::sin(yaw)+dy*std::cos(yaw);
+        const double behind=-avoid::signedGap(s,car.s,lap);
+        if(localX>=-.4 || behind<=0. || behind>defense::kRearDetectM)
+          continue;
+        const bool seen=rear_scan::verifiedReturn(
+          rearImage,localX,localY);
+        if(!seen)continue;
+        // Same rear target is tracked across multiple simulation frames.
+        const size_t idx=static_cast<size_t>(car.id);
+        const bool betweenLanes=std::none_of(
+          offsets.begin(),offsets.end(),[&](double o){
+            return std::abs(o-car.lateral)<.30;
+          });
+        bool weaving=betweenLanes;
+        const double age=now-lastLateralUpdate[idx];
+        if(lastLateralUpdate[idx]<0. || age>=.18){
+          if(lastLateralUpdate[idx]>=0. && age<2.){
+            const double rate=std::abs(
+              car.lateral-lastLateral[idx])/std::max(.01,age);
+            if(rate>.55)weaving=true;
+          }
+          lastLateralUpdate[idx]=now;
+          lastLateral[idx]=car.lateral;
+        }
+        rearTargets.push_back({car.id,behind,car.speed,
+                               car.lateral,seen,weaving});
+      }
+    }
     // Classify the road before deciding whether a safe passing gap exists.
     // This is independent of temporary target lane selection.
     double roadCurve=0.;
@@ -217,7 +279,18 @@ class Team11ThreeLane:public gz::sim::System,
       state.changing=changing;
       const auto decision=avoid::evaluate(state,traffic);
       followingSpeed=decision.followSpeed;
+      // Front passing / obstacle avoidance ALWAYS takes priority over rear.
+      defense::State defenseState;
+      defenseState.car=state;
+      defenseState.frontOvertakeActive=(avoidIndex>=0);
+      defenseState.frontOvertakeRequested=(
+        decision.nextLane>=0 || decision.blocked);
+      defenseState.sinceDefenseChangeM=traveledFromStart-lastDefenseTravel;
+      defenseState.zigzagEndpoint=zigzagEndpoint;
+      const auto rearDecision=defense::evaluate(
+        defenseState,rearTargets,traffic);
       if(decision.nextLane>=0 && !changing){
+        defending=false;
         const int oldLane=target;
         lane=target;target=decision.nextLane;
         changing=true;changeStart=s;
@@ -230,6 +303,42 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" length_m="<<changeLength
                  <<" current_mps="<<speed
                  <<" road_curve="<<roadCurve<<std::endl;
+      }else if(!changing && rearDecision.nextLane>=0 &&
+               !decision.blocked){
+        const int oldLane=target;
+        lane=target;
+        target=rearDecision.nextLane;
+        changeStart=s;
+        changeLength=rearDecision.length;
+        changing=true;
+        lastChangeTravel=traveledFromStart;
+        lastDefenseTravel=traveledFromStart;
+        defending=true;
+        if(rearDecision.zigzag && target==zigzagEndpoint)
+          zigzagEndpoint=(zigzagEndpoint==0?2:0);
+        std::cout<<"[TEAM11 DEFENSE] shift "<<(oldLane+1)
+                 <<" -> "<<(target+1)
+                 <<" rear_id="<<rearDecision.rearId
+                 <<" rear_ttc_s="<<rearDecision.ttc
+                 <<" zigzag="<<rearDecision.zigzag
+                 <<" rear_lidar_frames="<<rearFrames.load()
+                 <<std::endl;
+      }else if(!changing && defending &&
+               !rearDecision.active && target!=homeLane &&
+               traveledFromStart-lastDefenseTravel>=18. &&
+               !decision.blocked){
+        const int restore=(target<homeLane?target+1:target-1);
+        const double length=avoid::distanceToChange(
+          std::max(speed,state.roadSpeed),spacing);
+        if(avoid::trajectoryClear(state,restore,length,traffic)){
+          lane=target;target=restore;
+          changing=true;changeStart=s;changeLength=length;
+          lastChangeTravel=traveledFromStart;
+          lastDefenseTravel=traveledFromStart;
+          if(target==homeLane)defending=false;
+          std::cout<<"[TEAM11 DEFENSE] clear -> return "
+                   <<(lane+1)<<" -> "<<(target+1)<<std::endl;
+        }
       }else if(decision.blocked && !changing &&
                trackedAt<now-.8){
         trackedAt=now;
@@ -441,7 +550,11 @@ class Team11ThreeLane:public gz::sim::System,
   gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName,startMode,cameraTopic,cameraReadyFile;
+  std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic;
+  std::mutex rearMutex;
+  rear_scan::Scan lastRearImage;
+  std::chrono::steady_clock::time_point rearArrival{};
+  std::atomic<unsigned int> rearFrames{0};
   gz::transport::Node node;
   std::atomic<bool> cameraStarted{false},fiveObserved{false};
   std::atomic<unsigned int> imageFrames{0},redFrames{0},offFrames{0};
@@ -450,6 +563,11 @@ class Team11ThreeLane:public gz::sim::System,
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
+  bool defending{false};
+  int zigzagEndpoint{0};
+  double lastDefenseTravel{-100.};
+  std::array<double,2> lastLateral{0.,0.};
+  std::array<double,2> lastLateralUpdate{-1.,-1.};
   std::array<bool,2> observed{false,false};
   std::array<size_t,2> lastNearest{0,0};
   std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};
