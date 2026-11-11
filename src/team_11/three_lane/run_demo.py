@@ -174,7 +174,13 @@ def main():
                         print("[PACE WARNING] Light sequence failed; TEAM11 runs independently",flush=True)
                 except Exception as exc:
                     print("[PACE WARNING] "+str(exc)+"; TEAM11 runs independently",flush=True)
-            threading.Thread(target=run_pace_signal,daemon=True).start()
+            if args.scenario=="physics-impact" and args.start_mode=="immediate":
+                # Isolated collision impact test: start both dynamic bodies
+                # together. The normal camera/five-light race is unchanged.
+                fire_start(args.track,env)
+                print("[TEAM11 PHYSICS] immediate opponent start for physics impact QA",flush=True)
+            else:
+                threading.Thread(target=run_pace_signal,daemon=True).start()
             print(f"[TEAM11] Start mode={args.start_mode}; camera={manifest['start_camera_topic']}",flush=True)
             print("[TEAM11] Log:",log,flush=True)
             return sim.wait()
