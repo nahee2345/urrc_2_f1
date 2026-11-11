@@ -257,3 +257,24 @@ python3 src/team_11/three_lane/run_demo.py monza --grid 1 --start-mode immediate
 **주의:** `[TEAM11 LAP]`은 이제 실제 모델의 위치 기반 연속 진행,
 도로 이탈 및 위치 점프 검사를 통과할 때만 출력합니다.
 `[TEAM11 ESTIMATED LAP]`은 내부 명령상 계산 기록이며 완주로 간주하지 않습니다.
+
+## 13. 기존 map_library 경로 생성기 (연습용) (연습 전용)
+
+TEAM 11의 maps/에 Monza, Spa, Monaco, COTA, Hungaroring, Baku 중앙선 및 그리드 데이터를 저장합니다.
+기준: nahee2345/urrc_f1_ws 커밋 a23c7eec41b98b67ec3a3a2a46f9d7ed957f8290. 원본 월드와 맵은 변경하지 않습니다.
+map_library.py로 중앙선에서 왼쪽·중앙·오른쪽 3경로 CSV를 생성합니다.
+맵 식별: 지정된 트랙 이름, 월드 이름/파일, 운영자 last_run.json, 일치하는 출발 그리드 위치를 사용합니다.
+식별 실패 또는 중복 후보인 경우 임의 맵을 선택하지 않고 종료합니다.
+
+```bash
+cd ~/urrc_2_f1
+python3 src/team_11/three_lane/map_library.py --world-name monaco_race --output /tmp/team11_routes
+python3 src/team_11/three_lane/map_library.py --track auto --output /tmp/team11_routes
+```
+
+경로 생성은 외부 경로 저장소를 필요로 하지 않습니다. 다만 run_demo.py는 서브모듈의 시뮬레이션 월드 및
+팀 내부 pace_source 연습차량 생성기를 사용하므로, 경로 라이브러리만으로 공식 참가 패키지가 완성되는 것은 아닙니다.
+
+**대회 규정:** urrc_f1_ws/race/README_KO.md의 공식 규칙은 저장된 트랙 좌표 및 Gazebo world pose
+기반 주행을 금지하며 주행 판단에 차량 LiDAR만 허용합니다. 이 라이브러리는 연습 시뮬레이션 전용입니다.
+
