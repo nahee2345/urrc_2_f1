@@ -291,7 +291,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
     expected_pace = sorted(f"urrc_pace_grid_{slot:02d}"
                            for slot in (2,9) if practice_cars and slot != grid_position
-                           and (scenario != "rear-fast" or slot == 9))
+                           and (scenario not in ("rear-fast","rear-contact") or slot == 9))
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
     grid_data = json.loads(
