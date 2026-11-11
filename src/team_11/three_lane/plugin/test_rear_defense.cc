@@ -24,14 +24,14 @@ int main(){
     auto s=ego();
     // 20m/s rear vehicle in lane2, 24m behind our lane3.
     std::vector<Car> traffic{{9,126.,0.,20.}};
-    std::vector<RearTarget> rear{{9,24.,20.,0.,true,false,true,true,true,true}};
+    std::vector<RearTarget> rear{{9,24.,20.,0.,true,false,true,true}};
     auto d=evaluate(s,rear,traffic);
     assert(d.active && d.nextLane==1 && !d.zigzag);
     assert(d.ttc>4.7 && d.ttc<4.9);
   }
   {
     auto s=ego();
-    std::vector<RearTarget> rear{{9,24.,15.,0.,true,false,true,true,true,true}};
+    std::vector<RearTarget> rear{{9,24.,15.,0.,true,false,true,true}};
     assert(!evaluate(s,rear,{}).active); // no relative approach
     rear[0].speed=20.;rear[0].behindM=30.;
     assert(!evaluate(s,rear,{}).active); // TTC > 5
@@ -45,18 +45,18 @@ int main(){
   {
     auto s=ego();
     s.frontOvertakeRequested=true;
-    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{}).nextLane==-1);
+    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{}).nextLane==-1);
     s.frontOvertakeRequested=false;s.frontOvertakeActive=true;
-    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{}).nextLane==-1);
+    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{}).nextLane==-1);
     s.frontOvertakeActive=false;s.car.changing=true;
-    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{}).nextLane==-1);
+    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{}).nextLane==-1);
   }
   {
     auto s=ego();
     s.car.curve=.05;
-    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{}).nextLane==-1);
+    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{}).nextLane==-1);
     s.car.curve=0.;s.sinceDefenseChangeM=2.;
-    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{}).nextLane==-1);
+    assert(evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{}).nextLane==-1);
   }
   {
     auto s=ego(2);
@@ -78,13 +78,13 @@ int main(){
     auto s=ego(1);
     // The rear car is already in the same middle route: holding lane
     // is sufficient. No gratuitous side-to-side movement.
-    auto d=evaluate(s,{{9,24.,20.,0.,true,false,true,true,true,true}},{{9,126.,0.,20.}});
+    auto d=evaluate(s,{{9,24.,20.,0.,true,false,true,true}},{{9,126.,0.,20.}});
     assert(d.active && d.nextLane==0 && d.zigzag);
   }
   {
     auto s=ego();
     // Sudden blocking with rear too close to complete safe shift is denied.
-    auto d=evaluate(s,{{9,7.,20.,0.,true,false,true,true,true,true}},{{9,143.,0.,20.}});
+    auto d=evaluate(s,{{9,7.,20.,0.,true,false,true,true}},{{9,143.,0.,20.}});
     assert(d.active && d.nextLane==-1);
     assert(std::string(d.reason)=="UNSAFE_SHIFT");
   }
