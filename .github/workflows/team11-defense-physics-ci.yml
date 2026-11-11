@@ -1,0 +1,202 @@
+name: TEAM11 stable rear defense and physical contact
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-defense-hysteresis-physics-v1]
+    paths:
+      - 'src/team_11/three_lane/**'
+      - '.github/workflows/team11-defense-physics-ci.yml'
+jobs:
+  independent-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Existing front and new rear/measurement state C++ regressions
+        run: |
+          set -e
+          for p in test_overtake_planner test_rear_defense test_rear_threat_history; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+              "src/team_11/three_lane/plugin/$p.cc" -o "/tmp/$p"
+            "/tmp/$p"
+          done
+      - name: Previous Python route regressions
+        run: |
+          python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+          python - <<'PY'
+          from pathlib import Path
+          source=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
+          assert 'rearThreatConfirmed' in source
+          assert 'lastProcessedRearFrame' in source
+          assert 'rearHistories[idx].update' in source
+          assert '[TEAM11 DEFENSE] clear -> return' not in source
+          assert 'avoid::evaluate(state,traffic)' in source
+          assert 'CountRedLamps' in source
+          assert 'physical::apply' in source
+          assert 'SetWorldPoseCmd' in source # legacy retained, only nonphysical
+          print('PASS no automatic defense return, front passing unchanged, physical mode isolated')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Generate unchanged solo and physical 50:2.5kg test world
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --prepare-only
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --practice-cars --scenario physics-impact --physics-collisions --fixed-lane --prepare-only
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          d=json.loads((Path('urrc_source/generated/team11/monza')/'team11_manifest.json').read_text())
+          assert d['physics_collisions']
+          assert d['physics_ego_mass_kg']==50
+          assert d['physics_opponent_mass_kg']==2.5
+          assert d['selected_lane_number']==3
+          world=ET.parse(d['world_file']).getroot().find('world')
+          assert len([p for p in world.findall('plugin') if p.get('name')=='gz::sim::systems::Contact'])==1
+          assert len([p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars'])==1
+          assert d['practice_cars']==['urrc_pace_grid_09']
+          for n,mass in [('urrc_pace_grid_01',50),('urrc_pace_grid_09',2.5)]:
+            model=world.find(f"model[@name='{n}']")
+            assert model.findtext('static')=='false'
+            link=model.find("link[@name='base_link']")
+            assert float(link.findtext('inertial/mass'))==mass
+            assert link.find("collision[@name='body_collision']") is not None
+          ego=world.find("model[@name='urrc_pace_grid_01']")
+          assert ego.find(".//sensor[@name='team11_physical_contact']") is not None
+          assert ego.find(".//sensor[@name='team11_rear_lidar']") is not None
+          print('PASS Gazebo dynamic 50kg/2.5kg collisions, real contact sensor, no map edits')
+          PY
+  gazebo-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Build actual gz-sim8 plugins
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/team11-force-build
+          cmake --build /tmp/team11-force-build --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-pace-force-build
+          cmake --build /tmp/team11-pace-force-build --parallel 2
+          test -s /tmp/team11-force-build/liburrc_team11.so
+          test -s /tmp/team11-pace-force-build/liburrc_pace_cars.so
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Actual Gazebo 50kg versus 2.5kg contact (no scripted bounce)
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 240s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 --start-mode immediate \
+              --practice-cars --fixed-lane --scenario physics-impact \
+              --physics-collisions --server \
+            >/tmp/team11-physical-impact.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 220); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 PHYSICS CONTACT]' "$log"; then
+              echo "Real physical contact observed at wall-second $i"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          set -e
+          tail -n 100 /tmp/team11-physical-impact.log || true
+          test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
+          grep -E 'TEAM11 CAMERA|TEAM11 PHYSICS|PACE PHYSICS|PACE] Armed|TEAM11 AVOID' "$log" | tail -n 70 || true
+          grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL immediate physics-only impact test start'; exit 1; }
+          grep -Fq 'physics_contact=1 ego_mass=50 opponent_mass=2.5' "$log" || { echo 'FAIL physical model mode'; exit 1; }
+          ! grep -Fq '[PACE BOUNCE]' "$log" || { echo 'FAIL scripted bounce still active'; exit 1; }
+          grep -Fq '[TEAM11 PHYSICS CONTACT]' "$log" || { echo 'FAIL no actual Gazebo contact detected'; exit 1; }
+          echo 'PASS actual physics contact with two dynamic bodies: 50kg ego, 2.5kg pace'
+      - name: Upload reproducible real physics evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-real-physics-evidence
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-physical-impact.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
+  gazebo-defense:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Install Gazebo binaries
+        run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Real LiDAR triggered confirmed defense without forced return
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 215s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 \
+              --practice-cars --scenario rear-fast --server \
+            >/tmp/team11-stable-defense.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 200); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 AVOID] finished lane=2' "$log"; then
+              echo "Confirmed defense completed after $i seconds"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          sleep 7
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          set -e
+          tail -n 100 /tmp/team11-stable-defense.log || true
+          test -f "$log" || { echo "FAIL Gazebo never wrote log"; exit 1; }
+          grep -E 'TEAM11 REAR|TEAM11 DEFENSE|TEAM11 AVOID|TEAM11 CAMERA' "$log" | tail -n 50 || true
+          grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" || exit 1
+          grep -Fq '[TEAM11 DEFENSE] shift 3 -> 2' "$log" || exit 1
+          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || exit 1
+          if grep -Fq '[TEAM11 DEFENSE] clear -> return' "$log"; then
+            echo 'FAIL automatic defense return remains'; exit 1
+          fi
+          echo 'PASS continuous rear threat, 3->2 completed, NO automatic home return'
+      - name: Upload rear defense logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-no-auto-return-evidence
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-stable-defense.log
+            urrc_source/generated/team11/monza/team11_gazebo.log

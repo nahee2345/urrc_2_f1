@@ -3,6 +3,8 @@
 // It observes model poses in Gazebo and logs equivalent bicycle steering.
 #include "OvertakePlanner.hh"
 #include "RearDefense.hh"
+#include "RearThreatHistory.hh"
+#include "ForcePathFollower.hh"
 #include "RearScan.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
@@ -16,6 +18,7 @@
 #include <gz/msgs/boolean.pb.h>
 #include <gz/msgs/image.pb.h>
 #include <gz/msgs/laserscan.pb.h>
+#include <gz/msgs/contacts.pb.h>
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
 #include <algorithm>
@@ -49,6 +52,14 @@ class Team11ThreeLane:public gz::sim::System,
     target=lane;
     homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
+    physicsCollisions=cfg->Get<bool>("physics_collisions",false).first;
+    contactTopic=cfg->Get<std::string>("contact_topic","").first;
+    if(physicsCollisions && !contactTopic.empty() &&
+       !node.Subscribe(contactTopic,&Team11ThreeLane::OnContact,this)){
+      std::cerr<<"[TEAM11 PHYSICS ERROR] contact sensor subscription failed: "
+               <<contactTopic<<std::endl;
+      return;
+    }
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -138,6 +149,12 @@ class Team11ThreeLane:public gz::sim::System,
       initialS=s;
       traveledFromStart=0.;
       started=true;
+      if(physicsCollisions){
+        const gz::sim::Link base(
+          gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+        base.SetGravityEnabled(ecm,true);
+        std::cout<<"[TEAM11 PHYSICS] release gravity at real camera start"<<std::endl;
+      }
       std::cout<<"[TEAM11] "<<(startMode=="camera"?"CAMERA GREEN":"IMMEDIATE")
                <<" start s="<<s<<" lane="<<(lane+1)<<" home="<<(homeLane+1)<<" changing="<<changing
                <<" fixed="<<fixedLane
@@ -152,6 +169,35 @@ class Team11ThreeLane:public gz::sim::System,
     std::vector<avoid::Car> traffic;
     const auto &middle=routes[1];
     const double now=std::chrono::duration<double>(info.simTime).count();
+    if(physicsCollisions){
+      // Re-project REAL physics position to the existing 3-route arc length.
+      // Do not use motor time as a substitute for movement after an impact.
+      const auto actual=gz::sim::worldPose(ego,ecm);
+      double best=1e99;
+      size_t bestIdx=lastPhysicalNearest;
+      const int count=static_cast<int>(middle.size());
+      const int window=physicalProjectionReady?80:count;
+      for(int k=physicalProjectionReady?-window:0;
+          k<=(physicalProjectionReady?window:count-1);k++){
+        const size_t idx=physicalProjectionReady?
+          (lastPhysicalNearest+count+k)%count:static_cast<size_t>(k);
+        const auto &p=middle[idx];
+        const double d=std::hypot(actual.Pos().X()-p.x,
+                                  actual.Pos().Y()-p.y);
+        if(d<best){best=d;bestIdx=idx;}
+      }
+      physicalProjectionReady=true;
+      lastPhysicalNearest=bestIdx;
+      const double delta=avoid::signedGap(s,middle[bestIdx].s,lap);
+      if(std::abs(delta)<5.0)
+        s=std::fmod(s+delta+lap,lap);
+      if(best>4. && physicsWarnAt<now-2.){
+        physicsWarnAt=now;
+        std::cout<<"[TEAM11 PHYSICS] off planned route by "
+                 <<best<<"m; no teleport recovery"<<std::endl;
+      }
+    }
+
     for(size_t j=0;j<practice.size();j++){
       const auto other=practice[j];
       if(other==gz::sim::kNullEntity || other==ego)continue;
@@ -248,6 +294,31 @@ class Team11ThreeLane:public gz::sim::System,
                                car.lateral,seen,weaving});
       }
     }
+    // Debounce rear targets ONLY on newly received LiDAR frames.
+    // Physics ticks can run hundreds of times per one sensor frame.
+    const auto scanGeneration=rearFrames.load();
+    if(freshRear && scanGeneration!=lastProcessedRearFrame){
+      lastProcessedRearFrame=scanGeneration;
+      rearThreatConfirmed.fill(false);
+      for(auto &rear:rearTargets){
+        const auto idx=static_cast<size_t>(rear.id);
+        if(idx>=rearHistories.size())continue;
+        const double closing=rear.speed-speed;
+        const double ttc=closing>=defense::kClosingMinMps ?
+            rear.behindM/closing : std::numeric_limits<double>::infinity();
+        const bool confirmed=rearHistories[idx].update(
+          rear.id,now,ttc,rear.lateral,rear.uncertain);
+        rearThreatConfirmed[idx]=confirmed;
+      }
+    }
+    rearTargets.erase(std::remove_if(rearTargets.begin(),rearTargets.end(),
+      [&](defense::RearTarget &rear){
+        const auto idx=static_cast<size_t>(rear.id);
+        if(idx>=rearThreatConfirmed.size() || !rearThreatConfirmed[idx])
+          return true;
+        rear.uncertain=rearHistories[idx].weaving();
+        return false;
+      }),rearTargets.end());
     // Classify the road before deciding whether a safe passing gap exists.
     // This is independent of temporary target lane selection.
     double roadCurve=0.;
@@ -323,22 +394,9 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" zigzag="<<rearDecision.zigzag
                  <<" rear_lidar_frames="<<rearFrames.load()
                  <<std::endl;
-      }else if(!changing && defending &&
-               !rearDecision.active && target!=homeLane &&
-               traveledFromStart-lastDefenseTravel>=18. &&
-               !decision.blocked){
-        const int restore=(target<homeLane?target+1:target-1);
-        const double length=avoid::distanceToChange(
-          std::max(speed,state.roadSpeed),spacing);
-        if(avoid::trajectoryClear(state,restore,length,traffic)){
-          lane=target;target=restore;
-          changing=true;changeStart=s;changeLength=length;
-          lastChangeTravel=traveledFromStart;
-          lastDefenseTravel=traveledFromStart;
-          if(target==homeLane)defending=false;
-          std::cout<<"[TEAM11 DEFENSE] clear -> return "
-                   <<(lane+1)<<" -> "<<(target+1)<<std::endl;
-        }
+      // NO automatic return after a completed defense:
+      // keep the selected safe lane until front passing or another
+      // fully-confirmed rear threat chooses a new lane.
       }else if(decision.blocked && !changing &&
                trackedAt<now-.8){
         trackedAt=now;
@@ -423,8 +481,20 @@ class Team11ThreeLane:public gz::sim::System,
     // instantly from 10 to 3 at a corner.
     speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
     const auto pos=poseAt(s);
-    gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
-        pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    if(physicsCollisions){
+      const auto actual=gz::sim::worldPose(ego,ecm);
+      const auto look=poseAt(s+clamp(3.+speed*.35,3.,9.));
+      const double heading=std::atan2(
+        look.y-actual.Pos().Y(),look.x-actual.Pos().X());
+      const gz::sim::Link base(
+        gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+      physical::apply(base,ecm,actual,{look.x,look.y,heading,speed},
+                      50.,1.2621,5.);
+    }else{
+      // Preserve legacy scripted route following with no physics mode.
+      gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
     const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
@@ -437,6 +507,19 @@ class Team11ThreeLane:public gz::sim::System,
     trace+=dt;
     if(trace>=1.){
       trace=0.;
+      if(physicsCollisions){
+        const auto actual=gz::sim::worldPose(ego,ecm);
+        const gz::sim::Link base(
+          gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+        const auto v=base.WorldLinearVelocity(ecm).value_or(
+          gz::math::Vector3d::Zero);
+        std::cout<<"[TEAM11 PHYSICS] xy="<<actual.Pos().X()
+                 <<","<<actual.Pos().Y()
+                 <<" measured_speed="<<v.Length()
+                 <<" route_s="<<s
+                 <<" contact_count="<<physicsContactCount.load()
+                 <<std::endl;
+      }
       std::cout<<"[TEAM11] lane="<<(target+1)
                <<" fixed="<<fixedLane
                <<" merge_progress_m="<<std::min(12.,traveledFromStart)
@@ -484,6 +567,27 @@ class Team11ThreeLane:public gz::sim::System,
         active++;
     }
     return active;
+  }
+  void OnContact(const gz::msgs::Contacts &report){
+    if(report.contact_size()>0 && rawContactCount.fetch_add(1)==0)
+      std::cout<<"[TEAM11 PHYSICS RAW CONTACT] count="
+               <<report.contact_size()<<" first="
+               <<report.contact(0).collision1().name()<<" vs "
+               <<report.contact(0).collision2().name()<<std::endl;
+    for(int i=0;i<report.contact_size();i++){
+      const auto &c=report.contact(i);
+      const auto first=c.collision1().name();
+      const auto second=c.collision2().name();
+      const bool pace=(first.find("urrc_pace_grid_02")!=std::string::npos ||
+                       first.find("urrc_pace_grid_09")!=std::string::npos ||
+                       second.find("urrc_pace_grid_02")!=std::string::npos ||
+                       second.find("urrc_pace_grid_09")!=std::string::npos);
+      if(!pace)continue;
+      if(physicsContactCount.fetch_add(1)==0)
+        std::cout<<"[TEAM11 PHYSICS CONTACT] real Gazebo contact pair "
+                 <<first<<" || "<<second<<" (no scripted bounce)"
+                 <<std::endl;
+    }
   }
   void OnRearScan(const gz::msgs::LaserScan &laser){
     rear_scan::Scan next;
@@ -571,7 +675,8 @@ class Team11ThreeLane:public gz::sim::System,
   gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic;
+  std::string egoName,startMode,cameraTopic,cameraReadyFile,rearTopic,contactTopic;
+  std::atomic<unsigned int> physicsContactCount{0},rawContactCount{0};
   std::mutex rearMutex;
   rear_scan::Scan lastRearImage;
   std::chrono::steady_clock::time_point rearArrival{};
@@ -582,6 +687,9 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
+  bool physicsCollisions{false},physicalProjectionReady{false};
+  size_t lastPhysicalNearest{0};
+  double physicsWarnAt{-100.};
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
   bool defending{false};
@@ -594,6 +702,9 @@ class Team11ThreeLane:public gz::sim::System,
   std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};
   std::array<double,2> measuredSpeed{10.,20.};
   double trackedAt{-100.};
+  std::array<defense::ThreatHistory,2> rearHistories{};
+  std::array<bool,2> rearThreatConfirmed{false,false};
+  unsigned int lastProcessedRearFrame{0};
   double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};

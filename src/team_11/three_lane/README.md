@@ -100,9 +100,11 @@ python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --lane 1 --fi
 새 기능은 `RearScan.hh`(실제 레이저 측정 검증), `RearDefense.hh`(후방 위협/경로 선택)
 에 분리되어 있습니다. `--practice-cars`를 생략하거나 `--fixed-lane`이면 방어를 실행하지 않습니다.
 
-**발동 조건:** 후방 LiDAR 거리 데이터가 수신되고, 기존 연습 상대차 추적 데이터에서
-후방 60m 이내·뒤차 상대속도 2m/s 이상·예상 추월시간 5초 이하를 모두 충족할 때만
-후방 추월 방어 후보를 검토합니다. 근접해도 상대속도가 부족하면 현재 경로를 유지합니다.
+**발동 조건:** 후방 LiDAR의 **서로 다른 프레임**에서 상대 차량이 확인되고,
+후방 60m 이내, 뒤차 상대속도 2m/s 이상, 추월예상시간 5초 이내여야 합니다.
+5초 이하 3회 연속 또는 5초 이하 2회이면서 TTC가 감소하는 경우에만 시작합니다.
+같은 LiDAR 프레임을 Gazebo 물리 틱에서 여러 번 확인해도 중복으로 세지 않습니다.
+근접해도 상대속도가 부족하거나 확인 프레임이 모자라면 현재 경로를 유지합니다.
 
 **우선순위:** ① 기존 전방 추월·우회·복귀 ② 뒤차 추월 방어 ③ 정상 경로 추종.
 기존 전방 추월을 시작할 수 있거나 현재 경로 변경 중이면 방어를 시작하지 않습니다.
@@ -113,11 +115,14 @@ python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --lane 1 --fi
 예측한 이동 중 실제 차량 겹침이 있거나 진입 순간 후방 거리가 부족하면 방어하지 않습니다.
 이는 정해진 *시뮬레이션 충돌 연출*의 진로 선점 기능입니다.
 
-**S자 주행:** 후방 차량의 횡방향 이동이 크거나 경로가 불확실하면,
+**S자 주행:** 후방 차량의 S자 횡방향 이동이 여러 LiDAR 프레임에서 실제로 확인되거나,
+빠르게 추월하려는 차량이 있지만 1·2·3번 중 **현재 위치에서 별도로 선점할 경로가 없을 때**
 1·3번 경로를 양끝 목표로 번갈아 선정하고 2번 경로를 중간 경유합니다.
 경로변경 거리 최소 18m, 횡가속도 제한 2.5m/s², 급격한 방향 반전 금지.
 각 단계 전에 미래 차량 위치를 검사하고, 안전하게 이동할 수 없으면 S자 이동을 보류합니다.
-추월 위험이 해소되면 원래 경로로 복귀합니다.
+**방어 후 원래 경로로 자동 복귀하지 않습니다.** 3→2로 변경 완료하면 2번
+경로를 계속 따라갑니다. 새로 확인된 전방 추월이나 후방 추월 위험이 생겼을 때만
+다른 경로로 이동합니다. 28m 이내 반복 변경은 금지합니다.
 
 **센서·물리 한계:** 실제 후방 `gpu_lidar`를 설치하고 30Hz 후방 스캔을 받지만,
 대상 차량의 ID·진행거리·속도는 기존의 Gazebo 월드 pose 기반 연습차 추적을
@@ -148,3 +153,41 @@ TEAM11 후방 약 110m에 배치하고, 전방 추월 충돌을 피하려고
 `TEAM11 DEFENSE`(방어 경로 이동/복귀),
 `TEAM11 AVOID`(기존 전방 추월),
 `PACE BOUNCE`(상대차 충돌 연출).
+
+## 9. 물리 엔진으로 연습차량 충돌 (Gazebo Harmonic)
+
+기본값은 기존의 3경로 키네마틱 연습 시연을 **완전히 보존**합니다.
+실제 충돌은 `--physics-collisions`을 지정할 때만 활성화합니다.
+
+- TEAM11 차체: **50kg**, 연습차량: **2.5kg**, 둘 다 `<static>false</static>`인 Gazebo 물리 모델입니다.
+- 기본 연습 차량의 차체 충돌체와 관성 텐서를 실제 Gazebo 물리 엔진에 전달합니다.
+- **TEAM11 및 연습차량을 모두** `SetWorldPoseCmd`로 순간이동시키지 않고, `Link::AddWorldWrench`의 제한된 힘·토크로 기존 경로를 추종합니다. 기존 1·2·3번 경로 추종 판단·전방 추월·후방 방어는 그대로 사용합니다.
+- `gz-sim-contact-system`에서 TEAM11 차체 충돌체의 실제 접촉을 감지합니다. 충돌 시 상대 차량만 인위적으로 튕기는 예전 `PACE BOUNCE` 연출은 물리 모드에서 **비활성화**합니다.
+- 질량비 때문에 TEAM11의 속도·진로 영향이 상대적으로 작을 수 있지만, **물리 모드에서는 TEAM11도 실제 충돌 반작용을 받습니다.** '무조건 상대차만 튕긴다'는 것은 물리 엔진과 양립하지 않습니다.
+- 코너에서 실제 그립·회전 안정성은 아직 별도 검증이 필요합니다. 차체 force/yaw 제어이지 정교한 타이어/서스펜션 모델은 아닙니다.
+
+```bash
+cd ~/urrc_2_f1
+git fetch origin
+git switch team11-defense-hysteresis-physics-v1
+git pull --ff-only origin team11-defense-hysteresis-physics-v1
+
+# 기존 주행·방어를 유지하며 동적 충돌만 추가
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --practice-cars --physics-collisions
+
+# 실제 20m/s 연습차량을 내 경로 후방 18m에 배치해 접촉 확인
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --practice-cars --fixed-lane \
+  --physics-collisions --scenario physics-impact --start-mode immediate
+```
+
+두 명령 모두 원본 트랙과 원본 그리드는 수정하지 않고 `generated/team11` 월드만 생성합니다. `physics-impact --start-mode immediate`는 충돌 시험을 위해 두 동적 차량만 즉시 출발시키는 테스트 전용 모드이며, 정상 주행의 5등 신호 출발 기능은 유지됩니다.
+
+**판정 기준:** `[TEAM11 PHYSICS CONTACT]`는 실제 Gazebo 접촉 센서의
+`gz.msgs.Contacts` 메시지에 **연습차량 충돌체가 포함된 경우에만** 출력합니다.
+`[PACE PHYSICS NEAR CONTACT]`는 거리 근접 로그일 뿐 실제 물리 충돌 확인이
+아니므로 두 로그를 구분해야 합니다.
+
+`TEAM11 DEFENSE`는 후방 방어 경로변경, `TEAM11 AVOID`는 이전 전방
+추월·복귀입니다. 사용자 지시에 따라 **후방 방어 자동 복귀 로그는 없습니다**.
