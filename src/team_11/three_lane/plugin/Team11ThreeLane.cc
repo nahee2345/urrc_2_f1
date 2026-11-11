@@ -77,7 +77,9 @@ class Team11ThreeLane:public gz::sim::System,
     lap=r.back().s+std::hypot(r.back().x-r.front().x,r.back().y-r.front().y);
     ready=true;
     std::cout<<"[TEAM11] 3 routes armed, spacing "<<spacing
-             <<"m; start_mode="<<startMode<<" camera="<<cameraTopic<<"\n";
+             <<"m; target_lane="<<(target+1)
+             <<" fixed_lane="<<fixedLane
+             <<" start_mode="<<startMode<<" camera="<<cameraTopic<<"\n";
   }
   void PreUpdate(const gz::sim::UpdateInfo &info,
                  gz::sim::EntityComponentManager &ecm) override {
@@ -231,7 +233,10 @@ class Team11ThreeLane:public gz::sim::System,
     trace+=dt;
     if(trace>=1.){
       trace=0.;
-      std::cout<<"[TEAM11] lane="<<(target+1)<<" speed="<<speed
+      std::cout<<"[TEAM11] lane="<<(target+1)
+               <<" fixed="<<fixedLane
+               <<" merge_progress_m="<<std::min(12.,traveledFromStart)
+               <<" speed="<<speed
                <<"m/s steer="<<steer*180./M_PI<<"deg preview_curvature="
                <<futureCurvature<<" target="<<targetSpeed
                <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";
