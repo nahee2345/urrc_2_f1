@@ -146,8 +146,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("scan_ahead_m", "35"),
     ):
         ET.SubElement(ctrl, tag).text = val
-    # Optional reproducible integration test: move the RED 10m/s practice car
-    # onto TEAM11's selected lane 45m ahead. This changes GENERATED world only;
+    # Optional reproducible integration test: move the RED 5m/s test car
+    # onto TEAM11's selected lane 25m ahead. This changes GENERATED world only;
     # original painted grids and source tracks are never edited.
     if scenario == 'slow-ahead':
         red = world.find("model[@name='urrc_pace_grid_02']")
@@ -159,12 +159,12 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
         lap_distance = points[-1].s + math.hypot(
             points[-1].x - points[0].x, points[-1].y - points[0].y)
-        start_s = (grid_s + 45.) % lap_distance
+        start_s = (grid_s + 25.) % lap_distance
         first = next((i for i, row in enumerate(rows)
                       if float(row[0]) >= start_s), 0)
         rotated = rows[first:] + rows[:first]
         origin_s = float(rotated[0][0])
-        staged_file = destination / "team11_red_10mps_ahead.csv"
+        staged_file = destination / "team11_red_5mps_ahead.csv"
         with staged_file.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(["distance_m", "x_m", "y_m", "z_m", "yaw_rad"])
@@ -172,6 +172,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 relative = (float(row[0]) - origin_s) % lap_distance
                 writer.writerow([f"{relative:.9f}", *row[1:5]])
         red_config.find("route_file").text = str(staged_file.resolve())
+        red_config.find("speed_mps").text = "5"
         x, y, z, yaw = (float(v) for v in rotated[0][1:5])
         red.find("pose").text = (
             f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
@@ -234,6 +235,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "practice_cars": [name for name in sorted(names)],
         "practice_cars_enabled": practice_cars,
         "practice_scenario": scenario,
+        "scenario_target_speed_mps": 5 if scenario == "slow-ahead" else None,
+        "scenario_target_initial_gap_m": 25 if scenario == "slow-ahead" else None,
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 15,
         "straight_speed_range_mps": [10, 15],
