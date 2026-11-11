@@ -140,7 +140,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                        ("min_angle", "-2.25"), ("max_angle", "2.25")):
         ET.SubElement(horizontal, tag).text = value
     lidar_range = ET.SubElement(lidar, "range")
-    for tag, value in (("min", "0.12"), ("max", "35"), ("resolution", "0.02")):
+    for tag, value in (("min", "0.12"), ("max", "70"), ("resolution", "0.02")):
         ET.SubElement(lidar_range, tag).text = value
     # TEAM11 starts as soon as the model is available; pace cars retain their light sequence.
     ctrl = ET.SubElement(world, "plugin", filename=str(Path(plugin_file).resolve()),
@@ -197,7 +197,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         red.find("pose").text = (
             f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
     # Only the generated test world is staged: 20m/s blue car starts
-    # 24m behind TEAM11 in the neighboring central lane.
+    # 110m behind TEAM11 in the neighboring central lane.
     # Red 10m/s car is absent in this scenario to isolate rear defense.
     if scenario == 'rear-fast':
         blue = world.find("model[@name='urrc_pace_grid_09']")
@@ -209,7 +209,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
         lap_distance = points[-1].s + math.hypot(
             points[-1].x - points[0].x, points[-1].y - points[0].y)
-        start_s = (grid_s - 24.) % lap_distance
+        start_s = (grid_s - 110.) % lap_distance
         first = next((i for i, row in enumerate(rows)
                       if float(row[0]) >= start_s), 0)
         rotated = rows[first:] + rows[:first]
