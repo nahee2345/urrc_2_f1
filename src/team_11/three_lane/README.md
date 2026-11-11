@@ -14,7 +14,7 @@
 - 진행 방향 기준 **1번=왼쪽, 2번=중앙, 3번=오른쪽**입니다.
 - 원본 트랙의 그리드 교대 배치를 따라 **홀수 1·3·5·7·9·11번 → 3번(오른쪽)**, **짝수 2·4·6·8·10·12번 → 1번(왼쪽)** 경로를 선택합니다.
 - 원래 위치에서 약 12m 동안 5차 부드러운 보간으로 선택된 경로에 합류합니다.
-- 단독 주행은 선택 경로를 유지합니다. `--lane 1/2/3 --fixed-lane`으로 각 경로를 별도로 점검할 수 있습니다.
+- 단독 주행도 코너 접근 시 1·3번에서 중앙 2번 경로로 합류합니다. `--lane 1/2/3 --fixed-lane`을 지정한 경우에만 해당 경로를 계속 고정해 점검합니다.
 - 세 경로는 전체 트랙 중 최소 도로 폭을 이용해 생성합니다. 벽 여유와 실제 차체 폭을 고려한 도로 영역 검사와 실제 Gazebo 접촉 검사는 구별해야 합니다.
 
 ## 3. 속도 제어
@@ -29,7 +29,7 @@
 - 조향각 10° 초과 시 목표 최대 7m/s, 20° 초과 시 최대 5m/s입니다.
 - 코너는 X·Y 실제 경로좌표에서 미리 계산하여 감속을 시작합니다.
 - 최고 가속도 2m/s², 최고 감속도 4m/s². 출발 직후의 0~10m/s 가속 구간과 추돌 방지 정지는 목표 대역 예외입니다.
-- 실제 차량이 물리 구동식이 아니라 `SetWorldPoseCmd`로 움직이는 **키네마틱 시연 모델**이라는 한계가 있습니다.
+- 기본 차량은 `SetWorldPoseCmd`로 움직이는 **키네마틱 시연 모델**이지만, 실제 위치·자세 명령은 ±30° 조향·최대 회전속도·곡률 한도를 만족하도록 바이시클 모델로 적분합니다. 별도 `--physics-contact` 실험에서 실제 힘/토크 구동을 사용합니다.
 
 ## 4. 선택적으로 차량을 추가하는 우회·충돌 시험
 
@@ -53,9 +53,9 @@
 
 ```bash
 cd ~/urrc_2_f1
-git fetch origin team11-three-lane-overtake-v1
-git switch team11-three-lane-overtake-v1
-git pull --ff-only origin team11-three-lane-overtake-v1
+git fetch origin team11-corner-center-steer30-v1
+git switch team11-corner-center-steer30-v1
+git pull --ff-only origin team11-corner-center-steer30-v1
 
 # 기본: 연습차량 없이 1번 그리드 → 3번 경로, 카메라 신호 대기
 python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --grid 1 --start-mode camera
