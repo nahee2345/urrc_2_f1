@@ -149,6 +149,12 @@ class Team11ThreeLane:public gz::sim::System,
       initialS=s;
       traveledFromStart=0.;
       started=true;
+      if(physicsCollisions){
+        const gz::sim::Link base(
+          gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+        base.SetGravityEnabled(ecm,true);
+        std::cout<<"[TEAM11 PHYSICS] release gravity at real camera start"<<std::endl;
+      }
       std::cout<<"[TEAM11] "<<(startMode=="camera"?"CAMERA GREEN":"IMMEDIATE")
                <<" start s="<<s<<" lane="<<(lane+1)<<" home="<<(homeLane+1)<<" changing="<<changing
                <<" fixed="<<fixedLane
@@ -501,6 +507,19 @@ class Team11ThreeLane:public gz::sim::System,
     trace+=dt;
     if(trace>=1.){
       trace=0.;
+      if(physicsCollisions){
+        const auto actual=gz::sim::worldPose(ego,ecm);
+        const gz::sim::Link base(
+          gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+        const auto v=base.WorldLinearVelocity(ecm).value_or(
+          gz::math::Vector3d::Zero);
+        std::cout<<"[TEAM11 PHYSICS] xy="<<actual.Pos().X()
+                 <<","<<actual.Pos().Y()
+                 <<" measured_speed="<<v.Length()
+                 <<" route_s="<<s
+                 <<" contact_count="<<physicsContactCount.load()
+                 <<std::endl;
+      }
       std::cout<<"[TEAM11] lane="<<(target+1)
                <<" fixed="<<fixedLane
                <<" merge_progress_m="<<std::min(12.,traveledFromStart)
