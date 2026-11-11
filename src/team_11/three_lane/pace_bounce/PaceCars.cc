@@ -152,7 +152,7 @@ class PaceCars : public gz::sim::System,
           pose.Pos().X()+=car.hitX*lateral;
           pose.Pos().Y()+=car.hitY*lateral;
           pose.Pos().Z()+=std::max(0.,height);
-          pose.Rot().Yaw(pose.Rot().Yaw()+.9*std::sin(M_PI*t/2.)*weight);
+          pose.Rot()=gz::math::Quaterniond(0.,0.,pose.Rot().Yaw()+.9*std::sin(M_PI*t/2.)*weight);
         }
       }
       gz::sim::Model(car.entity).SetWorldPoseCmd(ecm,pose);
