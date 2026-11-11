@@ -134,7 +134,7 @@ class Team11ThreeLane:public gz::sim::System,
       }
       if(fiveObserved.load() && !redReported){
         redReported=true;
-        std::cout<<"[TEAM11] CAMERA all FIVE red lights confirmed; waiting zero red lamps\n";
+        std::cout<<"[TEAM11] CAMERA at least FOUR red lights confirmed; waiting zero red lamps\n";
       }
       return;
     }
@@ -679,7 +679,7 @@ class Team11ThreeLane:public gz::sim::System,
     }
     lastLampCount.store(lamps);
     if(cameraStarted.load())return;
-    if(lamps==5){
+    if(lamps>=4){
       offFrames.store(0);
       if(redFrames.fetch_add(1)+1>=2)fiveObserved.store(true);
     }else{
