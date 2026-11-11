@@ -41,6 +41,7 @@ class Team11ThreeLane:public gz::sim::System,
     egoName=cfg->Get<std::string>("ego_name");
     lane=cfg->Get<int>("initial_lane");
     target=lane;
+    homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
@@ -123,51 +124,99 @@ class Team11ThreeLane:public gz::sim::System,
       traveledFromStart=0.;
       started=true;
       std::cout<<"[TEAM11] "<<(startMode=="camera"?"CAMERA GREEN":"IMMEDIATE")
-               <<" start s="<<s<<" lane="<<(lane+1)<<" fixed="<<fixedLane
+               <<" start s="<<s<<" lane="<<(lane+1)<<" home="<<(homeLane+1)<<" changing="<<changing
+               <<" fixed="<<fixedLane
                <<" images="<<imageFrames.load()<<" lamps="<<lastLampCount.load()<<"\n";
     }
     double dt=std::chrono::duration<double>(info.dt).count();
     if(dt<=0 || dt>0.2)return;
-    // Detect the original moving practice cars (grid 02 and grid 09).
-    // No synthetic stationary blocker is spawned by TEAM11.
-    auto offsets=std::array<double,3>{spacing,0.,-spacing};
-    bool blocked[3]={false,false,false};
+
+    // Gazebo world-pose obstacle tracking for the two practice cars.
+    // This is not a camera / LiDAR obstacle detector.
+    const std::array<double,3> offsets{spacing,0.,-spacing};
+    struct Traffic {gz::sim::Entity id; double s, lateral, nominalSpeed;};
+    std::vector<Traffic> traffic;
     const auto &middle=routes[1];
-    for(const auto other: practice){
+    for(size_t j=0;j<practice.size();j++){
+      const auto other=practice[j];
       if(other==gz::sim::kNullEntity || other==ego)continue;
       const auto pose=gz::sim::worldPose(other,ecm);
       const double ox=pose.Pos().X(),oy=pose.Pos().Y();
-      double best=1e99, obsS=0;
+      double best=1e99,obsS=0.;
       size_t closest=0;
       for(size_t i=0;i<middle.size();i++){
         const double d=std::hypot(ox-middle[i].x,oy-middle[i].y);
         if(d<best){best=d;obsS=middle[i].s;closest=i;}
       }
-      const double ahead=std::fmod(obsS-s+lap,lap);
-      if(ahead<1.0 || ahead>=scanAhead)continue;
       const auto &p=middle[closest];
       const double lateral=-(ox-p.x)*std::sin(p.yaw)
                            +(oy-p.y)*std::cos(p.yaw);
-      for(int k=0;k<3;k++){
-        if(std::abs(lateral-offsets[k])<.37)
-          blocked[k]=true;
-      }
+      traffic.push_back({other,obsS,lateral,j==0?10.:20.});
     }
-    if(!fixedLane && !changing && blocked[target]){
-      int next=-1;
-      // Only adjacent paths. No jumping over a blocked lane.
-      for(int j: {target-1,target+1}){
-        if(j>=0 && j<3 && !blocked[j]){next=j;break;}
+    auto forwardDistance=[&](double from,double to){
+      return std::fmod(to-from+lap,lap);
+    };
+    auto laneFree=[&](int candidate){
+      if(candidate<0 || candidate>2)return false;
+      for(const auto &car:traffic){
+        if(std::abs(car.lateral-offsets[candidate])>=.40)continue;
+        const double ahead=forwardDistance(s,car.s);
+        const double behind=forwardDistance(car.s,s);
+        const double rearWindow=std::max(7.,(car.nominalSpeed-speed)*2.+7.);
+        if(ahead<20. || behind<rearWindow)return false;
       }
-      if(next>=0){
-        lane=target;target=next;
-        changeStart=s;changing=true;
-        std::cout<<"[TEAM11] PRACTICE CAR ahead: "
-                 <<lane<<" -> "<<target<<" (keep new lane)\n";
-      } else {
-        speed=0;
-        std::cout<<"[TEAM11] all adjacent lanes blocked; stop\n";
-        return;
+      return true;
+    };
+    if(changing && forwardDistance(changeStart,s)>=changeLength-1e-5){
+      changing=false;
+      lane=target;
+      std::cout<<"[TEAM11 AVOID] finished lane="<<(target+1)<<std::endl;
+    }
+    bool brakeForTraffic=false;
+    if(!fixedLane && !changing && traveledFromStart>=12.){
+      bool passed=false;
+      for(const auto &car:traffic)if(car.id==avoidEntity){
+        const double behind=forwardDistance(car.s,s);
+        passed=behind>=6. && behind<lap/2.;
+      }
+      if(target!=homeLane && avoidEntity!=gz::sim::kNullEntity &&
+         passed && laneFree(homeLane) &&
+         traveledFromStart-lastChangeTravel>=changeLength+6.){
+        lane=target;target=homeLane;changeStart=s;changing=true;
+        lastChangeTravel=traveledFromStart;
+        avoidEntity=gz::sim::kNullEntity;
+        std::cout<<"[TEAM11 AVOID] return "<<(lane+1)<<" -> "
+                 <<(target+1)<<" after passing"<<std::endl;
+      }else if(traveledFromStart-lastChangeTravel>=changeLength+4.){
+        double risk=1e99;
+        gz::sim::Entity blocker=gz::sim::kNullEntity;
+        for(const auto &car:traffic){
+          if(std::abs(car.lateral-offsets[target])>=.40)continue;
+          const double ahead=forwardDistance(s,car.s);
+          const double closing=std::max(0.,speed-car.nominalSpeed);
+          const double trigger=clamp(8.+closing*3.,10.,30.);
+          if(closing>.5 && ahead>=2. && ahead<trigger && ahead<risk){
+            risk=ahead;blocker=car.id;
+          }
+        }
+        if(blocker!=gz::sim::kNullEntity){
+          int next=-1;
+          for(int candidate:{target-1,target+1}){
+            if(laneFree(candidate)){next=candidate;break;}
+          }
+          if(next>=0){
+            lane=target;target=next;changeStart=s;changing=true;
+            lastChangeTravel=traveledFromStart;
+            avoidEntity=blocker;
+            std::cout<<"[TEAM11 AVOID] pass "<<(lane+1)<<" -> "
+                     <<(target+1)<<" obstacle_distance="<<risk<<"m"
+                     <<std::endl;
+          }else{
+            brakeForTraffic=true;
+            std::cout<<"[TEAM11 AVOID] no adjacent free lane, braking"
+                     <<std::endl;
+          }
+        }
       }
     }
     // Quintic interpolation over traveled distance, including lap wrap.
@@ -220,7 +269,9 @@ class Team11ThreeLane:public gz::sim::System,
     }
     if(std::abs(steer)>slowThreshold)targetSpeed=std::min(targetSpeed,7.);
     if(std::abs(steer)>2.*slowThreshold)targetSpeed=std::min(targetSpeed,3.);
-    targetSpeed=clamp(targetSpeed,3.,baseSpeed);
+    if(changing)targetSpeed=std::min(targetSpeed,7.);
+    if(brakeForTraffic)targetSpeed=0.;
+    targetSpeed=clamp(targetSpeed,0.,baseSpeed);
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
     // instantly from 10 to 3 at a corner.
@@ -366,7 +417,9 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false};
-  int lane{1},target{1};
+  int lane{1},target{1},homeLane{1};
+  gz::sim::Entity avoidEntity{gz::sim::kNullEntity};
+  double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
