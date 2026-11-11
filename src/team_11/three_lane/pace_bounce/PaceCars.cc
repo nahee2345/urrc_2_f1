@@ -182,8 +182,8 @@ class PaceCars : public gz::sim::System,
   void OnContact(const gz::msgs::Contacts &msg){
     for(int i=0;i<msg.contact_size();i++){
       const auto &hit=msg.contact(i);
-      const std::string first=hit.collision1();
-      const std::string second=hit.collision2();
+      const std::string first=hit.collision1().name();
+      const std::string second=hit.collision2().name();
       const std::string both=first+" "+second;
       if(both.find(egoName)==std::string::npos)continue;
       if(both.find("urrc_pace_grid_02")==std::string::npos &&
