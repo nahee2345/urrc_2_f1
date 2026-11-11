@@ -1,6 +1,7 @@
 // TEAM11 3-lane kinematic practice controller; Gazebo Harmonic gz-sim8.
 // Vehicle moves by pose command, not physical steering joints.
 // It observes model poses in Gazebo and logs equivalent bicycle steering.
+#include "OvertakePlanner.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -21,6 +22,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -133,12 +135,12 @@ class Team11ThreeLane:public gz::sim::System,
     double dt=std::chrono::duration<double>(info.dt).count();
     if(dt<=0 || dt>0.2)return;
 
-    // Gazebo world-pose obstacle tracking for the two practice cars.
-    // This is not a camera / LiDAR obstacle detector.
+    // The baseline camera / static route control is unchanged.
+    // Overtaking is based on Gazebo model poses (not LiDAR / vision).
     const std::array<double,3> offsets{spacing,0.,-spacing};
-    struct Traffic {gz::sim::Entity id; double s, lateral, nominalSpeed;};
-    std::vector<Traffic> traffic;
+    std::vector<avoid::Car> traffic;
     const auto &middle=routes[1];
+    const double now=std::chrono::duration<double>(info.simTime).count();
     for(size_t j=0;j<practice.size();j++){
       const auto other=practice[j];
       if(other==gz::sim::kNullEntity || other==ego)continue;
@@ -146,79 +148,93 @@ class Team11ThreeLane:public gz::sim::System,
       const double ox=pose.Pos().X(),oy=pose.Pos().Y();
       double best=1e99,obsS=0.;
       size_t closest=0;
-      for(size_t i=0;i<middle.size();i++){
-        const double d=std::hypot(ox-middle[i].x,oy-middle[i].y);
-        if(d<best){best=d;obsS=middle[i].s;closest=i;}
+      // Local search tracks the moving cars without an O(N) full-lap scan
+      // on each Gazebo physics tick.
+      if(!observed[j]){
+        for(size_t i=0;i<middle.size();i++){
+          const double dx=ox-middle[i].x,dy=oy-middle[i].y;
+          const double d=dx*dx+dy*dy;
+          if(d<best){best=d;obsS=middle[i].s;closest=i;}
+        }
+        observed[j]=true;
+        measuredSpeed[j]=j==0?10.:20.;
+        lastObsTime[j]=now;
+      }else{
+        const int n=static_cast<int>(middle.size());
+        for(int k=-40;k<=40;k++){
+          const size_t i=(lastNearest[j]+n+k)%n;
+          const double dx=ox-middle[i].x,dy=oy-middle[i].y;
+          const double d=dx*dx+dy*dy;
+          if(d<best){best=d;obsS=middle[i].s;closest=i;}
+        }
+        const double sampleDt=now-lastObsTime[j];
+        if(sampleDt>=.10 && sampleDt<2.){
+          const double delta=avoid::signedGap(lastObsS[j],obsS,lap);
+          const double observedVelocity=delta/sampleDt;
+          if(observedVelocity>=-.5 && observedVelocity<=30.){
+            const double speedEstimate=std::max(0.,observedVelocity);
+            measuredSpeed[j]=.45*speedEstimate+.55*measuredSpeed[j];
+          }
+          lastObsTime[j]=now;
+          lastObsS[j]=obsS;
+        }
       }
+      if(lastObsTime[j]==now)lastObsS[j]=obsS;
+      lastNearest[j]=closest;
       const auto &p=middle[closest];
       const double lateral=-(ox-p.x)*std::sin(p.yaw)
-                           +(oy-p.y)*std::cos(p.yaw);
-      traffic.push_back({other,obsS,lateral,j==0?10.:20.});
+                            +(oy-p.y)*std::cos(p.yaw);
+      traffic.push_back({static_cast<int>(j),obsS,lateral,measuredSpeed[j]});
     }
-    auto forwardDistance=[&](double from,double to){
-      return std::fmod(to-from+lap,lap);
-    };
-    auto laneFree=[&](int candidate){
-      if(candidate<0 || candidate>2)return false;
-      for(const auto &car:traffic){
-        if(std::abs(car.lateral-offsets[candidate])>=.40)continue;
-        const double ahead=forwardDistance(s,car.s);
-        const double behind=forwardDistance(car.s,s);
-        const double rearWindow=std::max(7.,(car.nominalSpeed-baseSpeed)*2.+7.);
-        if(ahead<20. || behind<rearWindow)return false;
-      }
-      return true;
-    };
-    if(changing && forwardDistance(changeStart,s)>=changeLength-1e-5){
-      changing=false;
-      lane=target;
-      std::cout<<"[TEAM11 AVOID] finished lane="<<(target+1)<<std::endl;
+    // Classify the road before deciding whether a safe passing gap exists.
+    // This is independent of temporary target lane selection.
+    double roadCurve=0.;
+    for(double look=0.;look<=36.;look+=3.){
+      const auto a=sample(1,s+look);
+      const auto b=sample(1,s+look+2.);
+      const auto c=sample(1,s+look+4.);
+      const double ya=std::atan2(b.y-a.y,b.x-a.x);
+      const double yb=std::atan2(c.y-b.y,c.x-b.x);
+      const double delta=std::atan2(std::sin(yb-ya),std::cos(yb-ya));
+      roadCurve=std::max(roadCurve,std::abs(delta)/
+                            std::max(.4,std::hypot(c.x-b.x,c.y-b.y)));
     }
-    bool brakeForTraffic=false;
-    if(!fixedLane && !changing && traveledFromStart>=12.){
-      bool passed=false;
-      for(const auto &car:traffic)if(car.id==avoidEntity){
-        const double behind=forwardDistance(car.s,s);
-        passed=behind>=6. && behind<lap/2.;
-      }
-      if(target!=homeLane && avoidEntity!=gz::sim::kNullEntity &&
-         passed && laneFree(homeLane) &&
-         traveledFromStart-lastChangeTravel>=changeLength+6.){
-        lane=target;target=homeLane;changeStart=s;changing=true;
+    if(changing && avoid::signedGap(changeStart,s,lap)>=changeLength-1e-5){
+      changing=false;lane=target;
+      std::cout<<"[TEAM11 AVOID] finished lane="<<(lane+1)<<std::endl;
+    }
+    double followingSpeed=std::numeric_limits<double>::infinity();
+    if(!fixedLane){
+      avoid::State state;
+      state.s=s;state.lap=lap;state.speed=speed;
+      state.roadSpeed=avoid::curvatureSpeed(roadCurve);
+      state.spacing=spacing;state.curve=roadCurve;
+      state.travelled=traveledFromStart;
+      state.sinceChange=traveledFromStart-lastChangeTravel;
+      state.lane=changing?lane:target;
+      state.targetLane=target;
+      state.homeLane=homeLane;state.avoidId=avoidIndex;
+      state.changing=changing;
+      const auto decision=avoid::evaluate(state,traffic);
+      followingSpeed=decision.followSpeed;
+      if(decision.nextLane>=0 && !changing){
+        const int oldLane=target;
+        lane=target;target=decision.nextLane;
+        changing=true;changeStart=s;
+        changeLength=decision.changeLength;
         lastChangeTravel=traveledFromStart;
-        avoidEntity=gz::sim::kNullEntity;
-        std::cout<<"[TEAM11 AVOID] return "<<(lane+1)<<" -> "
-                 <<(target+1)<<" after passing"<<std::endl;
-      }else if(traveledFromStart-lastChangeTravel>=changeLength+4.){
-        double risk=1e99;
-        gz::sim::Entity blocker=gz::sim::kNullEntity;
-        for(const auto &car:traffic){
-          if(std::abs(car.lateral-offsets[target])>=.40)continue;
-          const double ahead=forwardDistance(s,car.s);
-          const double closing=std::max(0.,baseSpeed-car.nominalSpeed);
-          const double trigger=clamp(8.+closing*3.,10.,30.);
-          if(closing>.5 && ahead>=2. && ahead<trigger && ahead<risk){
-            risk=ahead;blocker=car.id;
-          }
-        }
-        if(blocker!=gz::sim::kNullEntity){
-          int next=-1;
-          for(int candidate:{target-1,target+1}){
-            if(laneFree(candidate)){next=candidate;break;}
-          }
-          if(next>=0){
-            lane=target;target=next;changeStart=s;changing=true;
-            lastChangeTravel=traveledFromStart;
-            avoidEntity=blocker;
-            std::cout<<"[TEAM11 AVOID] pass "<<(lane+1)<<" -> "
-                     <<(target+1)<<" obstacle_distance="<<risk<<"m"
-                     <<std::endl;
-          }else{
-            brakeForTraffic=true;
-            std::cout<<"[TEAM11 AVOID] no adjacent free lane, braking"
-                     <<std::endl;
-          }
-        }
+        avoidIndex=decision.returning?-1:decision.avoidId;
+        std::cout<<"[TEAM11 AVOID] "
+                 <<(decision.returning?"return ":"pass ")
+                 <<(oldLane+1)<<" -> "<<(target+1)
+                 <<" length_m="<<changeLength
+                 <<" current_mps="<<speed
+                 <<" road_curve="<<roadCurve<<std::endl;
+      }else if(decision.blocked && !changing &&
+               trackedAt<now-.8){
+        trackedAt=now;
+        std::cout<<"[TEAM11 AVOID] FOLLOW lane="<<(target+1)
+                 <<" follow_target_mps="<<followingSpeed<<std::endl;
       }
     }
     // Quintic interpolation over traveled distance, including lap wrap.
@@ -281,8 +297,17 @@ class Team11ThreeLane:public gz::sim::System,
     // preview momentarily classifies the road as straight.
     if(std::abs(steer)>slowThreshold)targetSpeed=std::min(targetSpeed,7.);
     if(std::abs(steer)>2.*slowThreshold)targetSpeed=std::min(targetSpeed,5.);
-    if(changing)targetSpeed=std::min(targetSpeed,7.);
-    if(brakeForTraffic)targetSpeed=0.; // emergency / blocked-path exception
+    if(changing){
+      // Quintic lane change lateral acceleration <= 2.5 m/s^2.
+      const double width=std::abs(offsets[target]-offsets[lane]);
+      if(width>1e-4){
+        const double laneSpeed=changeLength*std::sqrt(
+              avoid::kMaxLatAccelMps2/(5.774*width));
+        targetSpeed=std::min(targetSpeed,laneSpeed);
+      }
+    }
+    if(std::isfinite(followingSpeed))
+      targetSpeed=std::min(targetSpeed,followingSpeed);
     targetSpeed=clamp(targetSpeed,0.,baseSpeed);
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
@@ -424,7 +449,12 @@ class Team11ThreeLane:public gz::sim::System,
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
   int lane{1},target{1},homeLane{1},lapCount{0};
-  gz::sim::Entity avoidEntity{gz::sim::kNullEntity};
+  int avoidIndex{-1};
+  std::array<bool,2> observed{false,false};
+  std::array<size_t,2> lastNearest{0,0};
+  std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};
+  std::array<double,2> measuredSpeed{10.,20.};
+  double trackedAt{-100.};
   double lastChangeTravel{-100.};
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
