@@ -71,6 +71,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ET.SubElement(pace_plugin, "pace_mass_kg").text = "1.5"
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
+    camera_ready_file = destination / "camera_ready.flag"
     camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
     # Aim TEAM11's camera toward the actual gantry from the chosen grid.
     gate = world.find("model[@name='race_start_gantry']")
@@ -109,6 +110,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                          name="urrc::Team11ThreeLane")
     for tag, val in (
         ("camera_topic", camera_topic),
+        ("camera_ready_file", str(camera_ready_file.resolve())),
         ("start_mode", start_mode),
         ("ego_name", ego_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
@@ -169,6 +171,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "fixed_lane": fixed_lane,
         "start_mode": start_mode,
         "grid_position": grid_position, "start_camera_topic": camera_topic,
+        "camera_ready_file": str(camera_ready_file.resolve()),
         "camera_target": [gx,gy,target_z],
         "camera_pitch_rad": camera_pitch, "camera_yaw_rad": camera_yaw,
         "camera_hfov_rad": camera_hfov, "camera_target_distance_m": ground_distance,
