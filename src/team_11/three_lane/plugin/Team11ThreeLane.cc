@@ -254,9 +254,14 @@ class Team11ThreeLane:public gz::sim::System,
         // independent evidence. Require >=3 spaced observations.
         const double closing=car.speed-speed;
         const double ttc=closing>0.1?behind/closing:1e9;
-        if(now-lastRearSample[idx]>=.15){
+        // Only accept independent LiDAR frames, not repeated physics
+        // updates that inspect one cached scan many times.
+        const unsigned int frameId=rearFrames.load();
+        if(now-lastRearSample[idx]>=.15 &&
+           frameId!=lastRearFrameId[idx]){
           if(now-lastRearSample[idx]>1.0)rearEvidence[idx]=0;
           lastRearSample[idx]=now;
+          lastRearFrameId[idx]=frameId;
           rearEvidence[idx]=std::min(12,rearEvidence[idx]+1);
           rearDeclining[idx]=(ttc<=lastRearTtc[idx]-.035);
           lastRearTtc[idx]=ttc;
@@ -611,6 +616,7 @@ class Team11ThreeLane:public gz::sim::System,
   std::array<double,2> lastRearSample{-100.,-100.};
   std::array<double,2> lastRearTtc{1e9,1e9};
   std::array<bool,2> rearDeclining{false,false};
+  std::array<unsigned int,2> lastRearFrameId{0,0};
   std::array<bool,2> observed{false,false};
   std::array<size_t,2> lastNearest{0,0};
   std::array<double,2> lastObsS{0.,0.},lastObsTime{-1.,-1.};
