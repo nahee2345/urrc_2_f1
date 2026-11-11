@@ -90,6 +90,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     camera_yaw = math.atan2(gy-cy,gx-cx)-yaw
     camera_yaw = math.atan2(math.sin(camera_yaw),math.cos(camera_yaw))
     camera_hfov = .52
+    camera_range = math.hypot(ground_distance, target_z - cz)
+    lamp_spacing_px = 0.16 * (1280 / 2) / math.tan(camera_hfov / 2) / camera_range
     ET.SubElement(camera, "pose").text = (
         f"0.20 0 0.24 0 {camera_pitch:.8f} {camera_yaw:.8f}")
     ET.SubElement(camera, "always_on").text = "true"
@@ -111,6 +113,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     for tag, val in (
         ("camera_topic", camera_topic),
         ("camera_ready_file", str(camera_ready_file.resolve())),
+        ("lamp_spacing_px", f"{lamp_spacing_px:.6f}"),
         ("start_mode", start_mode),
         ("ego_name", ego_name),
         ("route_prefix", str((destination / "team11_routes").resolve())),
@@ -175,6 +178,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "camera_target": [gx,gy,target_z],
         "camera_pitch_rad": camera_pitch, "camera_yaw_rad": camera_yaw,
         "camera_hfov_rad": camera_hfov, "camera_target_distance_m": ground_distance,
+        "lamp_spacing_px": lamp_spacing_px,
         "grid_lane_policy": "odd=3,even=1",
         "collision_mode": "scripted_asymmetric_bounce",
         "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
