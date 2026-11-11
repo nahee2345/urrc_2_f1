@@ -72,6 +72,20 @@ Hungaroring도 `monza`를 `hungaroring`으로 바꿔 동일하게 시험합니�
 
 로그에는 `[TEAM11] ... lane=1`처럼 1부터 시작하는 번호로 출력됩니다.
 
+## 출발 그리드에 따른 기본 경로
+
+- `--grid 1 --lane auto`: 1번 그리드 노란 TEAM11 → **3번 경로(우측)**.
+- `--grid 2 --lane auto`: 2번 그리드 노란 TEAM11 → **1번 경로(좌측)**.
+- 양쪽 모두 5등 카메라 인식 출발을 유지합니다.
+- 2번 그리드를 TEAM11이 사용할 경우 원래 그 자리에 있던 **빨간색 연습차량은 해당 시연 월드에서 제거**합니다. 파란색 9번 그리드 차량은 유지됩니다. 원본 저장소는 바꾸지 않습니다.
+- 지정한 경로로는 스폰 직후 약 12m 구간에 걸쳐 매끄럽게 합류합니다. 장애물 회피에 의한 경로변경은 기존대로 허용합니다. `--fixed-lane`이 있을 때만 해당 경로를 계속 고정합니다.
+
+```bash
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --grid 1 --lane auto --start-mode camera
+# 이전 Gazebo 종료 후
+python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --grid 2 --lane auto --start-mode camera
+```
+
 ## 전방 카메라 5등 인식 출발 (기본값)
 
 - 1번 그리드 노란색 차량에 고정된 전방 RGB 카메라(`/urrc/<track>/team11/front/image`)가 신호등을 관찰합니다.
