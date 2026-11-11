@@ -49,7 +49,7 @@ int main() {
     // No jumping over an occupied intermediate lane.
     const auto result=evaluate(car(2),{
       {1,125.,laneOffset(2,.765),10.},
-      {2,105.,0.,0.}});
+      {2,116.,0.,0.}});
     assert(result.nextLane==-1);
   }
   {
@@ -61,7 +61,7 @@ int main() {
     // Match slower leader instead of stop, with no safe alternate.
     const auto result=evaluate(car(2),{
       {1,120.,laneOffset(2,.765),10.},
-      {2,108.,0.,0.}});
+      {2,116.,0.,0.}});
     assert(result.nextLane==-1);
     assert(result.followSpeed<15. && result.followSpeed>10.);
   }
