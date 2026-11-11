@@ -248,14 +248,20 @@ class Team11ThreeLane:public gz::sim::System,
     double yawChange=std::atan2(std::sin(yaw1-yaw0),std::cos(yaw1-yaw0));
     const double curvature=yawChange/std::max(.05,std::hypot(p1.x-p0.x,p1.y-p0.y));
     const double steer=std::atan(wheelbase*curvature);
-    // Preview 20m of curvature; braking 10 -> 3m/s at 4m/s^2
-    // needs about 11.4m, so start decelerating before corner entry.
+    // Preview 36m of ACTUAL XY trajectory geometry, not waypoint yaw.
+    // Earlier raw yaw preview reported spurious ~1.5rad/m on straights.
+    // Braking from 15 to 3m/s at 4m/s2 needs 27m.
     double futureCurvature=std::abs(curvature);
-    for(double look=0.;look<=20.;look+=2.){
-      const auto a=sample(1,s+look);
-      const auto b=sample(1,s+look+2.);
-      const double delta=std::atan2(std::sin(b.yaw-a.y),std::cos(b.yaw-a.y));
-      futureCurvature=std::max(futureCurvature,std::abs(delta)/2.);
+    for(double look=0.;look<=36.;look+=3.){
+      const auto a=poseAt(s+look);
+      const auto b=poseAt(s+look+2.);
+      const auto c=poseAt(s+look+4.);
+      const double first=std::atan2(b.y-a.y,b.x-a.x);
+      const double second=std::atan2(c.y-b.y,c.x-b.x);
+      const double turn=std::atan2(std::sin(second-first),
+                                   std::cos(second-first));
+      const double distance=std::max(.4,std::hypot(c.x-b.x,c.y-b.y));
+      futureCurvature=std::max(futureCurvature,std::abs(turn)/distance);
     }
     double targetSpeed=baseSpeed;
     if(futureCurvature<.012 && std::abs(steer)<=slowThreshold){
