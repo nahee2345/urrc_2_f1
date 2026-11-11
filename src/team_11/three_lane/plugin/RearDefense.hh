@@ -8,7 +8,7 @@
 
 namespace urrc::defense {
 
-constexpr double kRearDetectM=30.;
+constexpr double kRearDetectM=60.;
 constexpr double kClosingMinMps=2.;
 constexpr double kThreatTtcS=5.;
 constexpr double kLaneTolerance=.40;
