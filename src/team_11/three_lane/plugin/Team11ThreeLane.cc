@@ -4,6 +4,7 @@
 #include "OvertakePlanner.hh"
 #include "RearDefense.hh"
 #include "RearThreatHistory.hh"
+#include "ForcePathFollower.hh"
 #include "RearScan.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
@@ -50,6 +51,7 @@ class Team11ThreeLane:public gz::sim::System,
     target=lane;
     homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
+    physicsCollisions=cfg->Get<bool>("physics_collisions",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -152,6 +154,35 @@ class Team11ThreeLane:public gz::sim::System,
     const std::array<double,3> offsets{spacing,0.,-spacing};
     std::vector<avoid::Car> traffic;
     const auto &middle=routes[1];
+    if(physicsCollisions){
+      // Re-project REAL physics position to the existing 3-route arc length.
+      // Do not use motor time as a substitute for movement after an impact.
+      const auto actual=gz::sim::worldPose(ego,ecm);
+      double best=1e99;
+      size_t bestIdx=lastPhysicalNearest;
+      const int count=static_cast<int>(middle.size());
+      const int window=physicalProjectionReady?80:count;
+      for(int k=physicalProjectionReady?-window:0;
+          k<=(physicalProjectionReady?window:count-1);k++){
+        const size_t idx=physicalProjectionReady?
+          (lastPhysicalNearest+count+k)%count:static_cast<size_t>(k);
+        const auto &p=middle[idx];
+        const double d=std::hypot(actual.Pos().X()-p.x,
+                                  actual.Pos().Y()-p.y);
+        if(d<best){best=d;bestIdx=idx;}
+      }
+      physicalProjectionReady=true;
+      lastPhysicalNearest=bestIdx;
+      const double delta=avoid::signedGap(s,middle[bestIdx].s,lap);
+      if(std::abs(delta)<5.0)
+        s=std::fmod(s+delta+lap,lap);
+      if(best>4. && physicsWarnAt<now-2.){
+        physicsWarnAt=now;
+        std::cout<<"[TEAM11 PHYSICS] off planned route by "
+                 <<best<<"m; no teleport recovery"<<std::endl;
+      }
+    }
+
     const double now=std::chrono::duration<double>(info.simTime).count();
     for(size_t j=0;j<practice.size();j++){
       const auto other=practice[j];
@@ -436,8 +467,20 @@ class Team11ThreeLane:public gz::sim::System,
     // instantly from 10 to 3 at a corner.
     speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
     const auto pos=poseAt(s);
-    gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
-        pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    if(physicsCollisions){
+      const auto actual=gz::sim::worldPose(ego,ecm);
+      const auto look=poseAt(s+clamp(3.+speed*.35,3.,9.));
+      const double heading=std::atan2(
+        look.y-actual.Pos().Y(),look.x-actual.Pos().X());
+      const gz::sim::Link base(
+        gz::sim::Model(ego).LinkByName(ecm,"base_link"));
+      physical::apply(base,ecm,actual,{look.x,look.y,heading,speed},
+                      50.,1.2621,5.);
+    }else{
+      // Preserve legacy scripted route following with no physics mode.
+      gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
     const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
@@ -595,6 +638,9 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
+  bool physicsCollisions{false},physicalProjectionReady{false};
+  size_t lastPhysicalNearest{0};
+  double physicsWarnAt{-100.};
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
   bool defending{false};
