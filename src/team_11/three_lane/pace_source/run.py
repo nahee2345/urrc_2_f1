@@ -50,7 +50,7 @@ def start_signal(track,env,generated):
 def fire_start(track,env):
     """Send a reliable start burst only after successful five-light model removal."""
     for attempt in range(3):
-        cmd=['gz','topic','-t',f'/urrc/{track}/pace/start',
+        cmd=['gz','topic','-t',f'/urrc/{track}/team11/pace_start_11',
              '-m','gz.msgs.Boolean','-p','data: true']
         result=subprocess.run(cmd,cwd=ROOT,env=env,text=True,
                               capture_output=True,timeout=12)
@@ -100,7 +100,7 @@ def main(argv=None):
         with log.open('wb') as loghandle:
             sim=subprocess.Popen(simcmd,cwd=ROOT,env=env,stdout=loghandle,stderr=subprocess.STDOUT,start_new_session=True)
             # A published readiness topic proves the native plugin loaded and advertised.
-            ready=f'/urrc/{args.track}/pace/start/ready'
+            ready=f'/urrc/{args.track}/team11/pace_start_11_ready_11'
             deadline=time.monotonic()+50
             while time.monotonic()<deadline:
                 if sim.poll() is not None:

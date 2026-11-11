@@ -116,7 +116,7 @@ def main():
         with log.open("wb") as fd:
             sim=subprocess.Popen(cmd,cwd=src,env=env,stdout=fd,
                                  stderr=subprocess.STDOUT,start_new_session=True)
-            ready=f"/urrc/{args.track}/pace/start/ready"
+            ready=f"/urrc/{args.track}/team11/pace_start_11_ready_11"
             for _ in range(100):
                 if sim.poll() is not None:
                     raise RuntimeError("Gazebo quit. Inspect "+str(log))

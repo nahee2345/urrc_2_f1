@@ -137,7 +137,7 @@ def generate(root, track, target, libfile):
     world_tree=ET.parse(res/'worlds'/f'{track}_race.sdf')
     world=world_tree.getroot().find('world')
     plugin=ET.SubElement(world,'plugin',filename=str(Path(libfile).resolve()),name='urrc::PaceCars')
-    ET.SubElement(plugin,'start_topic').text=f'/urrc/{track}/pace/start'
+    ET.SubElement(plugin,'start_topic').text=f'/urrc/{track}/team11/pace_start_11'
     manifest={'track':track,'start_on':'all_five_lights_off','cars':[]}
     for slot,speed in GRID_SPEEDS:
         grid=meta['grid'][slot-1]

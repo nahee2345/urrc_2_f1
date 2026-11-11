@@ -108,7 +108,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Physical contact mode is opt-in; default scripted mode stays identical.
     ET.SubElement(pace_plugin, "physics_contact_mode").text = str(physics_contact).lower()
     if physics_contact:
-        ET.SubElement(pace_plugin, "physics_contact_topic").text = f"/urrc/{track}/team11/physics_contact"
+        ET.SubElement(pace_plugin, "physics_contact_topic").text = f"/urrc/{track}/team11/physics_contact_11"
     if physics_contact:
         ET.SubElement(world, "plugin", filename="gz-sim-contact-system",
                       name="gz::sim::systems::Contact")
@@ -136,7 +136,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 sensor = ET.SubElement(body, "sensor", name="team11_collision_contacts", type="contact")
                 ET.SubElement(sensor, "always_on").text = "true"
                 ET.SubElement(sensor, "update_rate").text = "60"
-                contact_topic = f"/urrc/{track}/team11/physics_contact"
+                contact_topic = f"/urrc/{track}/team11/physics_contact_11"
                 ET.SubElement(sensor, "topic").text = contact_topic
                 contact_conf = ET.SubElement(sensor, "contact")
                 ET.SubElement(contact_conf, "collision").text = "body_collision"
@@ -149,7 +149,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 ET.SubElement(ode, "mu2").text = "0.9"
 
     link = ego_model.find("link[@name='base_link']")
-    camera_topic = f"/urrc/{track}/team11/front/image"
+    camera_topic = f"/urrc/{track}/team11/front_image_11"
     camera_ready_file = destination / "camera_ready.flag"
     camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
     # Aim TEAM11's camera toward the actual gantry from the chosen grid.
@@ -187,7 +187,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ET.SubElement(clip, "near").text = "0.1"
     ET.SubElement(clip, "far").text = "80"
     # Genuine rear-facing Gazebo LiDAR on the very same TEAM11 vehicle.
-    rear_topic = f"/urrc/{track}/team11/rear_scan"
+    rear_topic = f"/urrc/{track}/team11/rear_scan_11"
     rear = ET.SubElement(link, "sensor", name="team11_rear_lidar", type="gpu_lidar")
     ET.SubElement(rear, "pose").text = "-0.20 0 0.16 0 0 3.141592653589793"
     ET.SubElement(rear, "always_on").text = "true"
