@@ -204,6 +204,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("fixed_lane", str(fixed_lane).lower()),
         ("spacing_m", str(spacing)),
         ("wheelbase_m", ".33"),
+        ("maximum_steering_deg", "30"),
+        ("maximum_yaw_rate_deg_s", "68.754935"),
         ("base_speed_mps", "15"),
         ("physics_contact_mode", str(physics_contact).lower()),
         ("steering_slow_threshold_deg", "10"),
