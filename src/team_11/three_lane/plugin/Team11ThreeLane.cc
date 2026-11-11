@@ -55,6 +55,7 @@ class Team11ThreeLane:public gz::sim::System,
     if(maxDecel<=0 || maxAccel<=0){std::cerr<<"[TEAM11 ERROR] Invalid acceleration limits\n";return;}
     startMode=cfg->Get<std::string>("start_mode","camera").first;
     cameraTopic=cfg->Get<std::string>("camera_topic","").first;
+    cameraReadyFile=cfg->Get<std::string>("camera_ready_file","").first;
     if(startMode!="immediate" && startMode!="camera"){
       std::cerr<<"[TEAM11 ERROR] Invalid start mode "<<startMode<<"\n";return;
     }
@@ -362,7 +363,21 @@ class Team11ThreeLane:public gz::sim::System,
   void OnImage(const gz::msgs::Image &image){
     const int lamps=CountRedLamps(image);
     if(lamps<0)return; // Invalid or incomplete image is NOT lights-off.
-    imageFrames.fetch_add(1);
+    const auto count=imageFrames.fetch_add(1)+1;
+    if(count==1 && !cameraReadyFile.empty()){
+      std::ofstream readyStream(cameraReadyFile,std::ios::trunc);
+      if(readyStream){
+        readyStream<<"image_received=1 width="<<image.width()
+                   <<" height="<<image.height()<<"\\n";
+        readyStream.flush();
+        std::cout<<"[TEAM11 CAMERA] first valid image received"
+                 <<" width="<<image.width()<<" height="<<image.height()
+                 <<std::endl;
+      }else{
+        std::cerr<<"[TEAM11 CAMERA ERROR] Cannot write camera readiness "
+                 <<cameraReadyFile<<std::endl;
+      }
+    }
     lastLampCount.store(lamps);
     if(cameraStarted.load())return;
     if(lamps==5){
@@ -410,7 +425,7 @@ class Team11ThreeLane:public gz::sim::System,
   gz::sim::Entity world{gz::sim::kNullEntity},ego{gz::sim::kNullEntity};
   std::array<gz::sim::Entity,2> practice{gz::sim::kNullEntity,gz::sim::kNullEntity};
   std::array<std::vector<Sample>,3> routes;
-  std::string egoName,startMode,cameraTopic;
+  std::string egoName,startMode,cameraTopic,cameraReadyFile;
   gz::transport::Node node;
   std::atomic<bool> cameraStarted{false},fiveObserved{false};
   std::atomic<unsigned int> imageFrames{0},redFrames{0},offFrames{0};
