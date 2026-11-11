@@ -58,6 +58,31 @@ jobs:
                       assert m['straight_speed_range_mps']==[10,15]
                       print('PASS',track,grid,'opponents',opponents)
           PY
+      - name: Verify generated moving opponent 45m ahead in ego lane
+        run: |
+          python src/team_11/three_lane/run_demo.py monza \
+            --source urrc_source --grid 1 --practice-cars \
+            --scenario slow-ahead --prepare-only
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET,csv
+          base=Path('urrc_source/generated/team11/monza')
+          manifest=json.loads((base/'team11_manifest.json').read_text())
+          assert manifest['practice_scenario']=='slow-ahead'
+          assert manifest['selected_lane_number']==3
+          assert manifest['practice_cars_enabled'] and not manifest['fixed_lane']
+          world=ET.parse(manifest['world_file']).getroot().find('world')
+          pace=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
+          red=next(c for c in pace.findall('car') if c.findtext('name')=='urrc_pace_grid_02')
+          route=Path(red.findtext('route_file'))
+          assert route.name=='team11_red_10mps_ahead.csv'
+          with route.open() as stream:
+              rows=list(csv.reader(stream))
+          assert len(rows)>100
+          assert abs(float(rows[1][0]))<1e-6
+          assert float(red.findtext('speed_mps'))==10
+          print('PASS staged 10 m/s target car at safe forward distance')
+          PY
   gazebo-binary:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -84,3 +109,43 @@ jobs:
           test -s /tmp/team11-new-build/liburrc_team11.so
           test -s /tmp/team11-bounce-build/liburrc_pace_cars.so
           echo 'PASS full Gazebo Harmonic controller + opponent bounce compilation'
+      - name: Read-only original map checkout for real overtaking
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Real camera start and 3rd-to-2nd lane passing scenario
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 300s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+              --practice-cars --scenario slow-ahead --server \
+            > /tmp/team11-overtake-runner.log 2>&1
+          code=$?
+          set -e
+          echo "Gazebo runner exit: $code"
+          tail -n 65 /tmp/team11-overtake-runner.log || true
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          test -f "$log" || { echo 'FAIL no generated Gazebo log'; exit 1; }
+          grep -E '\[TEAM11 AVOID\]|\[TEAM11 CAMERA\]|\[TEAM11 LAP\]|CAMERA GREEN start' "$log" | tail -n 65 || true
+          grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL no actual camera frame'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL five-red 5-light camera launch'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" || { echo 'FAIL no real passing maneuver from 3 to 2'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || { echo 'FAIL maneuver not completed'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log" || { echo 'FAIL did not safely rejoin lane 3'; exit 1; }
+          echo 'PASS real RGB camera start, lane-change, and rejoin'
+      - name: Upload Gazebo overtaking logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-overtake-real-gazebo-logs
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-overtake-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
