@@ -72,6 +72,7 @@ jobs:
           done
       - name: Confirm camera gate and rigid-car limitations are explicit
         run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --prepare-only --start-mode camera >/dev/null
           python - <<'PY'
           from pathlib import Path
           import json
