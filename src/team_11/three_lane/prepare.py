@@ -91,7 +91,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ET.SubElement(pace_plugin, "team11_ego_name").text = ego_name
     ET.SubElement(pace_plugin, "team11_mass_kg").text = "50"
     ET.SubElement(pace_plugin, "physics_collisions").text = str(physics_collisions).lower()
-    ET.SubElement(pace_plugin, "pace_mass_kg").text = "2.5"
+    ET.SubElement(pace_plugin, "pace_mass_kg").text = "2.5" if physics_collisions else "1.5"
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
     camera_ready_file = destination / "camera_ready.flag"
