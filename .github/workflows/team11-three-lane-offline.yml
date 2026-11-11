@@ -94,3 +94,27 @@ jobs:
               assert plugin.findtext('start_mode')=='camera'
               print('PASS',track,'camera gate wiring, static vehicle limitations')
           PY
+      - name: Verify automatic grid 1 to lane 3 and grid 2 to lane 1
+        run: |
+          for track in monza hungaroring; do
+            for grid in 1 2; do
+              python src/team_11/three_lane/run_demo.py "$track" --source urrc_source --prepare-only --grid "$grid" --lane auto --start-mode camera >/dev/null
+              python - "$track" "$grid" <<'PY'
+          from pathlib import Path
+          import json,sys,xml.etree.ElementTree as ET
+          track=sys.argv[1]; grid=int(sys.argv[2])
+          data=json.loads((Path("urrc_source/generated/team11")/track/"team11_manifest.json").read_text())
+          assert data['grid_position']==grid
+          assert data['selected_lane_number']==(3 if grid==1 else 1)
+          world=ET.parse(data['world_file']).getroot().find('world')
+          models={e.get('name') for e in world.findall('model')}
+          assert f"urrc_pace_grid_{grid:02d}" in models
+          assert "urrc_pace_grid_09" in models
+          plugin=next(p for p in world.findall("plugin") if p.get("name")=="urrc::PaceCars")
+          registered=sorted(e.findtext("name") for e in plugin.findall("car"))
+          expected=(["urrc_pace_grid_02","urrc_pace_grid_09"] if grid==1 else ["urrc_pace_grid_09"])
+          assert registered==expected,(registered,expected)
+          print("PASS",track,grid,data['selected_lane_number'])
+          PY
+            done
+          done
