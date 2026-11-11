@@ -47,7 +47,7 @@ def main():
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="enable overtaking (now the default; retained for compatibility)")
     ap.add_argument("--scenario",choices=("normal","slow-ahead"),default="normal",
-                    help="slow-ahead: opt-in RED 10m/s car 45m ahead on our lane (generated world only)")
+                    help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
     ap.add_argument("--practice-cars",action="store_true",
                     help="enable original moving red/blue opponents after solo baseline")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
