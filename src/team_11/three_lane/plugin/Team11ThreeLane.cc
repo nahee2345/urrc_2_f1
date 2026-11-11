@@ -162,7 +162,7 @@ class Team11ThreeLane:public gz::sim::System,
         if(std::abs(car.lateral-offsets[candidate])>=.40)continue;
         const double ahead=forwardDistance(s,car.s);
         const double behind=forwardDistance(car.s,s);
-        const double rearWindow=std::max(7.,(car.nominalSpeed-speed)*2.+7.);
+        const double rearWindow=std::max(7.,(car.nominalSpeed-baseSpeed)*2.+7.);
         if(ahead<20. || behind<rearWindow)return false;
       }
       return true;
@@ -193,7 +193,7 @@ class Team11ThreeLane:public gz::sim::System,
         for(const auto &car:traffic){
           if(std::abs(car.lateral-offsets[target])>=.40)continue;
           const double ahead=forwardDistance(s,car.s);
-          const double closing=std::max(0.,speed-car.nominalSpeed);
+          const double closing=std::max(0.,baseSpeed-car.nominalSpeed);
           const double trigger=clamp(8.+closing*3.,10.,30.);
           if(closing>.5 && ahead>=2. && ahead<trigger && ahead<risk){
             risk=ahead;blocker=car.id;
