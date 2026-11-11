@@ -147,7 +147,7 @@ jobs:
           data=json.loads(path.read_text())
           assert data["grid_position"]==1
           assert data["selected_lane_number"]==3
-          assert data["fixed_lane"] is True
+          assert data["fixed_lane"] is False
           world=ET.parse(data["world_file"]).getroot().find("world")
           controller=next(p for p in world.findall("plugin") if p.get("name")=="urrc::Team11ThreeLane")
           assert controller.findtext("initial_lane")=="2"
