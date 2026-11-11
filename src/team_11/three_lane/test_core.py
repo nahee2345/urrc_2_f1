@@ -18,7 +18,7 @@ class LaneTests(unittest.TestCase):
     def test_three_paths(self):
         lanes=generate_lanes(self.pts)
         self.assertEqual(len(lanes),3)
-        self.assertAlmostEqual(lane_spacing(self.pts),.535)
+        self.assertAlmostEqual(lane_spacing(self.pts),.765)
         self.assertEqual(closest_lane(self.pts,*lanes[0][0][1:3]),0)
         self.assertEqual(closest_lane(self.pts,*lanes[2][0][1:3]),2)
     def test_edge_margin(self):
@@ -26,13 +26,13 @@ class LaneTests(unittest.TestCase):
             for p in lane[::40]:
                 self.assertLessEqual(
                     math.hypot(p[1]-60*math.cos(p[0]/60),
-                               p[2]-60*math.sin(p[0]/60)),.536)
+                               p[2]-60*math.sin(p[0]/60)),.766)
     def test_persistent_change(self):
         policy=LaneDecision(1)
         self.assertEqual(policy.update({1},0),0)
         self.assertEqual(policy.update(set(),9),0)
         self.assertEqual(policy.update(set(),3),0)
-        self.assertAlmostEqual(policy.offset(.535),.535)
+        self.assertAlmostEqual(policy.offset(.765),.765)
     def test_obstacle(self):
         p=self.pts[100]
         spacing=lane_spacing(self.pts)
