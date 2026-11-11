@@ -84,7 +84,7 @@ jobs:
           pace=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
           cars=pace.findall('car')
           assert len(cars)==1
-          assert cars[0].findtext('speed_mps')=='20'
+          assert abs(float(cars[0].findtext('speed_mps'))-20.)<1e-6
           route=Path(cars[0].findtext('route_file'))
           assert route.name=='team11_blue_20mps_behind.csv'
           with route.open() as stream:rows=list(csv.reader(stream))
