@@ -46,7 +46,7 @@ def main():
                     help="keep selected lane, disable overtaking")
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="enable overtaking (now the default; retained for compatibility)")
-    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast"),default="normal",
+    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast","physics-impact"),default="normal",
                     help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
     ap.add_argument("--physics-collisions",action="store_true",
                     help="enable physical Gazebo contact on 50kg ego and 2.5kg pace vehicles, no scripted bounce")
