@@ -91,6 +91,10 @@ def main():
     cmd.append(manifest["world_file"])
     sim=lights=None
     log=dest/"team11_gazebo.log"
+    camera_ready=Path(manifest["camera_ready_file"])
+    # Never accept a marker produced by a previous Gazebo session.
+    if camera_ready.exists():
+        camera_ready.unlink()
     try:
         with log.open("wb") as fd:
             sim=subprocess.Popen(cmd,cwd=src,env=env,stdout=fd,
@@ -123,6 +127,20 @@ def main():
                     time.sleep(.5)
                 else:
                     raise RuntimeError("TEAM11 camera topic not ready: "+camera_topic)
+                # Topic listing proves advertisement, not delivery to TEAM11.
+                # Wait for the plugin to decode at least one actual frame.
+                for _ in range(120):
+                    if sim.poll() is not None:
+                        raise RuntimeError("Gazebo exited while awaiting first camera frame")
+                    if camera_ready.is_file():
+                        print("[TEAM11 CAMERA] real frame confirmed, signal enabled",
+                              camera_ready.read_text().strip(),flush=True)
+                        break
+                    time.sleep(.5)
+                else:
+                    raise RuntimeError(
+                        "TEAM11 failed to receive a valid RGB frame before signal. "
+                        "Check gz-camera/system plugin and Gazebo log: "+str(log))
             # Camera mode gates only TEAM11 using actual image analysis.
 
             # The original pace cars may start after the regular light sequence;
