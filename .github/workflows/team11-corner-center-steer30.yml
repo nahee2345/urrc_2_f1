@@ -95,7 +95,7 @@ jobs:
           for i in $(seq 1 218); do
             if test -f "$log" &&
                grep -Fq "[TEAM11 CORNER] slow merge $from -> 2" "$log" &&
-               grep -Fq '[TEAM11 AVOID] finished lane=2' "$log"; then
+               grep -Fq '[TEAM11 CORNER] finished lane=2' "$log"; then
               echo "PASS completed $from -> 2 corner merge at second $i"
               break
             fi
@@ -109,7 +109,7 @@ jobs:
           grep -E 'TEAM11 CORNER|finished lane|yaw_rate_deg_s|TEAM11 ERROR' "$log" | tail -n 45 || true
           grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL start'; exit 1; }
           grep -Fq "[TEAM11 CORNER] slow merge $from -> 2" "$log" || { echo "FAIL no $from -> 2"; exit 1; }
-          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || { echo 'FAIL center merge unfinished'; exit 1; }
+          grep -Fq '[TEAM11 CORNER] finished lane=2' "$log" || { echo 'FAIL center merge unfinished'; exit 1; }
           python3 - "$log" <<'PY'
           import math,re,sys
           from pathlib import Path
