@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -71,16 +72,34 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
     camera = ET.SubElement(link, "sensor", name="team11_front_camera", type="camera")
-    ET.SubElement(camera, "pose").text = "0.20 0 0.24 0 -0.43 0"
+    # Aim TEAM11's camera toward the actual gantry from the chosen grid.
+    gate = world.find("model[@name='race_start_gantry']")
+    if gate is None:
+        raise RuntimeError("Starting-light gantry missing")
+    gx, gy, gz, _, _, _ = map(float, gate.findtext("pose").split())
+    target_z = gz + 1.96
+    yaw = grid["yaw"]
+    cx = grid["x"] + .20*math.cos(yaw)
+    cy = grid["y"] + .20*math.sin(yaw)
+    cz = grid["road_z"] + .003 + .24
+    ground_distance = math.hypot(gx-cx, gy-cy)
+    if ground_distance < .5:
+        raise RuntimeError("Starting light gantry is too close")
+    camera_pitch = -math.atan2(target_z-cz, ground_distance)
+    camera_yaw = math.atan2(gy-cy,gx-cx)-yaw
+    camera_yaw = math.atan2(math.sin(camera_yaw),math.cos(camera_yaw))
+    camera_hfov = .52
+    ET.SubElement(camera, "pose").text = (
+        f"0.20 0 0.24 0 {camera_pitch:.8f} {camera_yaw:.8f}")
     ET.SubElement(camera, "always_on").text = "true"
     ET.SubElement(camera, "update_rate").text = "20"
     ET.SubElement(camera, "visualize").text = "false"
     ET.SubElement(camera, "topic").text = camera_topic
     settings = ET.SubElement(camera, "camera")
-    ET.SubElement(settings, "horizontal_fov").text = "1.3"
+    ET.SubElement(settings, "horizontal_fov").text = str(camera_hfov)
     image = ET.SubElement(settings, "image")
-    ET.SubElement(image, "width").text = "640"
-    ET.SubElement(image, "height").text = "360"
+    ET.SubElement(image, "width").text = "1280"
+    ET.SubElement(image, "height").text = "720"
     ET.SubElement(image, "format").text = "R8G8B8"
     clip = ET.SubElement(settings, "clip")
     ET.SubElement(clip, "near").text = "0.1"
@@ -150,6 +169,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "fixed_lane": fixed_lane,
         "start_mode": start_mode,
         "grid_position": grid_position, "start_camera_topic": camera_topic,
+        "camera_target": [gx,gy,target_z],
+        "camera_pitch_rad": camera_pitch, "camera_yaw_rad": camera_yaw,
+        "camera_hfov_rad": camera_hfov, "camera_target_distance_m": ground_distance,
         "grid_lane_policy": "odd=3,even=1",
         "collision_mode": "scripted_asymmetric_bounce",
         "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
