@@ -14,7 +14,7 @@
 - 진행 방향 기준 **1번=왼쪽, 2번=중앙, 3번=오른쪽**입니다.
 - 원본 트랙의 그리드 교대 배치를 따라 **홀수 1·3·5·7·9·11번 → 3번(오른쪽)**, **짝수 2·4·6·8·10·12번 → 1번(왼쪽)** 경로를 선택합니다.
 - 원래 위치에서 약 12m 동안 5차 부드러운 보간으로 선택된 경로에 합류합니다.
-- 단독 주행은 선택 경로를 유지합니다. `--lane 1/2/3 --fixed-lane`으로 각 경로를 별도로 점검할 수 있습니다.
+- 단독 주행도 코너 접근 시 1·3번에서 중앙 2번 경로로 합류합니다. `--lane 1/2/3 --fixed-lane`을 지정한 경우에만 해당 경로를 계속 고정해 점검합니다.
 - 세 경로는 전체 트랙 중 최소 도로 폭을 이용해 생성합니다. 벽 여유와 실제 차체 폭을 고려한 도로 영역 검사와 실제 Gazebo 접촉 검사는 구별해야 합니다.
 
 ## 3. 속도 제어
@@ -29,7 +29,7 @@
 - 조향각 10° 초과 시 목표 최대 7m/s, 20° 초과 시 최대 5m/s입니다.
 - 코너는 X·Y 실제 경로좌표에서 미리 계산하여 감속을 시작합니다.
 - 최고 가속도 2m/s², 최고 감속도 4m/s². 출발 직후의 0~10m/s 가속 구간과 추돌 방지 정지는 목표 대역 예외입니다.
-- 실제 차량이 물리 구동식이 아니라 `SetWorldPoseCmd`로 움직이는 **키네마틱 시연 모델**이라는 한계가 있습니다.
+- 기본 차량은 `SetWorldPoseCmd`로 움직이는 **키네마틱 시연 모델**이지만, 실제 위치·자세 명령은 ±30° 조향·최대 회전속도·곡률 한도를 만족하도록 바이시클 모델로 적분합니다. 별도 `--physics-contact` 실험에서 실제 힘/토크 구동을 사용합니다.
 
 ## 4. 선택적으로 차량을 추가하는 우회·충돌 시험
 
@@ -53,9 +53,9 @@
 
 ```bash
 cd ~/urrc_2_f1
-git fetch origin team11-three-lane-overtake-v1
-git switch team11-three-lane-overtake-v1
-git pull --ff-only origin team11-three-lane-overtake-v1
+git fetch origin team11-corner-center-steer30-v1
+git switch team11-corner-center-steer30-v1
+git pull --ff-only origin team11-corner-center-steer30-v1
 
 # 기본: 연습차량 없이 1번 그리드 → 3번 경로, 카메라 신호 대기
 python3 src/team_11/three_lane/run_demo.py monza --source ~/urrc_2 --grid 1 --start-mode camera
@@ -176,3 +176,57 @@ python3 src/team_11/three_lane/run_demo.py monza \
 - 기존 스크립트로 상대 차량만 튕기는 기능은 물리 모드에서 꺼지며, 완전한 충돌 무반동은 보장되지 않습니다.
 - 물리 힘 기반 15m/s 주행의 완주·안정성·충돌 결과는 실제 Gazebo 시험을 통과해야만 인정합니다.
 - 변경되는 맵은 generated/team11 아래의 생성 월드뿐이며, 원본 맵·그리드는 변경하지 않습니다.
+
+## 10. 코너 중앙 합류 / 최대 조향 ±30° (별도 개발 브랜치)
+
+- 현재 개발 브랜치: `team11-corner-center-steer30-v1`.
+- 본 변경에서는 기존 3경로 CSV, 전방 추월 `OvertakePlanner.hh`, 후방 방어 `RearDefense.hh`, RGB 신호등 출발 및 연습차량 물리 시험 코드를 삭제하지 않습니다.
+- 새 `CornerPlanner.hh`는 원본 도로 중앙선의 52m 앞 곡률을 미리 검사해 코너가 가까우면 1번/3번 경로에서 **2번(중앙) 경로**로 합류를 계획합니다.
+- 합류 전부터 7m/s(급코너 5m/s) 이하로 감속하며, 진행 중인 전방 추월과 경로변경을 우선합니다. 중앙 경로가 충돌 위험이 있으면 강제 합류하지 않습니다.
+- 2번 경로 진입 완료 후에는 중앙 경로를 유지하며 코너 통과 뒤 자동으로 기존 1/3번 경로에 돌아가지 않습니다. 다음 전방 추월이나 새로운 안전한 방어 상황은 기존 정책으로 판단합니다.
+- 사용자 요청에 맞춰 **연습차량 없는 기본 솔로 주행도 코너 중앙 합류를 실행합니다.** 특정 경로 고정 시험이 필요하면 `--fixed-lane`을 지정합니다.
+- `BoundedTracker.hh`는 경로 CSV의 위치와 방향을 즉시 강제하지 않고, **키네마틱 바이시클 모델**로 다음 위치·방향을 계산합니다. 조향각 ±30°와 최대 회전속도 약 68.75°/s(1.2rad/s)를 지키도록 경로 곡률을 제한합니다.
+- 차량 축거 0.33m 기준 실행 가능한 최대 곡률은 tan(30°)/0.33m ≈ **1.75m⁻¹**, 최소 회전반경은 약 **0.572m**입니다. 횡가속도 기준 2.5m/s²도 적용하며, 도달 불가능한 곡률을 요구하면 진행을 중단합니다.
+- 목표 속도·조향각은 실제 목표 경로와 실시간 추적 오차에 따라 낮아질 수 있습니다. 현재 `--physics-contact` 모드는 별도 힘/토크 동역학 시험이며, 실제 접촉에 의한 추가 회전까지 절대 제한하는 것을 의미하지 않습니다.
+- 진단 로그: `TEAM11 CORNER`(코너 중앙 합류), `yaw_rate_deg_s`, `max_steer_deg`, `track_error_m`, `steer`, `preview_curvature`.
+
+### 실행
+
+```bash
+cd ~/urrc_2_f1
+git fetch origin
+git switch team11-corner-center-steer30-v1
+git pull --ff-only origin team11-corner-center-steer30-v1
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --start-mode camera
+```
+
+코너 합류만 검증하려면 `--start-mode immediate --server`로 실행할 수 있습니다. 기본 `--start-mode camera`에서는 기존의 5등 적색 신호등 소등 인식 후 출발합니다.
+
+기존 전방/후방 추월·충돌 연습은 `--practice-cars` 옵션을 추가합니다. 원본 맵은 수정하지 않으며 실제 주행 중 도로 이탈 여부는 별도의 Gazebo 장시간 시험으로 검증해야 합니다.
+
+## 11. 코너 합류 감속 보정 / 전방 추월 TTC 3초 (별도 브랜치)
+
+- 개발 브랜치: `team11-corner-speed-late-pass-v1` (기존 3경로·전방 추월/복귀·후방 방어·카메라 출발·물리 실험 기능 유지).
+- **추월 시작:** 같은 경로 전방 차량과 실제 상대 접근속도를 기반으로 `(전방 경로상 거리-차량 충돌 판정거리 2m)/접근속도`를 계산하며, **예상 충돌까지 3초 이내일 때만** 추월을 검토합니다. 기존 35m 미만이라는 이유만으로 미리 추월하지 않습니다.
+- 전방 차량이 느려도 TTC 3초를 넘으면 기본 경로를 유지하며, 필요하면 추돌 방지를 위해 점진적으로 감속합니다. 옆 경로가 충돌 위험으로 막혀 있으면 억지로 추월하지 않고 감속합니다.
+- 3초는 **추월 시작 허용 기준**이지 충돌 보장 시간이나 강제 충돌 명령이 아닙니다. 코너·진행 중 경로변경·안전 경로 확인 등의 제약은 그대로 유지됩니다.
+- **코너 감속:** 곡률 최대치를 36~52m 앞에서 발견했다는 이유만으로 현재 속도를 바로 5~7m/s 혹은 2~3m/s까지 낮추던 방식을 개선합니다.
+- `SpeedProfile.hh`에서 각 곡률이 나타나는 **남은 거리와 최대감속도 4m/s²**를 고려해 필요한 시점부터 제동하며, 회전 지점에 도달할 때만 실제 조향·횡가속·회전속도에 맞는 목표속도를 적용합니다.
+- 1·3번 경로에서 2번 중앙 경로로 합류하는 규칙과 조향각 ±30°, 최대 yaw 약 68.75°/s, 횡가속도 2.5m/s²는 그대로 적용합니다. 급격한 코너에 실제 도달했을 때는 여전히 5m/s보다 느릴 수 있습니다.
+- `--scenario late-pass`: 원본 맵을 수정하지 않고 **5m/s 적색 연습차량을 같은 경로 45m 앞**에 배치한 별도 검증 모드입니다. 기존 `slow-ahead` 25m 및 후방 차량 시나리오는 보존합니다.
+- 로그: `[TEAM11 AVOID] pass`의 `front_gap_m`, `collision_ttc_s`; `[TEAM11]`의 `speed_profile_cap`, `corner_approach_cap`으로 추월 거리·속도판정을 직접 확인할 수 있습니다.
+
+### 추월 3초 실제 시험 실행
+
+```bash
+cd ~/urrc_2_f1
+git fetch origin
+git switch team11-corner-speed-late-pass-v1
+git pull --ff-only origin team11-corner-speed-late-pass-v1
+python3 src/team_11/three_lane/run_demo.py monza \
+  --source ~/urrc_2 --grid 1 --practice-cars \
+  --scenario late-pass --start-mode camera
+```
+
+코너 속도 보정만 확인하려면 `--practice-cars --scenario late-pass`를 생략하고 실행합니다. 생성된 연습 월드와 원본 트랙은 분리됩니다.

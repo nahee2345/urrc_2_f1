@@ -43,11 +43,11 @@ def main():
     ap.add_argument("--lane",choices=("auto","1","2","3"),default="auto",
                     help="lane 1=left, 2=center, 3=right; auto=nearest")
     ap.add_argument("--fixed-lane",action="store_true",
-                    help="keep selected lane, disable overtaking")
+                    help="hold one exact route for QA; disables all overtaking and center-corner merge")
     ap.add_argument("--allow-lane-change",action="store_true",
-                    help="enable overtaking (now the default; retained for compatibility)")
-    ap.add_argument("--scenario",choices=("normal","slow-ahead","rear-fast","rear-contact"),default="normal",
-                    help="slow-ahead: opt-in RED test car 5m/s 25m ahead (generated world only)")
+                    help="legacy switch (lane changes and automatic corner-center merge now default)")
+    ap.add_argument("--scenario",choices=("normal","slow-ahead","late-pass","rear-fast","rear-contact"),default="normal",
+                    help="slow-ahead: 5m/s red 25m ahead; late-pass: 5m/s red 45m ahead (generated-only)")
     ap.add_argument("--physics-contact",action="store_true",
                     help="opt-in physical 50kg TEAM11 versus dynamic 1.5kg opponents; no scripted bounce")
     ap.add_argument("--practice-cars",action="store_true",
@@ -61,7 +61,7 @@ def main():
         ap.error("staged scenarios require --practice-cars")
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
-    effective_fixed_lane = args.fixed_lane or not args.practice_cars
+    effective_fixed_lane = args.fixed_lane  # default solo still safely enters route 2 at corners
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
         ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")

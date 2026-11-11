@@ -1,0 +1,165 @@
+name: TEAM11 distance-aware corner speed and 3s front TTC QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-corner-speed-late-pass-v1]
+    paths: ['src/team_11/three_lane/**','.github/workflows/team11-corner-speed-ttc3.yml']
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full original and updated front/rear/corner standalone C++ tests
+        run: |
+          set -e
+          for t in test_overtake_planner test_rear_defense test_corner_bounded; do
+            g++ -std=c++17 -Wall -Wextra -Werror -O2 "src/team_11/three_lane/plugin/$t.cc" -o "/tmp/$t"
+            "/tmp/$t"
+          done
+          python3 -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: New 45m lead practice scenario with original map and 3 routes unmodified
+        run: |
+          python3 src/team_11/three_lane/run_demo.py monza \
+            --source urrc_source --grid 1 --start-mode immediate \
+            --practice-cars --scenario late-pass --prepare-only
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          m=json.loads(Path("urrc_source/generated/team11/monza/team11_manifest.json").read_text())
+          w=ET.parse(m["world_file"]).getroot().find("world")
+          names={x.get("name") for x in w.findall("model")}
+          assert "urrc_pace_grid_01" in names
+          assert "urrc_pace_grid_02" in names
+          assert "urrc_pace_grid_09" not in names
+          assert m["scenario_target_speed_mps"]==5
+          assert m["scenario_target_initial_gap_m"]==45
+          p=next(x for x in w.findall("plugin") if x.get("name")=="urrc::Team11ThreeLane")
+          assert p.findtext("maximum_steering_deg")=="30"
+          assert m["fixed_lane"] is False
+          print("PASS late-pass generated-only: red 45m ahead 5m/s, +/-30deg steering, front pursuit enabled")
+          PY
+  gazebo-late-pass:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20.x'}
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with: {required-gazebo-distributions: harmonic}
+      - run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: Verify no early overtaking at initial 45m and passing only when TTC <=3s
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 240s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+            --source "$PWD/urrc_source" --grid 1 --start-mode immediate \
+            --practice-cars --scenario late-pass --server >/tmp/late-pass.log 2>&1 &
+          pid=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 225); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 AVOID] pass ' "$log" &&
+               grep -Fq '[TEAM11 AVOID] finished lane=' "$log"; then break; fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$pid" 2>/dev/null || true
+          wait "$pid" || true
+          set -e
+          tail -n 40 /tmp/late-pass.log || true
+          test -f "$log" || { echo 'FAIL missing Gazebo log'; exit 1; }
+          grep -E 'TEAM11 AVOID|TEAM11 CORNER|speed_profile_cap=' "$log" | tail -n 45 || true
+          grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL vehicle start'; exit 1; }
+          python3 - "$log" <<'PY'
+          from pathlib import Path
+          import sys,re,math
+          s=Path(sys.argv[1]).read_text(errors="replace")
+          passes=re.findall(r'\[TEAM11 AVOID\] pass [^\n]*?front_gap_m=([-+0-9.eE]+) collision_ttc_s=([-+0-9.eE]+)',s)
+          assert passes,("FAIL No overtaking event",s[-2000:])
+          gaps=[(float(a),float(b)) for a,b in passes]
+          assert all(math.isfinite(a) and math.isfinite(b) for a,b in gaps)
+          assert all(0<=ttc<=3.0001 for gap,ttc in gaps),("FAIL passing was started before TTC 3s",gaps)
+          assert all(gap<45 for gap,ttc in gaps),("FAIL premature 45m pass",gaps)
+          print("PASS collision TTC<=3s when front passing actually began:",gaps)
+          PY
+      - name: Save logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-late-pass-gazebo
+          if-no-files-found: ignore
+          path: |
+            /tmp/late-pass.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+  gazebo-corner-speed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20.x'}
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with: {required-gazebo-distributions: harmonic}
+      - run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: Real right route 3 to center 2 with distance-aware deceleration
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 230s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+            --source "$PWD/urrc_source" --grid 1 --start-mode immediate --server \
+            >/tmp/corner-speed.log 2>&1 &
+          pid=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 216); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 CORNER] slow merge 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 CORNER] finished lane=2' "$log"; then break; fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$pid" 2>/dev/null || true
+          wait "$pid" || true
+          set -e
+          test -f "$log" || { echo 'FAIL missing Gazebo log'; exit 1; }
+          grep -E 'TEAM11 CORNER|speed_profile_cap=|ERROR' "$log" | tail -n 45 || true
+          python3 - "$log" <<'PY'
+          import re,sys,math
+          from pathlib import Path
+          data=Path(sys.argv[1]).read_text(errors="replace")
+          assert "[TEAM11 CORNER] slow merge 3 -> 2" in data
+          assert "[TEAM11 CORNER] finished lane=2" in data
+          caps=[float(x) for x in re.findall(r'speed_profile_cap=([-+0-9.eE]+)',data)]
+          actual=[(float(a),float(b)) for a,b in re.findall(
+            r'm/s steer=([-+0-9.eE]+)deg yaw_rate_deg_s=([-+0-9.eE]+)',data)]
+          assert caps and actual
+          assert all(math.isfinite(x) for x in caps)
+          assert all(abs(steer)<=30.001 and abs(yaw)<=68.757 for steer,yaw in actual)
+          assert max(caps)>=12.,("FAIL speed profile still braking excessively before corner",caps)
+          print("PASS 3->2 center merge; +/-30 steer and yaw limits;"
+                " profile max",max(caps),"min",min(caps),"frames",len(actual))
+          PY
+      - name: Save logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-corner-speed-gazebo
+          if-no-files-found: ignore
+          path: |
+            /tmp/corner-speed.log
+            urrc_source/generated/team11/monza/team11_gazebo.log

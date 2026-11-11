@@ -1,0 +1,139 @@
+name: TEAM11 corner center and 30-degree steering QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-corner-center-steer30-v1]
+    paths: ['src/team_11/three_lane/**','.github/workflows/team11-corner-center-steer30.yml']
+jobs:
+  planner-and-world:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve front/rear passing and verify 30deg, curves and corner center
+        run: |
+          set -e
+          for t in test_overtake_planner test_rear_defense test_corner_bounded; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Werror "src/team_11/three_lane/plugin/$t.cc" -o "/tmp/$t"
+            "/tmp/$t"
+          done
+          python3 -m compileall -q src/team_11/three_lane
+          python3 -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: Validate original grids, maps and controller hard limits
+        run: |
+          python3 - <<'PY'
+          import subprocess,sys,json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          for track in ("monza","hungaroring"):
+            for grid in (1,2,3,4):
+              cmd=[sys.executable,"src/team_11/three_lane/run_demo.py",track,
+                   "--source","urrc_source","--grid",str(grid),
+                   "--start-mode","camera","--prepare-only"]
+              subprocess.run(cmd,check=True,capture_output=True,text=True)
+              data=json.loads((Path("urrc_source/generated/team11")/track/"team11_manifest.json").read_text())
+              assert data["selected_lane_number"]==(3 if grid%2 else 1)
+              assert data["fixed_lane"] is False
+              assert data["practice_cars_enabled"] is False
+              assert len(data["routes"])==3
+              world=ET.parse(data["world_file"]).getroot().find("world")
+              assert world.find(f"model[@name='urrc_pace_grid_{grid:02d}']") is not None
+              plugin=next(p for p in world.findall("plugin") if p.get("name")=="urrc::Team11ThreeLane")
+              assert plugin.findtext("maximum_steering_deg")=="30"
+              assert abs(float(plugin.findtext("maximum_yaw_rate_deg_s"))-68.754935)<.001
+              assert plugin.findtext("fixed_lane")=="false"
+              assert plugin.findtext("start_mode")=="camera"
+              print("PASS",track,grid,"original grid; corner center enabled")
+          subprocess.run([sys.executable,"src/team_11/three_lane/run_demo.py","monza",
+            "--source","urrc_source","--grid","1","--fixed-lane","--prepare-only"],
+            check=True,capture_output=True,text=True)
+          d=json.loads((Path("urrc_source/generated/team11/monza")/"team11_manifest.json").read_text())
+          assert d["fixed_lane"] is True
+          print("PASS explicit exact fixed-lane QA retained")
+          PY
+  gazebo-corner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        grid: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20.x'}
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with: {required-gazebo-distributions: harmonic}
+      - name: Build actual Gazebo Harmonic plugins
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/ego -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/ego --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/pace -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/pace --parallel 2
+          test -s /tmp/ego/liburrc_team11.so
+          test -s /tmp/pace/liburrc_pace_cars.so
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: Run real Monza outer-to-center merge and yaw-limited vehicle
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 225s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+            --source "$PWD/urrc_source" --grid "${{ matrix.grid }}" \
+            --start-mode immediate --server \
+            > /tmp/corner-runner.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          from=3
+          if test "${{ matrix.grid }}" -eq 2; then from=1; fi
+          for i in $(seq 1 218); do
+            if test -f "$log" &&
+               grep -Fq "[TEAM11 CORNER] slow merge $from -> 2" "$log" &&
+               grep -Fq '[TEAM11 CORNER] finished lane=2' "$log"; then
+              echo "PASS completed $from -> 2 corner merge at second $i"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          set -e
+          test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
+          grep -E 'TEAM11 CORNER|finished lane|yaw_rate_deg_s|TEAM11 ERROR' "$log" | tail -n 45 || true
+          grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL start'; exit 1; }
+          grep -Fq "[TEAM11 CORNER] slow merge $from -> 2" "$log" || { echo "FAIL no $from -> 2"; exit 1; }
+          grep -Fq '[TEAM11 CORNER] finished lane=2' "$log" || { echo 'FAIL center merge unfinished'; exit 1; }
+          python3 - "$log" <<'PY'
+          import math,re,sys
+          from pathlib import Path
+          lines=Path(sys.argv[1]).read_text(errors='replace').splitlines()
+          measured=[]
+          for line in lines:
+            m=re.search(r'm/s steer=([-+0-9.eE]+)deg yaw_rate_deg_s=([-+0-9.eE]+) max_steer_deg=([-+0-9.eE]+) track_error_m=([-+0-9.eE]+)',line)
+            if m: measured.append(tuple(map(float,m.groups())))
+          assert len(measured)>=4,("Missing actual steering/position diagnostics",len(measured))
+          assert max(abs(row[0]) for row in measured)<=30.001
+          assert max(abs(row[1]) for row in measured)<=68.757
+          assert all(math.isfinite(x) for row in measured for x in row)
+          assert all(abs(row[2]-30)<.001 for row in measured)
+          print("PASS actual Gazebo +/-30 steer and <=1.2rad/s yaw",
+                "frames",len(measured),
+                "max_track_error_m",round(max(row[3] for row in measured),3))
+          PY
+      - name: Upload real Gazebo corner and steering diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-corner-grid-${{ matrix.grid }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/corner-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json
