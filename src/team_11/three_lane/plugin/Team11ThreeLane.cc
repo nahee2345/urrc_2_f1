@@ -4,6 +4,7 @@
 #include "OvertakePlanner.hh"
 #include "RearDefense.hh"
 #include "RearScan.hh"
+#include "PhysicsDrive.hh"
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -49,6 +50,7 @@ class Team11ThreeLane:public gz::sim::System,
     target=lane;
     homeLane=lane;
     fixedLane=cfg->Get<bool>("fixed_lane",false).first;
+    physicsContact=cfg->Get<bool>("physics_contact_mode",false).first;
     spacing=cfg->Get<double>("spacing_m");
     wheelbase=cfg->Get<double>("wheelbase_m");
     baseSpeed=cfg->Get<double>("base_speed_mps");
@@ -427,8 +429,18 @@ class Team11ThreeLane:public gz::sim::System,
     // instantly from 10 to 3 at a corner.
     speed=clamp(targetSpeed,speed-maxDecel*dt,speed+maxAccel*dt);
     const auto pos=poseAt(s);
-    gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
-        pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    if(physicsContact){
+      const auto body=gz::sim::Model(ego).LinkByName(ecm,"base_link");
+      if(body!=gz::sim::kNullEntity){
+        const auto desired=gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0.,0.,yaw0);
+        physics::guide(body,ecm,gz::sim::worldPose(ego,ecm),
+                       desired,speed,50.,dt,egoPhysicalDrive);
+      }
+    }else{
+      gz::sim::Model(ego).SetWorldPoseCmd(ecm,gz::math::Pose3d(
+          pos.x,pos.y,pos.z+.003,0,0,yaw0));
+    }
     s=std::fmod(s+speed*dt,lap);
     traveledFromStart+=speed*dt;
     const int completedLaps=static_cast<int>(traveledFromStart/std::max(1.,lap));
@@ -586,6 +598,8 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
+  bool physicsContact{false};
+  physics::DriveState egoPhysicalDrive;
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
   bool defending{false};
