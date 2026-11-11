@@ -275,8 +275,11 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                 surface=ET.SubElement(collision,"surface")
                 friction=ET.SubElement(surface,"friction")
                 ode=ET.SubElement(friction,"ode")
-                ET.SubElement(ode,"mu").text="0.85"
-                ET.SubElement(ode,"mu2").text="0.85"
+                # Sliding-box demonstrator has no rolling wheels; use low
+                # body drag so a 5m/s² bounded force can overcome friction.
+                # Contacts/mass/impulses still use the real solver.
+                ET.SubElement(ode,"mu").text="0.10"
+                ET.SubElement(ode,"mu2").text="0.10"
             damping=ET.SubElement(link,"velocity_decay")
             ET.SubElement(damping,"linear").text="0.02"
             ET.SubElement(damping,"angular").text="0.03"
