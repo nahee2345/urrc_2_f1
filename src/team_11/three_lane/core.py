@@ -13,10 +13,10 @@ TRACKS = ("monza", "hungaroring")
 CAR_WIDTH_M = .25
 WALL_MARGIN_M = .08
 EXTRA_CLEARANCE_M = .03
-BASE_SPEED_MPS = 10.0
+BASE_SPEED_MPS = 15.0
 STEER_LIMIT_DEG = 10.0
-SLOW_FACTOR = .8  # legacy constant; corner schedule now 3-7 m/s
-LANE_CHANGE_LENGTH_M = 9.0
+SLOW_FACTOR = .8  # legacy constant; corner schedule now 5-7 m/s
+LANE_CHANGE_LENGTH_M = 12.0
 WHEELBASE_M = .33
 
 
@@ -100,26 +100,21 @@ def interpolated_offset(source, target, progress):
 
 
 def commanded_speed(steering_rad, curvature=0.):
-    """10m/s straight; 3-7m/s for curves, using preview curvature.
+    """Straight / gentle: 15 m/s; ordinary / sharp corners: 5..7 m/s.
 
-    Steering is an additional severity signal, not the only corner detector.
+    Values are target speeds. The Gazebo C++ controller additionally uses
+    hysteresis between corner entry (0.030/m) and exit (0.022/m).
     """
     severity = abs(curvature)
-    if severity < 0.012 and abs(math.degrees(steering_rad)) <= 10.:
-        return 10.
-    if severity < 0.025:
-        speed = 7.
-    elif severity < 0.055:
-        speed = 7. - (severity - .025) / .030 * 2.
-    elif severity < 0.10:
-        speed = 5. - (severity - .055) / .045 * 2.
+    if severity < .030:
+        speed = BASE_SPEED_MPS
     else:
-        speed = 3.
+        speed = max(5., 7. - 2. * min(1., (severity - .030) / .050))
     if abs(math.degrees(steering_rad)) > 10.:
         speed = min(speed, 7.)
     if abs(math.degrees(steering_rad)) > 20.:
-        speed = min(speed, 3.)
-    return max(3., min(10., speed))
+        speed = min(speed, 5.)
+    return speed
 
 
 def rate_limited_speed(previous, target, dt, decel=4., accel=2.):
