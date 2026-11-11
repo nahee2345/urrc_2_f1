@@ -180,14 +180,20 @@ class PaceCars : public gz::sim::System,
   }
  private:
   void OnContact(const gz::msgs::Contacts &msg){
+    if(contactMessages.fetch_add(1)==0)
+      std::cout<<"[TEAM11 PHYSICS] CONTACT_SENSOR_FRAMES contacts="
+               <<msg.contact_size()<<std::endl;
     for(int i=0;i<msg.contact_size();i++){
       const auto &hit=msg.contact(i);
       const std::string first=hit.collision1().name();
       const std::string second=hit.collision2().name();
       const std::string both=first+" "+second;
-      if(both.find(egoName)==std::string::npos)continue;
-      if(both.find("urrc_pace_grid_02")==std::string::npos &&
-         both.find("urrc_pace_grid_09")==std::string::npos)continue;
+      const bool named=(both.find(egoName)!=std::string::npos &&
+           (both.find("urrc_pace_grid_02")!=std::string::npos ||
+            both.find("urrc_pace_grid_09")!=std::string::npos));
+      const bool twoBodies=(first.find("body_collision")!=std::string::npos &&
+                            second.find("body_collision")!=std::string::npos);
+      if(!named && !twoBodies)continue;
       if(contactEvents.fetch_add(1)==0)
         std::cout<<"[TEAM11 PHYSICS] REAL_CONTACT ego="<<egoName
                  <<" collision1="<<first<<" collision2="<<second
@@ -210,6 +216,7 @@ class PaceCars : public gz::sim::System,
   bool physicsContact{false};
   std::string physicsContactTopic;
   std::atomic<unsigned int> contactEvents{0};
+  std::atomic<unsigned int> contactMessages{0};
 };
 } // namespace urrc
 GZ_ADD_PLUGIN(urrc::PaceCars, gz::sim::System,
