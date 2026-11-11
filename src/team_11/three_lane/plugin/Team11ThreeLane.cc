@@ -40,6 +40,7 @@ static double clamp(double x,double a,double b){return std::max(a,std::min(b,x))
 static double smooth(double x){x=clamp(x,0,1);return x*x*x*(10+x*(-15+6*x));}
 static double unwrap(double a,double b){return a+std::atan2(std::sin(b-a),std::cos(b-a));}
 struct Position {double x,y,z;};
+enum class ShiftReason {Front,Defense,Corner};
 class Team11ThreeLane:public gz::sim::System,
  public gz::sim::ISystemConfigure, public gz::sim::ISystemPreUpdate {
  public:
@@ -323,7 +324,10 @@ class Team11ThreeLane:public gz::sim::System,
 
     if(changing && avoid::signedGap(changeStart,s,lap)>=changeLength-1e-5){
       changing=false;lane=target;
-      std::cout<<"[TEAM11 AVOID] finished lane="<<(lane+1)<<std::endl;
+      const char *prefix=changeReason==ShiftReason::Corner ?
+        "[TEAM11 CORNER]" : changeReason==ShiftReason::Defense ?
+        "[TEAM11 DEFENSE]" : "[TEAM11 AVOID]";
+      std::cout<<prefix<<" finished lane="<<(lane+1)<<std::endl;
     }
     double followingSpeed=std::numeric_limits<double>::infinity();
     double cornerApproachCap=std::numeric_limits<double>::infinity();
@@ -356,6 +360,7 @@ class Team11ThreeLane:public gz::sim::System,
         avoidIndex>=0,fixedLane);
       cornerApproachCap=cornerDecision.speedCap;
       if(decision.nextLane>=0 && !changing){
+        changeReason=ShiftReason::Front;
         defending=false;
         const int oldLane=target;
         lane=target;target=decision.nextLane;
@@ -371,6 +376,7 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" road_curve="<<roadCurve<<std::endl;
       }else if(!changing && cornerDecision.nextLane>=0 &&
                !decision.blocked){
+        changeReason=ShiftReason::Corner;
         const int previous=target;
         lane=target;target=cornerDecision.nextLane;
         changing=true;changeStart=s;
@@ -388,6 +394,7 @@ class Team11ThreeLane:public gz::sim::System,
                  <<std::endl;
       }else if(!changing && rearDecision.nextLane>=0 &&
                !decision.blocked && !cornerMode){
+        changeReason=ShiftReason::Defense;
         const int oldLane=target;
         lane=target;
         target=rearDecision.nextLane;
@@ -684,6 +691,7 @@ class Team11ThreeLane:public gz::sim::System,
   bool redReported{false};
   bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
   bool physicsContact{false};
+  ShiftReason changeReason{ShiftReason::Front};
   physics::DriveState egoPhysicalDrive;
   int lane{1},target{1},homeLane{1},lapCount{0};
   int avoidIndex{-1};
