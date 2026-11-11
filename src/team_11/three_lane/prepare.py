@@ -14,7 +14,9 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing, projected_obstacle)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal'):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_collisions=False):
+    if physics_collisions and not practice_cars:
+        raise ValueError('physics collisions require practice traffic')
     if scenario not in ('normal', 'slow-ahead', 'rear-fast'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
@@ -86,7 +88,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                        if p.get("name") == "urrc::PaceCars")
     ET.SubElement(pace_plugin, "team11_ego_name").text = ego_name
     ET.SubElement(pace_plugin, "team11_mass_kg").text = "50"
-    ET.SubElement(pace_plugin, "pace_mass_kg").text = "1.5"
+    ET.SubElement(pace_plugin, "physics_collisions").text = str(physics_collisions).lower()
+    ET.SubElement(pace_plugin, "pace_mass_kg").text = "2.5"
     link = ego_model.find("link[@name='base_link']")
     camera_topic = f"/urrc/{track}/team11/front/image"
     camera_ready_file = destination / "camera_ready.flag"
@@ -147,6 +150,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
                          name="urrc::Team11ThreeLane")
     for tag, val in (
         ("camera_topic", camera_topic),
+        ("physics_collisions", str(physics_collisions).lower()),
         ("rear_lidar_topic", rear_topic),
         ("camera_ready_file", str(camera_ready_file.resolve())),
         ("lamp_spacing_px", f"{lamp_spacing_px:.6f}"),
@@ -225,6 +229,35 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         x, y, z, yaw = (float(v) for v in rotated[0][1:5])
         blue.find("pose").text = (
             f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
+    if physics_collisions:
+        # Gazebo/DART actually resolves the contact between dynamic
+        # 50kg TEAM11 and 2.5kg opponent bodies. NO teleports or scripted
+        # "bounce" position offsets may run in this mode.
+        for model in world.findall("model"):
+            name = model.get("name", "")
+            if name not in (ego_name,"urrc_pace_grid_02","urrc_pace_grid_09"):
+                continue
+            model.find("static").text="false"
+            link = model.find("link[@name='base_link']")
+            if name != ego_name:
+                inertial = ET.SubElement(link,"inertial")
+                ET.SubElement(inertial,"mass").text="2.5"
+                tensor = ET.SubElement(inertial,"inertia")
+                for tag,val in (
+                    ("ixx","0.018"),("iyy","0.055"),("izz","0.060"),
+                    ("ixy","0"),("ixz","0"),("iyz","0")):
+                    ET.SubElement(tensor,tag).text=val
+            # The official road mesh and source world are unchanged.
+            collision=link.find("collision[@name='body_collision']")
+            if collision is not None:
+                surface=ET.SubElement(collision,"surface")
+                friction=ET.SubElement(surface,"friction")
+                ode=ET.SubElement(friction,"ode")
+                ET.SubElement(ode,"mu").text="0.85"
+                ET.SubElement(ode,"mu2").text="0.85"
+            damping=ET.SubElement(link,"velocity_decay")
+            ET.SubElement(damping,"linear").text="0.02"
+            ET.SubElement(damping,"angular").text="0.03"
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
     expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
     for slot in (2,9):
@@ -287,6 +320,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "practice_scenario": scenario,
         "rear_lidar_topic": rear_topic,
         "rear_lidar_enabled": True,
+        "physics_collisions": physics_collisions,
+        "physics_ego_mass_kg": 50 if physics_collisions else None,
+        "physics_opponent_mass_kg": 2.5 if physics_collisions else None,
         "scenario_target_speed_mps": 5 if scenario == "slow-ahead" else None,
         "scenario_target_initial_gap_m": 25 if scenario == "slow-ahead" else None,
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
@@ -316,13 +352,14 @@ def main():
     parser.add_argument("--start-mode", choices=("camera", "immediate"), default="camera")
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
+    parser.add_argument("--physics-collisions", action="store_true", help="dynamic mass/contact engine instead of scripted pose-bounce")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
     parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast"), default="normal")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario, args.physics_collisions)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
