@@ -1,0 +1,111 @@
+name: TEAM11 v2 rear defense stability and physical contacts
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-defense-physics-v2]
+    paths: ['src/team_11/three_lane/**','.github/workflows/team11-defense-physics-v2.yml']
+jobs:
+  core-and-world:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Old front overtake + updated rear policy
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror src/team_11/three_lane/plugin/test_overtake_planner.cc -o /tmp/front-test
+          /tmp/front-test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror src/team_11/three_lane/plugin/test_rear_defense.cc -o /tmp/rear-test
+          /tmp/rear-test
+          python3 -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+      - uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Validate physics generated-world only; preserve normal
+        run: |
+          python3 src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --practice-cars --scenario rear-fast --physics-contact --prepare-only
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          base=Path('urrc_source/generated/team11/monza')
+          data=json.loads((base/'team11_manifest.json').read_text())
+          world=ET.parse(data['world_file']).getroot().find('world')
+          assert data['physics_contact_mode'] is True
+          assert data['collision_mode']=='gazebo_dynamic_contact'
+          models={m.get('name'):m for m in world.findall('model')}
+          for name,mass in [('urrc_pace_grid_01',50.),('urrc_pace_grid_09',1.5)]:
+              model=models[name]
+              assert model.findtext('static')=='false'
+              inert=model.find("./link[@name='base_link']/inertial")
+              assert abs(float(inert.findtext('mass'))-mass)<1e-6
+              assert float(inert.findtext('inertia/izz'))>0.
+          assert 'urrc_pace_grid_02' not in models
+          plugin=next(x for x in world.findall('plugin') if x.get('name')=='urrc::PaceCars')
+          assert plugin.findtext('physics_contact_mode')=='true'
+          assert not any(x.get('name')=='urrc::Team11ThreeLane' and x.findtext('physics_contact_mode')!='true' for x in world.findall('plugin'))
+          print('PASS physics mode 50kg/1.5kg + generated-world only')
+          PY
+          python3 src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --practice-cars --scenario rear-fast --prepare-only
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          base=Path('urrc_source/generated/team11/monza')
+          data=json.loads((base/'team11_manifest.json').read_text())
+          world=ET.parse(data['world_file']).getroot().find('world')
+          assert data['collision_mode']=='scripted_asymmetric_bounce'
+          for model in world.findall('model'):
+              if model.get('name') in ('urrc_pace_grid_01','urrc_pace_grid_09'):
+                  assert model.findtext('static')=='true'
+          print('PASS original default collision behavior preserved')
+          PY
+  gz-compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20.x'}
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with: {required-gazebo-distributions: harmonic}
+      - name: Build both real Gazebo controllers
+        run: |
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+          cmake -S src/team_11/three_lane/plugin -B /tmp/ego -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/ego --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/pace -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/pace --parallel 2
+          test -s /tmp/ego/liburrc_team11.so
+          test -s /tmp/pace/liburrc_pace_cars.so
+          echo 'PASS physics + default Gazebo plugins compile'
+      - uses: actions/checkout@v4
+        with: {repository: nahee2345/urrc_2, path: urrc_source}
+      - name: Run dynamic Gazebo for at least 4 seconds simulation
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          set +e
+          timeout --signal=INT --kill-after=10s 165s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+            --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+            --practice-cars --scenario rear-fast --physics-contact --server \
+            > /tmp/physics-runner.log 2>&1
+          code=$?
+          set -e
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          tail -n 30 /tmp/physics-runner.log || true
+          test -f "$log" || { echo 'FAIL Gazebo plugin did not start'; exit 1; }
+          grep -E 'TEAM11 CAMERA|TEAM11 REAR|TEAM11 DEFENSE|TEAM11 ERROR|Physics' "$log" | tail -n 30 || true
+          grep -Fq '[TEAM11 REAR] first real LiDAR scan' "$log" || { echo 'FAIL rear LiDAR in physics mode'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL RGB start in physics mode'; exit 1; }
+          echo 'PASS dynamic Gazebo launch, actual RGB start and rear scan (NOT contact outcome certification)'
+      - name: Save physics diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-physics-v2-gazebo
+          if-no-files-found: ignore
+          path: |
+            /tmp/physics-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
