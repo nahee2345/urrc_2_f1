@@ -263,22 +263,26 @@ class Team11ThreeLane:public gz::sim::System,
       const double distance=std::max(.4,std::hypot(c.x-b.x,c.y-b.y));
       futureCurvature=std::max(futureCurvature,std::abs(turn)/distance);
     }
+    // Straight and gentle curves use the same 10-15 m/s policy.
+    // Ordinary and sharp curves both use a 5-7 m/s target.
+    // Hysteresis prevents repeated acceleration/braking at the threshold.
+    constexpr double kCornerEnter=0.030;
+    constexpr double kCornerExit=0.022;
+    constexpr double kSharp=0.080;
+    if(!cornerMode && futureCurvature>=kCornerEnter)cornerMode=true;
+    else if(cornerMode && futureCurvature<=kCornerExit)cornerMode=false;
     double targetSpeed=baseSpeed;
-    if(futureCurvature<.012 && std::abs(steer)<=slowThreshold){
-      targetSpeed=baseSpeed;
-    }else if(futureCurvature<.025){
-      targetSpeed=7.;
-    }else if(futureCurvature<.055){
-      targetSpeed=7.-2.*(futureCurvature-.025)/.030;
-    }else if(futureCurvature<.10){
-      targetSpeed=5.-2.*(futureCurvature-.055)/.045;
-    }else{
-      targetSpeed=3.;
+    if(cornerMode){
+      const double blend=clamp((futureCurvature-kCornerEnter)/
+                               (kSharp-kCornerEnter),0.,1.);
+      targetSpeed=7.-2.*blend; // 7 m/s ordinary; 5 m/s sharp
     }
+    // Excessive commanded steering still reduces speed even if a noisy
+    // preview momentarily classifies the road as straight.
     if(std::abs(steer)>slowThreshold)targetSpeed=std::min(targetSpeed,7.);
-    if(std::abs(steer)>2.*slowThreshold)targetSpeed=std::min(targetSpeed,3.);
+    if(std::abs(steer)>2.*slowThreshold)targetSpeed=std::min(targetSpeed,5.);
     if(changing)targetSpeed=std::min(targetSpeed,7.);
-    if(brakeForTraffic)targetSpeed=0.;
+    if(brakeForTraffic)targetSpeed=0.; // emergency / blocked-path exception
     targetSpeed=clamp(targetSpeed,0.,baseSpeed);
     // Acceleration/deceleration slew limits in simulation time.
     // speed starts at 0 at spawn, ramps up smoothly, and never jumps
@@ -303,7 +307,8 @@ class Team11ThreeLane:public gz::sim::System,
                <<" fixed="<<fixedLane
                <<" merge_progress_m="<<std::min(12.,traveledFromStart)
                <<" speed="<<speed
-               <<"m/s steer="<<steer*180./M_PI<<"deg preview_curvature="
+               <<"m/s steer="<<steer*180./M_PI
+               <<"deg corner_mode="<<cornerMode<<" preview_curvature="
                <<futureCurvature<<" target="<<targetSpeed
                <<"m/s max_decel="<<maxDecel<<"m/s2 s="<<s<<"\n";
     }
@@ -417,7 +422,7 @@ class Team11ThreeLane:public gz::sim::System,
   std::atomic<unsigned int> imageFrames{0},redFrames{0},offFrames{0};
   std::atomic<int> lastLampCount{-1};
   bool redReported{false};
-  bool ready{false},started{false},changing{false},fixedLane{false};
+  bool ready{false},started{false},changing{false},fixedLane{false},cornerMode{false};
   int lane{1},target{1},homeLane{1},lapCount{0};
   gz::sim::Entity avoidEntity{gz::sim::kNullEntity};
   double lastChangeTravel{-100.};
