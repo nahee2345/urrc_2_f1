@@ -64,7 +64,7 @@ jobs:
           data=json.loads((Path("urrc_source/generated/team11/monza")/"team11_manifest.json").read_text())
           assert data["selected_lane_number"]==int(sys.argv[1])
           assert data["first_lane"]==int(sys.argv[1])-1
-          assert data["fixed_lane"] is False
+          assert data["fixed_lane"] is True
           assert data["grid_position"]==1
           assert len(data["routes"])==3
           print("PASS fixed lane",sys.argv[1])
@@ -179,4 +179,24 @@ jobs:
                   assert -1.5 < values[4] < 0.
                   assert -1.5 < values[5] < 1.5
                   print("PASS camera aim",track,grid,round(data["camera_target_distance_m"],2))
+          PY
+      - name: Verify target speed and overtaking controller wiring
+        run: |
+          python src/team_11/three_lane/run_demo.py monza --source urrc_source --grid 1 --lane auto --prepare-only >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET
+          data=json.loads(Path('urrc_source/generated/team11/monza/team11_manifest.json').read_text())
+          root=ET.parse(data['world_file']).getroot()
+          controller=next(x for x in root.find('world').findall('plugin') if x.get('name')=='urrc::Team11ThreeLane')
+          assert data['speed_mps']==15
+          assert data['straight_speed_range_mps']==[10,15]
+          assert data['corner_speed_range_mps']==[3,7]
+          assert data['fixed_lane'] is False
+          assert controller.findtext('base_speed_mps')=='15'
+          assert controller.findtext('lane_change_length_m')=='12'
+          src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
+          for token in ('[TEAM11 AVOID] pass','[TEAM11 AVOID] return','laneFree(homeLane)','rearWindow','brakeForTraffic'):
+              assert token in src,token
+          print('PASS 15m/s target, curvature braking, obstacle bypass and rejoin wiring')
           PY
