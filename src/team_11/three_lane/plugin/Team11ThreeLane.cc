@@ -262,12 +262,20 @@ class Team11ThreeLane:public gz::sim::System,
           if(now-lastRearSample[idx]>1.0)rearEvidence[idx]=0;
           lastRearSample[idx]=now;
           lastRearFrameId[idx]=frameId;
-          rearEvidence[idx]=std::min(12,rearEvidence[idx]+1);
-          rearDeclining[idx]=(ttc<=lastRearTtc[idx]-.035);
+          const bool urgent=behind<=defense::kRearDetectM &&
+             closing>=defense::kClosingMinMps &&
+             ttc<=defense::kThreatTtcS;
+          rearDeclining[idx]=urgent && rearEvidence[idx]>=1 &&
+              ttc<=lastRearTtc[idx]-.10;
+          rearEvidence[idx]=urgent?
+              std::min(12,rearEvidence[idx]+1):0;
           lastRearTtc[idx]=ttc;
         }
-        const bool confirmed=rearEvidence[idx]>=3 &&
-           now-lastRearSample[idx]<.5;
+        // Three urgent observations OR two with demonstrably falling TTC.
+        const bool confirmed=(
+          rearEvidence[idx]>=3 ||
+          (rearEvidence[idx]>=2 && rearDeclining[idx])) &&
+          now-lastRearSample[idx]<.5;
         rearTargets.push_back({car.id,behind,car.speed,
                                car.lateral,seen,weaving,
                                confirmed,rearDeclining[idx]});
