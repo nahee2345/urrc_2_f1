@@ -235,21 +235,28 @@ class Team11ThreeLane:public gz::sim::System,
         }
         // Same rear target is tracked across multiple simulation frames.
         const size_t idx=static_cast<size_t>(car.id);
-        const bool betweenLanes=std::none_of(
-          offsets.begin(),offsets.end(),[&](double o){
-            return std::abs(o-car.lateral)<.30;
-          });
-        bool weaving=betweenLanes;
+        // A single sideways deviation is NOT proof of S-shaped weaving.
+        // Require repeated lateral direction reversals at meaningful speed.
         const double age=now-lastLateralUpdate[idx];
         if(lastLateralUpdate[idx]<0. || age>=.18){
-          if(lastLateralUpdate[idx]>=0. && age<2.){
-            const double rate=std::abs(
-              car.lateral-lastLateral[idx])/std::max(.01,age);
-            if(rate>.55)weaving=true;
+          if(lastLateralUpdate[idx]>=0. && age<1.){
+            const double rate=(car.lateral-lastLateral[idx])/
+                              std::max(.01,age);
+            if(std::abs(rate)>.55 &&
+               std::abs(lastLateralRate[idx])>.55 &&
+               rate*lastLateralRate[idx]<0.)
+              weaveEvidence[idx]=std::min(6,weaveEvidence[idx]+1);
+            else if(std::abs(rate)<.25)
+              weaveEvidence[idx]=std::max(0,weaveEvidence[idx]-1);
+            lastLateralRate[idx]=rate;
+          }else{
+            weaveEvidence[idx]=0;
+            lastLateralRate[idx]=0.;
           }
           lastLateralUpdate[idx]=now;
           lastLateral[idx]=car.lateral;
         }
+        const bool weaving=weaveEvidence[idx]>=2;
         // Do not count many Gazebo physics steps from the same scan as
         // independent evidence. Require >=3 spaced observations.
         const double closing=car.speed-speed;
@@ -620,6 +627,8 @@ class Team11ThreeLane:public gz::sim::System,
   double lastDefenseTravel{-100.};
   std::array<double,2> lastLateral{0.,0.};
   std::array<double,2> lastLateralUpdate{-1.,-1.};
+  std::array<double,2> lastLateralRate{0.,0.};
+  std::array<int,2> weaveEvidence{0,0};
   std::array<int,2> rearEvidence{0,0};
   std::array<double,2> lastRearSample{-100.,-100.};
   std::array<double,2> lastRearTtc{1e9,1e9};
