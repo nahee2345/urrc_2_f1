@@ -46,12 +46,14 @@ def main():
                     help="keep selected lane, disable overtaking")
     ap.add_argument("--allow-lane-change",action="store_true",
                     help="enable overtaking (now the default; retained for compatibility)")
+    ap.add_argument("--practice-cars",action="store_true",
+                    help="enable original moving red/blue opponents after solo baseline")
     ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
                     help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
     if args.fixed_lane and args.allow_lane_change:
         ap.error("--fixed-lane and --allow-lane-change cannot be combined")
-    effective_fixed_lane = args.fixed_lane
+    effective_fixed_lane = args.fixed_lane or not args.practice_cars
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
         ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")
@@ -66,14 +68,15 @@ def main():
             ap.error("Gazebo Harmonic 'gz' executable not found")
         pace_lib=build(pace_src,plugin_dir/"pace_bounce","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
-    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,effective_fixed_lane,args.grid)
+    manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,effective_fixed_lane,args.grid,args.practice_cars)
     print("[TEAM11] grid:",manifest["grid_position"],
           "default lane:",manifest["selected_lane_number"],flush=True)
     print("[TEAM11] 3 lanes:",manifest["routes"],flush=True)
     print("[TEAM11] spacing:",round(manifest["lane_spacing_m"],3),
           "m, selected lane:",manifest["selected_lane_number"],
           "nearest lane:",manifest["nearest_lane_number"],
-          "fixed:",effective_fixed_lane,flush=True)
+          "fixed:",effective_fixed_lane,
+          "practice cars:",args.practice_cars,flush=True)
     if args.prepare_only:
         print("[TEAM11] world prepared; not run in Gazebo",flush=True)
         return 0
