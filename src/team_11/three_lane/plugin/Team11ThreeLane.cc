@@ -85,6 +85,17 @@ class Team11ThreeLane:public gz::sim::System,
     findEntities(ecm);
     if(ego==gz::sim::kNullEntity)return;
     if(startMode=="camera" && !cameraStarted.load()){
+      const double dtWait=std::chrono::duration<double>(info.dt).count();
+      if(dtWait>0 && dtWait<1.){
+        cameraTrace+=dtWait;
+        if(cameraTrace>=2.){
+          cameraTrace=0.;
+          std::cout<<"[TEAM11 CAMERA] images="<<imageFrames.load()
+                   <<" red_lamps="<<lastLampCount.load()
+                   <<" all_five_seen="<<fiveObserved.load()
+                   <<" consecutive_off="<<offFrames.load()<<"\\n";
+        }
+      }
       if(fiveObserved.load() && !redReported){
         redReported=true;
         std::cout<<"[TEAM11] CAMERA all FIVE red lights confirmed; waiting zero red lamps\n";
@@ -354,7 +365,7 @@ class Team11ThreeLane:public gz::sim::System,
   double lap{1},s{0},speed{0},spacing{.55},wheelbase{.33};
   double baseSpeed{10},slowThreshold{10*M_PI/180.},slowFactor{.8};
   double changeLength{9},scanAhead{35},changeStart{0},trace{0};
-  double maxDecel{4.},maxAccel{2.};
+  double maxDecel{4.},maxAccel{2.},cameraTrace{0.};
   double initialDx{0.},initialDy{0.},initialS{0.},traveledFromStart{0.};
 };
 }
