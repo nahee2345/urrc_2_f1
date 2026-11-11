@@ -257,7 +257,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
         lap_distance = points[-1].s + math.hypot(
             points[-1].x - points[0].x, points[-1].y - points[0].y)
-        start_s = (grid_s - 110. if scenario == "rear-fast" else grid_s + 2.) % lap_distance
+        start_s = (grid_s - 110. if scenario == "rear-fast" else grid_s + .40) % lap_distance
         first = next((i for i, row in enumerate(rows)
                       if float(row[0]) >= start_s), 0)
         rotated = rows[first:] + rows[:first]
