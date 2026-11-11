@@ -326,6 +326,7 @@ class Team11ThreeLane:public gz::sim::System,
       std::cout<<"[TEAM11 AVOID] finished lane="<<(lane+1)<<std::endl;
     }
     double followingSpeed=std::numeric_limits<double>::infinity();
+    double cornerApproachCap=std::numeric_limits<double>::infinity();
     if(!fixedLane){
       avoid::State state;
       state.s=s;state.lap=lap;state.speed=speed;
@@ -349,6 +350,11 @@ class Team11ThreeLane:public gz::sim::System,
       defenseState.zigzagEndpoint=zigzagEndpoint;
       const auto rearDecision=defense::evaluate(
         defenseState,rearTargets,traffic);
+      // Front overtaking priority > corner merge > rear defense.
+      const auto cornerDecision=corner::evaluate(
+        state,preview,traffic,decision.nextLane>=0 || decision.blocked,
+        avoidIndex>=0,fixedLane);
+      cornerApproachCap=cornerDecision.speedCap;
       if(decision.nextLane>=0 && !changing){
         defending=false;
         const int oldLane=target;
@@ -363,8 +369,25 @@ class Team11ThreeLane:public gz::sim::System,
                  <<" length_m="<<changeLength
                  <<" current_mps="<<speed
                  <<" road_curve="<<roadCurve<<std::endl;
-      }else if(!changing && rearDecision.nextLane>=0 &&
+      }else if(!changing && cornerDecision.nextLane>=0 &&
                !decision.blocked){
+        const int previous=target;
+        lane=target;target=cornerDecision.nextLane;
+        changing=true;changeStart=s;
+        changeLength=cornerDecision.length;
+        lastChangeTravel=traveledFromStart;
+        avoidIndex=-1;
+        homeLane=corner::kCenterLane;
+        defending=false;
+        std::cout<<"[TEAM11 CORNER] slow merge "
+                 <<(previous+1)<<" -> "<<(target+1)
+                 <<" length_m="<<changeLength
+                 <<" speed_cap_mps="<<cornerDecision.speedCap
+                 <<" road_curve="<<roadCurve
+                 <<" first_bend_m="<<preview.firstBendDistance
+                 <<std::endl;
+      }else if(!changing && rearDecision.nextLane>=0 &&
+               !decision.blocked && !cornerMode){
         const int oldLane=target;
         lane=target;
         target=rearDecision.nextLane;
