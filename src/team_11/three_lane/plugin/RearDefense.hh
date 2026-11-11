@@ -13,7 +13,7 @@ constexpr double kClosingMinMps=2.;
 constexpr double kThreatTtcS=5.;
 constexpr double kLaneTolerance=.40;
 constexpr double kShiftEndGapM=7.;
-constexpr double kDefenseCooldownM=8.;
+constexpr double kDefenseCooldownM=18.;
 
 struct RearTarget {
   int id{-1};
@@ -22,6 +22,8 @@ struct RearTarget {
   double lateral{0.};
   bool seenByRearLidar{false};
   bool uncertain{false};
+  bool confirmed{false}; // multiple distinct valid scan snapshots
+  bool ttcDeclining{false};
 };
 
 struct State {
@@ -38,7 +40,6 @@ struct Decision {
   double length{18.};
   bool active{false};
   bool zigzag{false};
-  bool returnHome{false};
   double ttc{std::numeric_limits<double>::infinity()};
   const char* reason{"NO_THREAT"};
 };
@@ -94,12 +95,13 @@ inline Decision evaluate(const State &s,
   const RearTarget* threat=nullptr;
   double soonest=std::numeric_limits<double>::infinity();
   for(const auto &car:rearTargets){
-    if(!car.seenByRearLidar || car.behindM<=0. ||
+    if(!car.seenByRearLidar || !car.confirmed || car.behindM<=0. ||
        car.behindM>kRearDetectM)continue;
     const double closing=car.speed-s.car.speed;
     if(closing<kClosingMinMps)continue;
     const double ttc=car.behindM/closing;
-    if(ttc<=kThreatTtcS && ttc<soonest){
+    if(ttc<=kThreatTtcS && ttc<soonest &&
+       (car.ttcDeclining || car.confirmed)){
       soonest=ttc;threat=&car;
     }
   }
@@ -129,9 +131,14 @@ inline Decision evaluate(const State &s,
     }
   }
   if(desired<0 || desired==s.car.lane){
-    d.reason="LANE_ALREADY_COVERED_OR_UNKNOWN";
-    return d;
+    // Fast rear car still threatens overtaking but no single adjacent
+    // lane can intercept its path: invoke the configured S defense.
+    // Movement itself remains subject to overlap and turn limits.
+    d.zigzag=true;
+    desired=s.car.lane==1?s.zigzagEndpoint:1;
+    d.reason="NO_INTERCEPT_LANE_S_PATTERN";
   }
+  if(desired==s.car.lane)return d;
   // Only move to an adjacent candidate on the way to the desired target.
   const int candidate=s.car.lane+(desired>s.car.lane?1:-1);
   const double length=avoid::distanceToChange(
