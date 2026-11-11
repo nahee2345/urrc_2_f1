@@ -58,7 +58,7 @@ jobs:
                       assert m['straight_speed_range_mps']==[10,15]
                       print('PASS',track,grid,'opponents',opponents)
           PY
-      - name: Verify generated moving opponent 45m ahead in ego lane
+      - name: Verify generated moving opponent 25m ahead in ego lane
         run: |
           python src/team_11/three_lane/run_demo.py monza \
             --source urrc_source --grid 1 --practice-cars \
@@ -75,12 +75,12 @@ jobs:
           pace=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
           red=next(c for c in pace.findall('car') if c.findtext('name')=='urrc_pace_grid_02')
           route=Path(red.findtext('route_file'))
-          assert route.name=='team11_red_10mps_ahead.csv'
+          assert route.name=='team11_red_5mps_ahead.csv'
           with route.open() as stream:
               rows=list(csv.reader(stream))
           assert len(rows)>100
           assert abs(float(rows[1][0]))<1e-6
-          assert float(red.findtext('speed_mps'))==10
+          assert float(red.findtext('speed_mps'))==5
           print('PASS staged 10 m/s target car at safe forward distance')
           PY
   gazebo-binary:
