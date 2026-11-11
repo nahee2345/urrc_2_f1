@@ -20,7 +20,7 @@ jobs:
           required-gazebo-distributions: harmonic
       - name: Build TEAM11 controller and opponent collision plugins
         run: |
-          sudo apt-get install -y cmake g++ libgz-sim8-dev
+          sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
           cmake -S src/team_11/three_lane/plugin -B /tmp/team11-controller -DCMAKE_BUILD_TYPE=Release
           cmake --build /tmp/team11-controller --parallel 2
           cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-bounce -DCMAKE_BUILD_TYPE=Release
