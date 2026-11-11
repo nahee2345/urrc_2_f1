@@ -73,8 +73,8 @@ class PlanningResult:
 
 def _bound_at(x, y, a, b):
     mask = (x>=a)&(x<=b)
-    left = y[mask & (y>0.35)]
-    right = y[mask & (y<-0.35)]
+    left = y[mask & (y>0.12)]
+    right = y[mask & (y<-.12)]
     # Close returns rather than mean averages avoid trusting invisible walls.
     return (float(np.quantile(left, .12)) if left.size>=3 else None,
             float(np.quantile(right, .88)) if right.size>=3 else None)
@@ -108,7 +108,7 @@ def interpret_scan(ranges, angle_min, angle_increment, range_min, range_max):
 
 
 def clearance(x, y, lateral, depth=50.0):
-    mask=(x>.45)&(x<depth)&(np.abs(y-lateral)<.31)
+    mask=(x>.45)&(x<depth)&(np.abs(y-lateral)<.20)
     return float(np.min(x[mask])) if np.any(mask) else float("inf")
 
 
