@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
-                  lane_spacing)
+                  lane_spacing, projected_obstacle)
 
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False):
     if start_mode not in ('camera', 'immediate'):
@@ -52,8 +52,17 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
             if car.findtext("name") == name:
                 pace_plugin.remove(car)
     nearest_lane = closest_lane(points, grid["x"], grid["y"])
-    # Fixed starting-grid mapping, with explicit --lane overriding for diagnostics.
-    initial_lane = (2 if grid_position % 2 else 0) if str(lane) == "auto" else int(lane) - 1
+    # Choose the real LEFT/RIGHT side of the road, not just grid parity.
+    _, grid_lateral = projected_obstacle(points, grid["x"], grid["y"])
+    if abs(grid_lateral) < .15:
+        raise RuntimeError(f"Grid {grid_position} lies too close to centerline")
+    physical_lane = 0 if grid_lateral > 0 else 2
+    # Original maps are staggered (odd right, even left). Catch metadata
+    # regressions instead of silently sending a car to the wrong side.
+    parity_lane = 2 if grid_position % 2 else 0
+    if physical_lane != parity_lane:
+        raise RuntimeError(f"Grid {grid_position} actual side contradicts expected stagger")
+    initial_lane = physical_lane if str(lane) == "auto" else int(lane) - 1
     runner = {"position": grid_position, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
@@ -181,7 +190,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "camera_pitch_rad": camera_pitch, "camera_yaw_rad": camera_yaw,
         "camera_hfov_rad": camera_hfov, "camera_target_distance_m": ground_distance,
         "lamp_spacing_px": lamp_spacing_px,
-        "grid_lane_policy": "odd=3,even=1",
+        "grid_lane_policy": "physical side (original grids odd-right/even-left)",
+        "grid_signed_lateral_m": grid_lateral,
+        "grid_physical_side": "left" if grid_lateral > 0 else "right",
         "collision_mode": "scripted_asymmetric_bounce",
         "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
         "practice_cars": [name for name in sorted(names)],
