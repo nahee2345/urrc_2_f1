@@ -100,7 +100,7 @@ jobs:
           set +e
           timeout --signal=INT --kill-after=10s 240s \
             python3 src/team_11/three_lane/run_demo.py monza \
-              --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+              --source "$PWD/urrc_source" --grid 1 --start-mode immediate \
               --practice-cars --fixed-lane --scenario physics-impact \
               --physics-collisions --server \
             >/tmp/team11-physical-impact.log 2>&1 &
@@ -121,7 +121,7 @@ jobs:
           tail -n 100 /tmp/team11-physical-impact.log || true
           test -f "$log" || { echo 'FAIL no Gazebo log'; exit 1; }
           grep -E 'TEAM11 CAMERA|TEAM11 PHYSICS|PACE PHYSICS|PACE] Armed|TEAM11 AVOID' "$log" | tail -n 70 || true
-          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL camera start'; exit 1; }
+          grep -Fq '[TEAM11] IMMEDIATE start' "$log" || { echo 'FAIL immediate physics-only impact test start'; exit 1; }
           grep -Fq 'physics_contact=1 ego_mass=50 opponent_mass=2.5' "$log" || { echo 'FAIL physical model mode'; exit 1; }
           ! grep -Fq '[PACE BOUNCE]' "$log" || { echo 'FAIL scripted bounce still active'; exit 1; }
           grep -Fq '[TEAM11 PHYSICS CONTACT]' "$log" || { echo 'FAIL no actual Gazebo contact detected'; exit 1; }
