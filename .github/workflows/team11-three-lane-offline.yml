@@ -204,11 +204,12 @@ jobs:
           assert data['corner_exit_curvature_per_m']==0.022
           assert data['fixed_lane'] is True
           assert controller.findtext('base_speed_mps')=='15'
-          assert controller.findtext('lane_change_length_m')=='12'
+          assert controller.findtext('lane_change_length_m')=='18'
           src=Path('src/team_11/three_lane/plugin/Team11ThreeLane.cc').read_text()
-          for token in ('[TEAM11 AVOID] pass','[TEAM11 AVOID] return','laneFree(homeLane)','rearWindow','brakeForTraffic'):
+          for token in ('[TEAM11 AVOID]','avoid::evaluate','followingSpeed','roadCurve'):
               assert token in src,token
-          print('PASS 15m/s target, curvature braking, obstacle bypass and rejoin wiring')
+          assert 'distanceToChange' in Path('src/team_11/three_lane/plugin/OvertakePlanner.hh').read_text()
+          print('PASS 15m/s target, 5-7m/s corners, future-gap overtake integration')
           PY
       - name: Check opt-in practice cars preserve collision demonstration
         run: |

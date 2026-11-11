@@ -1,0 +1,162 @@
+name: TEAM11 overtaking - separate baseline and Gazebo QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [team11-three-lane-overtake-v1]
+    paths:
+      - 'src/team_11/**'
+      - '.github/workflows/team11-overtake-qa.yml'
+jobs:
+  planner-and-generation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Standalone C++ planner regression
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            src/team_11/three_lane/plugin/test_overtake_planner.cc \
+            -o /tmp/test_overtake
+          /tmp/test_overtake
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Original source map read-only checkout
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Python tests and three-lane world wiring
+        run: |
+          python -m unittest discover -v -s src/team_11/three_lane -p 'test_*.py'
+          python - <<'PY'
+          import json,subprocess,sys,xml.etree.ElementTree as ET
+          from pathlib import Path
+          for track in ('monza','hungaroring'):
+              for grid in range(1,12):
+                  for opponents in (False,True):
+                      cmd=[sys.executable,'src/team_11/three_lane/run_demo.py',
+                           track,'--source','urrc_source','--prepare-only',
+                           '--grid',str(grid),'--start-mode','camera']
+                      if opponents: cmd.append('--practice-cars')
+                      subprocess.run(cmd,check=True,capture_output=True,text=True)
+                      m=json.loads((Path('urrc_source/generated/team11')/track/'team11_manifest.json').read_text())
+                      world=ET.parse(m['world_file']).getroot().find('world')
+                      cars={e.get('name') for e in world.findall('model')}
+                      plugin=next(e for e in world.findall('plugin') if e.get('name')=='urrc::Team11ThreeLane')
+                      assert m['selected_lane_number']==(3 if grid%2 else 1)
+                      assert m['grid_physical_side']==('right' if grid%2 else 'left')
+                      assert m['practice_cars_enabled']==opponents
+                      assert m['fixed_lane'] == (not opponents)
+                      assert plugin.findtext('start_mode')=='camera'
+                      assert plugin.findtext('base_speed_mps')=='15'
+                      assert 'urrc_pace_grid_%02d'%grid in cars
+                      for slot in (2,9):
+                          expected=opponents and slot!=grid
+                          assert (f'urrc_pace_grid_{slot:02d}' in cars)==(expected or slot==grid)
+                      assert m['corner_speed_range_mps']==[5,7]
+                      assert m['straight_speed_range_mps']==[10,15]
+                      print('PASS',track,grid,'opponents',opponents)
+          PY
+      - name: Verify generated moving opponent 25m ahead in ego lane
+        run: |
+          python src/team_11/three_lane/run_demo.py monza \
+            --source urrc_source --grid 1 --practice-cars \
+            --scenario slow-ahead --prepare-only
+          python - <<'PY'
+          from pathlib import Path
+          import json,xml.etree.ElementTree as ET,csv
+          base=Path('urrc_source/generated/team11/monza')
+          manifest=json.loads((base/'team11_manifest.json').read_text())
+          assert manifest['practice_scenario']=='slow-ahead'
+          assert manifest['selected_lane_number']==3
+          assert manifest['practice_cars_enabled'] and not manifest['fixed_lane']
+          world=ET.parse(manifest['world_file']).getroot().find('world')
+          pace=next(p for p in world.findall('plugin') if p.get('name')=='urrc::PaceCars')
+          red=next(c for c in pace.findall('car') if c.findtext('name')=='urrc_pace_grid_02')
+          route=Path(red.findtext('route_file'))
+          assert route.name=='team11_red_5mps_ahead.csv'
+          with route.open() as stream:
+              rows=list(csv.reader(stream))
+          assert len(rows)>100
+          assert abs(float(rows[1][0]))<1e-6
+          assert float(red.findtext('speed_mps'))==5
+          print('PASS staged 10 m/s target car at safe forward distance')
+          PY
+  gazebo-binary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - uses: gazebo-tooling/setup-gazebo@v0.3.0
+        with:
+          required-gazebo-distributions: harmonic
+      - name: Install real Gazebo Harmonic compile dependencies
+        run: sudo apt-get install -y cmake g++ libgz-sim8-dev cppzmq-dev libtinyxml2-dev
+      - name: Compile both plugins and run planner tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            src/team_11/three_lane/plugin/test_overtake_planner.cc \
+            -o /tmp/overtake-test
+          /tmp/overtake-test
+          cmake -S src/team_11/three_lane/plugin -B /tmp/team11-new-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-new-build --parallel 2
+          cmake -S src/team_11/three_lane/pace_bounce -B /tmp/team11-bounce-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/team11-bounce-build --parallel 2
+          test -s /tmp/team11-new-build/liburrc_team11.so
+          test -s /tmp/team11-bounce-build/liburrc_pace_cars.so
+          echo 'PASS full Gazebo Harmonic controller + opponent bounce compilation'
+      - name: Read-only original map checkout for real overtaking
+        uses: actions/checkout@v4
+        with:
+          repository: nahee2345/urrc_2
+          path: urrc_source
+      - name: Real camera start and 3rd-to-2nd lane passing scenario
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          QT_QPA_PLATFORM: offscreen
+          EGL_PLATFORM: surfaceless
+        run: |
+          # Stop the experiment as soon as both passing and return are logged.
+          timeout --signal=INT --kill-after=10s 210s \
+            python3 src/team_11/three_lane/run_demo.py monza \
+              --source "$PWD/urrc_source" --grid 1 --start-mode camera \
+              --practice-cars --scenario slow-ahead --server \
+            > /tmp/team11-overtake-runner.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 210); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log"; then
+              echo "Overtake and return observed at second $i"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
+          tail -n 65 /tmp/team11-overtake-runner.log || true
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          test -f "$log" || { echo 'FAIL no generated Gazebo log'; exit 1; }
+          grep -E '\[TEAM11 AVOID\]|\[TEAM11 CAMERA\]|\[TEAM11 LAP\]|CAMERA GREEN start' "$log" | tail -n 65 || true
+          grep -Fq '[TEAM11 CAMERA] first valid image received' "$log" || { echo 'FAIL no actual camera frame'; exit 1; }
+          grep -Fq '[TEAM11] CAMERA GREEN start' "$log" || { echo 'FAIL five-red 5-light camera launch'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" || { echo 'FAIL no real passing maneuver from 3 to 2'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] finished lane=2' "$log" || { echo 'FAIL maneuver not completed'; exit 1; }
+          grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log" || { echo 'FAIL did not safely rejoin lane 3'; exit 1; }
+          echo 'PASS real RGB camera start, lane-change, and rejoin'
+      - name: Upload Gazebo overtaking logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team11-overtake-real-gazebo-logs
+          if-no-files-found: ignore
+          path: |
+            /tmp/team11-overtake-runner.log
+            urrc_source/generated/team11/monza/team11_gazebo.log
+            urrc_source/generated/team11/monza/team11_manifest.json

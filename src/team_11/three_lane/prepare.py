@@ -2,6 +2,7 @@
 """Generate three routes and the grid-01 car without a stationary obstacle."""
 from __future__ import annotations
 import argparse
+import csv
 import json
 import math
 import sys
@@ -13,7 +14,11 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing, projected_obstacle)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal'):
+    if scenario not in ('normal', 'slow-ahead'):
+        raise ValueError(f'Unknown opponent scenario: {scenario}')
+    if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
+        raise ValueError('slow-ahead requires --practice-cars and grid other than 2')
     if start_mode not in ('camera', 'immediate'):
         raise ValueError(f'Unsupported start mode: {start_mode}')
     if str(lane) not in ('auto','1','2','3'):
@@ -137,10 +142,40 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("slow_factor", ".8"),
         ("max_deceleration_mps2", "4.0"),
         ("max_acceleration_mps2", "2.0"),
-        ("lane_change_length_m", "12"),
+        ("lane_change_length_m", "18"),
         ("scan_ahead_m", "35"),
     ):
         ET.SubElement(ctrl, tag).text = val
+    # Optional reproducible integration test: move the RED 5m/s test car
+    # onto TEAM11's selected lane 25m ahead. This changes GENERATED world only;
+    # original painted grids and source tracks are never edited.
+    if scenario == 'slow-ahead':
+        red = world.find("model[@name='urrc_pace_grid_02']")
+        red_config = next(c for c in pace_plugin.findall("car")
+                          if c.findtext("name") == "urrc_pace_grid_02")
+        route = destination / "team11_routes" / f"lane_{initial_lane}.csv"
+        with route.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))[1:]
+        grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
+        lap_distance = points[-1].s + math.hypot(
+            points[-1].x - points[0].x, points[-1].y - points[0].y)
+        start_s = (grid_s + 25.) % lap_distance
+        first = next((i for i, row in enumerate(rows)
+                      if float(row[0]) >= start_s), 0)
+        rotated = rows[first:] + rows[:first]
+        origin_s = float(rotated[0][0])
+        staged_file = destination / "team11_red_5mps_ahead.csv"
+        with staged_file.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["distance_m", "x_m", "y_m", "z_m", "yaw_rad"])
+            for row in rotated:
+                relative = (float(row[0]) - origin_s) % lap_distance
+                writer.writerow([f"{relative:.9f}", *row[1:5]])
+        red_config.find("route_file").text = str(staged_file.resolve())
+        red_config.find("speed_mps").text = "5"
+        x, y, z, yaw = (float(v) for v in rotated[0][1:5])
+        red.find("pose").text = (
+            f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
     expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
     for slot in (2,9):
@@ -167,6 +202,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
+        if scenario == "slow-ahead" and name == "urrc_pace_grid_02":
+            continue
         if (abs(pose[0] - original["x"]) > 1e-6 or
             abs(pose[1] - original["y"]) > 1e-6 or
             abs(pose[5] - original["yaw"]) > 1e-6):
@@ -197,10 +234,13 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "nominal_ego_mass_kg": 50, "nominal_other_mass_kg": 1.5,
         "practice_cars": [name for name in sorted(names)],
         "practice_cars_enabled": practice_cars,
+        "practice_scenario": scenario,
+        "scenario_target_speed_mps": 5 if scenario == "slow-ahead" else None,
+        "scenario_target_initial_gap_m": 25 if scenario == "slow-ahead" else None,
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 15,
         "straight_speed_range_mps": [10, 15],
-        "lane_change_length_m": 12,
+        "lane_change_length_m": 18,
         "steering_threshold_deg": 10, "corner_speed_range_mps": [5, 7],
         "gentle_corner_speed_range_mps": [10, 15],
         "corner_enter_curvature_per_m": 0.030,
@@ -225,11 +265,12 @@ def main():
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
+    parser.add_argument("--scenario", choices=("normal","slow-ahead"), default="normal")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane or not args.practice_cars, args.grid, args.practice_cars, args.scenario)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
