@@ -46,7 +46,7 @@ struct Car {
 struct State {
   double s=0., lap=1., speed=0., roadSpeed=15., spacing=.765;
   double curve=0., travelled=0., sinceChange=1e9;
-  int lane=2, homeLane=2, avoidId=-1;
+  int lane=2, homeLane=2, targetLane=2, avoidId=-1;
   bool changing=false;
 };
 struct Decision {
@@ -72,9 +72,10 @@ inline bool trajectoryClear(const State &state,int candidate,
     return false; // no teleport / two-lane jump
   const double lateral0=laneOffset(state.lane,state.spacing);
   const double lateral1=laneOffset(candidate,state.spacing);
-  const double travelSpeed=std::max(3.,state.speed);
+  // Check both braking and accelerating envelopes, not only one speed.
+  for(const double travelSpeed:{std::max(3.,std::min(state.speed,state.roadSpeed)),
+                                std::max(3.,std::max(state.speed,state.roadSpeed))}){
   const double duration=length/travelSpeed;
-  // Evaluate the crossing and at least four seconds into the future.
   const double horizon=std::max(kPreviewS,duration+1.0);
   for(double time=0.;time<=horizon+.001;time+=.20){
     const double progress=smooth(time/duration);
@@ -91,11 +92,25 @@ inline bool trajectoryClear(const State &state,int candidate,
         return false;
     }
   }
+  }
   return true;
 }
 inline Decision evaluate(const State &state,const std::vector<Car> &cars) {
   Decision decision;
-  if(state.changing)return decision; // never reverse mid-maneuver
+  // During a committed change, keep the target; respond by slowing,
+  // never by instantly steering back into the previous lane.
+  if(state.changing){
+    for(const auto &car:cars){
+      if(std::abs(car.lateral-laneOffset(state.targetLane,state.spacing))>.42)
+        continue;
+      const double ahead=signedGap(state.s,car.s,state.lap);
+      if(ahead<=0. || ahead>kDetectM)continue;
+      const double v=std::sqrt(std::max(0.,car.speed*car.speed+
+                              8.*std::max(0.,ahead-kFrontGapM)));
+      decision.followSpeed=std::min(decision.followSpeed,v);
+    }
+    return decision;
+  }
   const double preferred=std::max(0.,std::min(state.roadSpeed,15.));
   const Car *front=nullptr,*avoided=nullptr;
   double nearest=kDetectM+.001;
@@ -122,7 +137,7 @@ inline Decision evaluate(const State &state,const std::vector<Car> &cars) {
   if(state.lane!=state.homeLane && avoided) {
     const double behind=-signedGap(state.s,avoided->s,state.lap);
     const double width=state.spacing*std::abs(state.lane-state.homeLane);
-    const double distance=distanceToChange(state.speed,width);
+    const double distance=distanceToChange(std::max(state.speed,state.roadSpeed),width);
     if(behind>=10. && behind<state.lap/2. &&
        trajectoryClear(state,state.homeLane,distance,cars)){
       decision.nextLane=state.homeLane;
@@ -133,7 +148,7 @@ inline Decision evaluate(const State &state,const std::vector<Car> &cars) {
     }
   }
   if(!front)return decision;
-  const double closing=preferred-front->speed;
+  const double closing=std::min(preferred,state.speed)-front->speed;
   if(closing<kMinClosingMps)return decision;
   const double ttc=(nearest-5.)/closing;
   if(nearest>kTriggerM || ttc>kTtcS)return decision;
