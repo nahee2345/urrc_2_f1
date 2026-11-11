@@ -120,15 +120,26 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           EGL_PLATFORM: surfaceless
         run: |
-          set +e
-          timeout --signal=INT --kill-after=10s 300s \
+          # Stop the experiment as soon as both passing and return are logged.
+          timeout --signal=INT --kill-after=10s 210s \
             python3 src/team_11/three_lane/run_demo.py monza \
               --source "$PWD/urrc_source" --grid 1 --start-mode camera \
               --practice-cars --scenario slow-ahead --server \
-            > /tmp/team11-overtake-runner.log 2>&1
-          code=$?
-          set -e
-          echo "Gazebo runner exit: $code"
+            > /tmp/team11-overtake-runner.log 2>&1 &
+          runner=$!
+          log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
+          for i in $(seq 1 210); do
+            if test -f "$log" &&
+               grep -Fq '[TEAM11 AVOID] pass 3 -> 2' "$log" &&
+               grep -Fq '[TEAM11 AVOID] return 2 -> 3' "$log"; then
+              echo "Overtake and return observed at second $i"
+              break
+            fi
+            if ! kill -0 "$runner" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill -INT "$runner" 2>/dev/null || true
+          wait "$runner" || true
           tail -n 65 /tmp/team11-overtake-runner.log || true
           log="$PWD/urrc_source/generated/team11/monza/team11_gazebo.log"
           test -f "$log" || { echo 'FAIL no generated Gazebo log'; exit 1; }
