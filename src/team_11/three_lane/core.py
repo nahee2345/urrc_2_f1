@@ -11,8 +11,8 @@ from pathlib import Path
 
 TRACKS = ("monza", "hungaroring")
 CAR_WIDTH_M = .25
-WALL_MARGIN_M = .22
-EXTRA_CLEARANCE_M = .12
+WALL_MARGIN_M = .08
+EXTRA_CLEARANCE_M = .03
 BASE_SPEED_MPS = 10.0
 STEER_LIMIT_DEG = 10.0
 SLOW_FACTOR = .8  # legacy constant; corner schedule now 3-7 m/s
@@ -50,7 +50,8 @@ def load_centerline(file):
 
 def lane_spacing(points):
     # Reported road width is full width, collision vehicle width is .25m.
-    # Offset from centerline must leave outer wall clearance on both sides.
+    # Use the narrowest full-road width over the ENTIRE lap so that a route
+    # does not collide at constrictions. 0.11m is reserved beyond car halfwidth.
     return min(p.width for p in points) / 2 - CAR_WIDTH_M / 2 - WALL_MARGIN_M - EXTRA_CLEARANCE_M
 
 
