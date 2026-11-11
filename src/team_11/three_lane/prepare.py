@@ -15,10 +15,12 @@ from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing, projected_obstacle)
 
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal'):
-    if scenario not in ('normal', 'slow-ahead'):
+    if scenario not in ('normal', 'slow-ahead', 'rear-fast'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
         raise ValueError('slow-ahead requires --practice-cars and grid other than 2')
+    if scenario == 'rear-fast' and (not practice_cars or grid_position == 9):
+        raise ValueError('rear-fast requires --practice-cars and grid other than 9')
     if start_mode not in ('camera', 'immediate'):
         raise ValueError(f'Unsupported start mode: {start_mode}')
     if str(lane) not in ('auto','1','2','3'):
@@ -47,7 +49,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     pace_plugin = next(p for p in world.findall("plugin")
                        if p.get("name") == "urrc::PaceCars")
     for slot in (2, 9):
-        if practice_cars and slot != grid_position:
+        if practice_cars and slot != grid_position and (scenario != 'rear-fast' or slot == 9):
             continue
         name = f"urrc_pace_grid_{slot:02d}"
         model = world.find(f"model[@name='{name}']")
@@ -123,11 +125,29 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     clip = ET.SubElement(settings, "clip")
     ET.SubElement(clip, "near").text = "0.1"
     ET.SubElement(clip, "far").text = "80"
+    # Genuine rear-facing Gazebo LiDAR on the very same TEAM11 vehicle.
+    rear_topic = f"/urrc/{track}/team11/rear_scan"
+    rear = ET.SubElement(link, "sensor", name="team11_rear_lidar", type="gpu_lidar")
+    ET.SubElement(rear, "pose").text = "-0.20 0 0.16 0 0 3.141592653589793"
+    ET.SubElement(rear, "always_on").text = "true"
+    ET.SubElement(rear, "update_rate").text = "30"
+    ET.SubElement(rear, "visualize").text = "false"
+    ET.SubElement(rear, "topic").text = rear_topic
+    lidar = ET.SubElement(rear, "lidar")
+    scan = ET.SubElement(lidar, "scan")
+    horizontal = ET.SubElement(scan, "horizontal")
+    for tag, value in (("samples", "721"), ("resolution", "1"),
+                       ("min_angle", "-2.25"), ("max_angle", "2.25")):
+        ET.SubElement(horizontal, tag).text = value
+    lidar_range = ET.SubElement(lidar, "range")
+    for tag, value in (("min", "0.12"), ("max", "70"), ("resolution", "0.02")):
+        ET.SubElement(lidar_range, tag).text = value
     # TEAM11 starts as soon as the model is available; pace cars retain their light sequence.
     ctrl = ET.SubElement(world, "plugin", filename=str(Path(plugin_file).resolve()),
                          name="urrc::Team11ThreeLane")
     for tag, val in (
         ("camera_topic", camera_topic),
+        ("rear_lidar_topic", rear_topic),
         ("camera_ready_file", str(camera_ready_file.resolve())),
         ("lamp_spacing_px", f"{lamp_spacing_px:.6f}"),
         ("start_mode", start_mode),
@@ -176,10 +196,39 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         x, y, z, yaw = (float(v) for v in rotated[0][1:5])
         red.find("pose").text = (
             f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
+    # Only the generated test world is staged: 20m/s blue car starts
+    # 110m behind TEAM11 in the neighboring central lane.
+    # Red 10m/s car is absent in this scenario to isolate rear defense.
+    if scenario == 'rear-fast':
+        blue = world.find("model[@name='urrc_pace_grid_09']")
+        blue_config = next(c for c in pace_plugin.findall("car")
+                           if c.findtext("name") == "urrc_pace_grid_09")
+        route = destination / "team11_routes" / "lane_1.csv"
+        with route.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))[1:]
+        grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
+        lap_distance = points[-1].s + math.hypot(
+            points[-1].x - points[0].x, points[-1].y - points[0].y)
+        start_s = (grid_s - 110.) % lap_distance
+        first = next((i for i, row in enumerate(rows)
+                      if float(row[0]) >= start_s), 0)
+        rotated = rows[first:] + rows[:first]
+        origin_s = float(rotated[0][0])
+        staged_file = destination / "team11_blue_20mps_behind.csv"
+        with staged_file.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["distance_m", "x_m", "y_m", "z_m", "yaw_rad"])
+            for row in rotated:
+                relative = (float(row[0]) - origin_s) % lap_distance
+                writer.writerow([f"{relative:.9f}", *row[1:5]])
+        blue_config.find("route_file").text = str(staged_file.resolve())
+        x, y, z, yaw = (float(v) for v in rotated[0][1:5])
+        blue.find("pose").text = (
+            f"{x:.8f} {y:.8f} {z+.003:.8f} 0 0 {yaw:.8f}")
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
     expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
     for slot in (2,9):
-        if practice_cars and slot != grid_position:
+        if practice_cars and slot != grid_position and (scenario != "rear-fast" or slot == 9):
             expected[f"urrc_pace_grid_{slot:02d}"] = slot
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
@@ -193,7 +242,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         raise RuntimeError(f"Expected exactly one pace plugin; found {len(pace_plugins)}")
     names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
     expected_pace = sorted(f"urrc_pace_grid_{slot:02d}"
-                           for slot in (2,9) if practice_cars and slot != grid_position)
+                           for slot in (2,9) if practice_cars and slot != grid_position
+                           and (scenario != "rear-fast" or slot == 9))
     if sorted(names) != expected_pace:
         raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
     grid_data = json.loads(
@@ -202,7 +252,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
-        if scenario == "slow-ahead" and name == "urrc_pace_grid_02":
+        if (scenario == "slow-ahead" and name == "urrc_pace_grid_02") or (scenario == "rear-fast" and name == "urrc_pace_grid_09"):
             continue
         if (abs(pose[0] - original["x"]) > 1e-6 or
             abs(pose[1] - original["y"]) > 1e-6 or
@@ -235,6 +285,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "practice_cars": [name for name in sorted(names)],
         "practice_cars_enabled": practice_cars,
         "practice_scenario": scenario,
+        "rear_lidar_topic": rear_topic,
+        "rear_lidar_enabled": True,
         "scenario_target_speed_mps": 5 if scenario == "slow-ahead" else None,
         "scenario_target_initial_gap_m": 25 if scenario == "slow-ahead" else None,
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
@@ -265,7 +317,7 @@ def main():
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
-    parser.add_argument("--scenario", choices=("normal","slow-ahead"), default="normal")
+    parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast"), default="normal")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
