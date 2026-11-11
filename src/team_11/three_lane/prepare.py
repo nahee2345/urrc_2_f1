@@ -12,11 +12,13 @@ sys.path.insert(0, str(HERE))
 from core import (TRACKS, load_centerline, export_routes, closest_lane,
                   lane_spacing)
 
-def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False):
+def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1):
     if start_mode not in ('camera', 'immediate'):
         raise ValueError(f'Unsupported start mode: {start_mode}')
     if str(lane) not in ('auto','1','2','3'):
         raise ValueError(f'Invalid lane {lane}; expected auto or 1..3')
+    if grid_position not in (1, 2):
+        raise ValueError('TEAM11 start grid must be 1 or 2')
     source = Path(source).expanduser().resolve()
     destination = Path(destination).expanduser().resolve()
     pace = source / "race/pace_cars"
@@ -32,10 +34,22 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     csv_file = source / "src/urrc_track_gazebo/tracks/processed" / (track + "_centerline.csv")
     points = load_centerline(csv_file)
     spacing = export_routes(points, destination / "team11_routes")
-    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][0]
+    grid = json.loads((source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text())["grid"][grid_position-1]
+    if grid_position == 2:
+        # Prevent exact overlap with the original red practice car.
+        original = world.find("model[@name='urrc_pace_grid_02']")
+        if original is None:
+            raise RuntimeError('Original grid-02 practice car not found')
+        world.remove(original)
+        pace_plugin = next(p for p in world.findall('plugin')
+                           if p.get('name') == 'urrc::PaceCars')
+        for car in list(pace_plugin.findall('car')):
+            if car.findtext('name') == 'urrc_pace_grid_02':
+                pace_plugin.remove(car)
     nearest_lane = closest_lane(points, grid["x"], grid["y"])
-    initial_lane = nearest_lane if str(lane) == "auto" else int(lane) - 1
-    runner = {"position": 1, "x": grid["x"], "y": grid["y"],
+    # Fixed starting-grid mapping, with explicit --lane overriding for diagnostics.
+    initial_lane = (2 if grid_position == 1 else 0) if str(lane) == "auto" else int(lane) - 1
+    runner = {"position": grid_position, "x": grid["x"], "y": grid["y"],
               "road_z": grid["road_z"], "yaw": grid["yaw"]}
     ego_name = add_car(world, runner, "0.96 0.82 0.04 1")
     ego_model = world.find(f"model[@name='{ego_name}']")
@@ -78,11 +92,9 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     ):
         ET.SubElement(ctrl, tag).text = val
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
-    expected = {
-        "urrc_pace_grid_01": 1,
-        "urrc_pace_grid_02": 2,
-        "urrc_pace_grid_09": 9,
-    }
+    expected = ({"urrc_pace_grid_01": 1, "urrc_pace_grid_02": 2,
+                 "urrc_pace_grid_09": 9} if grid_position == 1 else
+                {"urrc_pace_grid_02": 2, "urrc_pace_grid_09": 9})
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
         if name not in models:
@@ -94,8 +106,10 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     if len(pace_plugins) != 1:
         raise RuntimeError(f"Expected exactly one pace plugin; found {len(pace_plugins)}")
     names = [car.findtext("name") for car in pace_plugins[0].findall("car")]
-    if sorted(names) != ["urrc_pace_grid_02", "urrc_pace_grid_09"]:
-        raise RuntimeError(f"Original practice cars not restored: {names}")
+    expected_pace = (["urrc_pace_grid_02", "urrc_pace_grid_09"]
+                     if grid_position == 1 else ["urrc_pace_grid_09"])
+    if sorted(names) != expected_pace:
+        raise RuntimeError(f"Practice cars inconsistent with TEAM11 grid {grid_position}: {names}")
     grid_data = json.loads(
         (source / "src/urrc_track_gazebo/tracks/processed" / (track + ".json")).read_text()
     )["grid"]
@@ -106,8 +120,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
             abs(pose[1] - original["y"]) > 1e-6 or
             abs(pose[5] - original["yaw"]) > 1e-6):
             raise RuntimeError(f"{name} is not at painted grid {number}")
-    print(f"[TEAM11] Grid 01=yellow TEAM11, Grid 02=red practice (10m/s), "
-          f"Grid 09=blue practice (20m/s); all present", flush=True)
+    print(f"[TEAM11] Grid {grid_position:02d}=yellow TEAM11, "
+          f"lane {initial_lane+1}, practice={names}", flush=True)
     ET.indent(doc)
     result = world_file.with_name(track + "_team11.sdf")
     doc.write(result, encoding="utf-8", xml_declaration=True)
@@ -119,7 +133,8 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "nearest_lane_number": nearest_lane+1,
         "fixed_lane": fixed_lane,
         "start_mode": start_mode,
-        "grid_position": 1, "start_camera_topic": camera_topic,
+        "grid_position": grid_position, "start_camera_topic": camera_topic,
+        "grid_lane_policy": {"1": 3, "2": 1},
         "practice_cars": [name for name in sorted(names)],
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 10,
@@ -142,10 +157,11 @@ def main():
     parser.add_argument("--start-mode", choices=("camera", "immediate"), default="camera")
     parser.add_argument("--lane", choices=("auto","1","2","3"), default="auto")
     parser.add_argument("--fixed-lane", action="store_true")
+    parser.add_argument("--grid", type=int, choices=(1,2), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
     out = Path(args.output).expanduser() if args.output else root/"generated/team11"/args.track
-    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane)
+    result = prepare(root, out, args.track, args.plugin, args.pace_plugin, args.start_mode, args.lane, args.fixed_lane, args.grid)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
