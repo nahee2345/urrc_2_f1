@@ -44,22 +44,22 @@ def main():
                     help="lane 1=left, 2=center, 3=right; auto=nearest")
     ap.add_argument("--fixed-lane",action="store_true",
                     help="ignore other cars for lane-change tests; stay on selected lane")
-    ap.add_argument("--grid",type=int,choices=(1,2),default=1,
-                    help="grid 1 defaults lane 3; grid 2 defaults lane 1")
+    ap.add_argument("--grid",type=int,choices=range(1,13),default=1,
+                    help="odd grids -> lane 3; even grids -> lane 1")
     args=ap.parse_args()
     src=Path(args.source).expanduser().resolve()
     if not (src/"race/pace_cars/routes.py").exists():
         ap.error("Clone source first: git clone https://github.com/nahee2345/urrc_2.git ~/urrc_2")
     dest=src/"generated/team11"/args.track
     plugin_dir=src/"generated/team11"/"build"
-    pace_src=src/"race/pace_cars/plugin"
+    pace_src=HERE/"pace_bounce"
     team_src=HERE/"plugin"
-    pace_lib=plugin_dir/"pace"/"liburrc_pace_cars.so"
+    pace_lib=plugin_dir/"pace_bounce"/"liburrc_pace_cars.so"
     team_lib=plugin_dir/"team"/"liburrc_team11.so"
     if not args.prepare_only:
         if not shutil.which("gz"):
             ap.error("Gazebo Harmonic 'gz' executable not found")
-        pace_lib=build(pace_src,plugin_dir/"pace","urrc_pace_cars")
+        pace_lib=build(pace_src,plugin_dir/"pace_bounce","urrc_pace_cars")
         team_lib=build(team_src,plugin_dir/"team","urrc_team11")
     manifest=prepare(src,dest,args.track,team_lib,pace_lib,args.start_mode,args.lane,args.fixed_lane,args.grid)
     print("[TEAM11] grid:",manifest["grid_position"],
