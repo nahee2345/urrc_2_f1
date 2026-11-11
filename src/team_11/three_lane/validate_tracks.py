@@ -6,7 +6,7 @@ from pathlib import Path
 from shapely.geometry import Point, Polygon
 from core import load_centerline, generate_lanes, lane_spacing, CAR_WIDTH_M
 
-def validate(source, track, margin=.12):
+def validate(source, track, margin=.06):
     base=Path(source)/"src/urrc_track_gazebo/tracks/processed"
     points=load_centerline(base/f"{track}_centerline.csv")
     meta=json.loads((base/f"{track}.json").read_text(encoding="utf-8"))
