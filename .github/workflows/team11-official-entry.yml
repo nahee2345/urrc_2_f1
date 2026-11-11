@@ -96,7 +96,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-ros@v0.7
+      - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: jazzy
       - name: Install ROS 2 Jazzy participant build dependencies
