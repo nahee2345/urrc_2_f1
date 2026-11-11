@@ -142,7 +142,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         ("slow_factor", ".8"),
         ("max_deceleration_mps2", "4.0"),
         ("max_acceleration_mps2", "2.0"),
-        ("lane_change_length_m", "12"),
+        ("lane_change_length_m", "18"),
         ("scan_ahead_m", "35"),
     ):
         ET.SubElement(ctrl, tag).text = val
@@ -240,7 +240,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
         "grid_pose": [grid["x"], grid["y"], grid["road_z"], grid["yaw"]],
         "lane_spacing_m": spacing, "speed_mps": 15,
         "straight_speed_range_mps": [10, 15],
-        "lane_change_length_m": 12,
+        "lane_change_length_m": 18,
         "steering_threshold_deg": 10, "corner_speed_range_mps": [5, 7],
         "gentle_corner_speed_range_mps": [10, 15],
         "corner_enter_curvature_per_m": 0.030,
