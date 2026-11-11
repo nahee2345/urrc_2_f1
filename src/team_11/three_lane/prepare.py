@@ -17,11 +17,13 @@ from core import (TRACKS, load_centerline, export_routes, closest_lane,
 def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mode='camera', lane='auto', fixed_lane=False, grid_position=1, practice_cars=False, scenario='normal', physics_collisions=False):
     if physics_collisions and not practice_cars:
         raise ValueError('physics collisions require practice traffic')
-    if scenario not in ('normal', 'slow-ahead', 'rear-fast'):
+    if scenario not in ('normal', 'slow-ahead', 'rear-fast', 'physics-impact'):
         raise ValueError(f'Unknown opponent scenario: {scenario}')
     if scenario == 'slow-ahead' and (not practice_cars or grid_position == 2):
         raise ValueError('slow-ahead requires --practice-cars and grid other than 2')
-    if scenario == 'rear-fast' and (not practice_cars or grid_position == 9):
+    if scenario == 'physics-impact' and not physics_collisions:
+        raise ValueError('physics-impact requires --physics-collisions')
+    if scenario in ('rear-fast', 'physics-impact') and (not practice_cars or grid_position == 9):
         raise ValueError('rear-fast requires --practice-cars and grid other than 9')
     if start_mode not in ('camera', 'immediate'):
         raise ValueError(f'Unsupported start mode: {start_mode}')
@@ -51,7 +53,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     pace_plugin = next(p for p in world.findall("plugin")
                        if p.get("name") == "urrc::PaceCars")
     for slot in (2, 9):
-        if practice_cars and slot != grid_position and (scenario != 'rear-fast' or slot == 9):
+        if practice_cars and slot != grid_position and (scenario not in ('rear-fast','physics-impact') or slot == 9):
             continue
         name = f"urrc_pace_grid_{slot:02d}"
         model = world.find(f"model[@name='{name}']")
@@ -203,22 +205,22 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Only the generated test world is staged: 20m/s blue car starts
     # 110m behind TEAM11 in the neighboring central lane.
     # Red 10m/s car is absent in this scenario to isolate rear defense.
-    if scenario == 'rear-fast':
+    if scenario in ('rear-fast','physics-impact'):
         blue = world.find("model[@name='urrc_pace_grid_09']")
         blue_config = next(c for c in pace_plugin.findall("car")
                            if c.findtext("name") == "urrc_pace_grid_09")
-        route = destination / "team11_routes" / "lane_1.csv"
+        route = destination / "team11_routes" / f"lane_{1 if scenario == 'rear-fast' else initial_lane}.csv"
         with route.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.reader(handle))[1:]
         grid_s, _ = projected_obstacle(points, grid["x"], grid["y"])
         lap_distance = points[-1].s + math.hypot(
             points[-1].x - points[0].x, points[-1].y - points[0].y)
-        start_s = (grid_s - 110.) % lap_distance
+        start_s = (grid_s - (110. if scenario == "rear-fast" else 18.)) % lap_distance
         first = next((i for i, row in enumerate(rows)
                       if float(row[0]) >= start_s), 0)
         rotated = rows[first:] + rows[:first]
         origin_s = float(rotated[0][0])
-        staged_file = destination / "team11_blue_20mps_behind.csv"
+        staged_file = destination / ("team11_blue_20mps_behind.csv" if scenario == "rear-fast" else "team11_blue_20mps_impact.csv")
         with staged_file.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(["distance_m", "x_m", "y_m", "z_m", "yaw_rad"])
@@ -278,7 +280,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     # Reject silently missing practice vehicles or overlapping TEAM11 spawns.
     expected = {f"urrc_pace_grid_{grid_position:02d}": grid_position}
     for slot in (2,9):
-        if practice_cars and slot != grid_position and (scenario != "rear-fast" or slot == 9):
+        if practice_cars and slot != grid_position and (scenario not in ("rear-fast","physics-impact") or slot == 9):
             expected[f"urrc_pace_grid_{slot:02d}"] = slot
     models = {model.get("name"): model for model in world.findall("model")}
     for name in expected:
@@ -302,7 +304,7 @@ def prepare(source, destination, track, plugin_file, pace_plugin_file, start_mod
     for name, number in expected.items():
         pose = [float(v) for v in models[name].findtext("pose").split()]
         original = grid_data[number-1]
-        if (scenario == "slow-ahead" and name == "urrc_pace_grid_02") or (scenario == "rear-fast" and name == "urrc_pace_grid_09"):
+        if (scenario == "slow-ahead" and name == "urrc_pace_grid_02") or (scenario in ("rear-fast","physics-impact") and name == "urrc_pace_grid_09"):
             continue
         if (abs(pose[0] - original["x"]) > 1e-6 or
             abs(pose[1] - original["y"]) > 1e-6 or
@@ -373,7 +375,7 @@ def main():
     parser.add_argument("--fixed-lane", action="store_true")
     parser.add_argument("--physics-collisions", action="store_true", help="dynamic mass/contact engine instead of scripted pose-bounce")
     parser.add_argument("--practice-cars", action="store_true", help="add red/blue opponent cars (off by default)")
-    parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast"), default="normal")
+    parser.add_argument("--scenario", choices=("normal","slow-ahead","rear-fast","physics-impact"), default="normal")
     parser.add_argument("--grid", type=int, choices=range(1,13), default=1)
     args = parser.parse_args()
     root = Path(args.source).expanduser().resolve()
