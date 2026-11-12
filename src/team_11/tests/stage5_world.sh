@@ -15,5 +15,13 @@ if [[ ! -f "$PKG/models/urrc_${TRACK}/meshes/road_textured.obj" || ! -f "$PKG/mo
   exit 3
 fi
 export GZ_SIM_RESOURCE_PATH="$PKG/models${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}"
+if [[ "${TEAM11_PRACTICE_LIGHTWEIGHT:-0}" == "1" ]]; then
+  TEAM="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  OUTPUT="${TEAM11_PRACTICE_DIR:-$HOME/.cache/team11_practice}"
+  python3 "$TEAM/tests/prepare_practice_world.py" --track "$TRACK" --official "$PKG" --output "$OUTPUT"
+  echo "[TEAM11] LOCAL lightweight practice map: spectator cameras removed, shadows disabled."
+  echo "[TEAM11] CameraTracking Follow plugin retained."
+  exec gz sim -r -v 2 --gui-config "$OUTPUT/${TRACK}_practice.gui.config" "$OUTPUT/${TRACK}_practice.sdf"
+fi
 echo "Using official unmodified $PKG/worlds/${TRACK}_race.sdf"
 exec gz sim -r -v 3 --gui-config "$PKG/worlds/${TRACK}_grid.gui.config" "$PKG/worlds/${TRACK}_race.sdf"
