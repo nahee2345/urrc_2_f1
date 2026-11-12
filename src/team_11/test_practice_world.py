@@ -44,7 +44,7 @@ class PracticeWorldTests(unittest.TestCase):
              <plugin filename="spectator" name="spectator_plugin"/>
              <scene><shadows>true</shadows></scene>
              <light name="sun"><cast_shadows>true</cast_shadows></light>
-             <light name="race_red_1"/><light name="race_red_5"/>
+             <light name="race_red_1"/><light name="race_red_2"/><light name="race_red_3"/><light name="race_red_4"/><light name="race_red_5"/>
              <model name="stand"><link name="frame">
              <sensor name="spectator_cam" type="camera"/>
              </link></model></world></sdf>'''
