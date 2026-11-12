@@ -66,7 +66,7 @@ class SignalNode(Node):
             self.save_image(msg,f"signal_{self.signal_capture_count:02d}.png")
             self.signal_capture_count+=1
             self.last_signal_capture=now
-                before=self.gate.started
+        before=self.gate.started
         if self.gate.observe(lamps,now,valid) and not before:
             self.get_logger().info("START: 4+ red lamps observed, now ALL OFF")
         if now-self.last_log>1.:
