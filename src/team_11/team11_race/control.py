@@ -87,6 +87,7 @@ class Team11Control(Node):
         self.grid=None
         self.planner=None
         self.announced=False
+        self.camera_announced=False
         self.last_report=0.
         self.last_health_report=0.
         self.started_at=time.monotonic()
@@ -152,12 +153,11 @@ class Team11Control(Node):
             self.get_logger().info(
                 "TEAM11 camera red confirmed: evidence=%d peak=%d" %
                 (amount,self.camera_gate.peak))
-        if self.camera_go and not self.announced:
+        if self.camera_go and not self.camera_announced:
             self.get_logger().info(
                 "TEAM11 camera LIGHTS OUT confirmed (red->dark stable); "
                 "race gate also required")
-            # Do not reuse self.announced; it belongs to SAFE STOP.
-            self.announced=True
+            self.camera_announced=True
 
     def report_wait(self,now,reason):
         if now-self.last_health_report<3.0:
@@ -182,14 +182,17 @@ class Team11Control(Node):
             return
         self.last_discover=now
         try:
-            name=discover_world()
-            if name is None:
-                result=match_map_from_spawn(self.share,self.pose)
-                if result is None:
-                    self.report_wait(now,"MAP_NOT_IDENTIFIED_FROM_SPAWN")
-                    return
+            # Spawn pose uniquely identifies all six official start grids.
+            # Match it first: the external 'gz topic -l' subprocess may block
+            # the single-threaded rclpy executor and starve camera/pose input.
+            result=match_map_from_spawn(self.share,self.pose)
+            if result is not None:
                 name,slot=result
             else:
+                name=discover_world()
+                if name is None:
+                    self.report_wait(now,"MAP_NOT_IDENTIFIED_FROM_SPAWN")
+                    return
                 slot=matching_grid(map_assets(self.share,name),self.pose)
             path=map_assets(self.share,name)
             route=RouteMap(path)

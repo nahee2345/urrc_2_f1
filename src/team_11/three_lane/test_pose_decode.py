@@ -29,6 +29,10 @@ class PoseDecodeTests(unittest.TestCase):
         msg=N(transforms=[item("base_link")])
         self.assertIsNotNone(extract_vehicle_pose(msg))
 
+    def test_private_single_world_transform_without_name(self):
+        self.assertEqual(extract_vehicle_pose(N(transforms=[item("",xyz=(.378,-2.056,1.3))]))[:3],
+                         (.378,-2.056,1.3))
+
     def test_rejects_other_team_pose(self):
         msg=N(transforms=[item("team_07"),item("team_07::base_link",base="team_07")])
         self.assertIsNone(extract_vehicle_pose(msg))

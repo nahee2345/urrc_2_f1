@@ -34,6 +34,18 @@ def extract_vehicle_pose(msg):
         if all(math.isfinite(v) for v in result[:4]):
             candidates.append((rank,result))
     if not candidates:
+        # With only the own model's world PosePublisher enabled, a TF bridge
+        # may leave the child name blank. The private topic is source-isolated.
+        if len(msg.transforms)==1:
+            tf=msg.transforms[0]
+            name=str(tf.child_frame_id or "").lower()
+            parent=str(tf.header.frame_id or "").lower()
+            if not name and parent in ("","world","map"):
+                t=tf.transform.translation
+                yaw=yaw_from_quaternion(tf.transform.rotation)
+                out=(float(t.x),float(t.y),float(t.z),float(yaw),"private_model_pose")
+                if all(math.isfinite(v) for v in out[:4]):
+                    return out
         return None
     candidates.sort(key=lambda x:x[0])
     return candidates[0][1]
