@@ -10,6 +10,7 @@ class TestStage5(unittest.TestCase):
     def test_timeout(self):
         self.assertEqual(convert(1,0,True,False,True),(0.,0.))
     def test_speed_limit(self):
-        self.assertEqual(convert(99,0,True,True,True)[0],2.)
+        self.assertEqual(convert(99,0,True,True,True)[0],15.)
+        self.assertEqual(convert(-99,0,True,True,True)[0],-2.)
     def test_nan(self):
         self.assertEqual(convert(float("nan"),0,True,True,True),(0.,0.))
