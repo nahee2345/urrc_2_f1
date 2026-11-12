@@ -57,6 +57,17 @@ def stop(process):
             pass
 
 
+def print_log_tail(path, count=18):
+    """Expose the real failure cause, rather than only saying 'GUI missing'."""
+    try:
+        lines=path.read_text(encoding="utf-8",errors="replace").splitlines()
+        print("[TEAM11 DIAG] "+str(path)+":", flush=True)
+        for line in lines[-count:]:
+            print("  "+line[-300:],flush=True)
+    except OSError as exc:
+        print("[TEAM11 DIAG] Cannot read %s: %s" % (path,exc),flush=True)
+
+
 def summary(path):
     source=path.read_text(encoding="utf-8",errors="replace") if path.exists() else ""
     speeds=[float(s) for s in re.findall(r"physical_distance=([0-9.]+)",source)]
@@ -91,9 +102,19 @@ def main():
                     help="Wall-clock test duration after lights-out (default: 90)")
     ap.add_argument("--headless",action="store_true",
                     help="Run Gazebo server without GUI (requires OGRE2/EGL)")
+    ap.add_argument("--startup-timeout",type=int,default=180,
+                    help="Wait for Gazebo camera/pose topics (default: 180s)")
     args=ap.parse_args()
     if args.seconds<10:
         ap.error("--seconds must be at least 10")
+    if args.startup_timeout<30:
+        ap.error("--startup-timeout must be at least 30")
+    if not args.headless and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        ap.error(
+            "No graphical desktop detected (DISPLAY/WAYLAND_DISPLAY unset). "
+            "Run from Ubuntu desktop or use --headless.")
     for exe in ("gz","ros2"):
         if shutil.which(exe) is None:
             ap.error(exe+" not found; run sim_test/run.sh after installing ROS/Gazebo")
@@ -112,16 +133,29 @@ def main():
     # Keep ROS isolated so user can run the full test without other ROS nodes.
     env["ROS_DOMAIN_ID"]=str(70+os.getpid()%80)
 
-    gz_cmd=["gz","sim","-r","-v","3"]
+    # Launch separate Gazebo server and GUI processes. Combined gz sim
+    # hides the cause of GUI failures in server logs, and a slow world may
+    # cause this runner to shut down before the client is even visible.
+    gz_cmd=["gz","sim","-s","-r","-v","4"]
     if args.headless:
-        gz_cmd+=["-s","--headless-rendering"]
+        gz_cmd.append("--headless-rendering")
     gz_cmd.append(str(world))
+    gui_cmd=["gz","sim","-g","-v","4"]
 
-    gz=bridge=clock=gate=None
+    gz=gui=bridge=clock=gate=None
     files=[]
     try:
         gz,f=launch(gz_cmd,out/"gazebo.log",env)
         files.append(f)
+        if not args.headless:
+            print("[TEAM11 GUI] Launching independent Gazebo graphical client",
+                  flush=True)
+            print("[TEAM11 GUI] DISPLAY=%s WAYLAND_DISPLAY=%s" %
+                  (env.get("DISPLAY",""),env.get("WAYLAND_DISPLAY","")),
+                  flush=True)
+            print("[TEAM11 GUI] Log:",out/"gazebo_gui.log",flush=True)
+            gui,f=launch(gui_cmd,out/"gazebo_gui.log",env)
+            files.append(f)
         ros_cmd=["ros2","launch","team11_race","race.launch.py",
                  "race_start_mode:=camera"]
         bridge,f=launch(ros_cmd,out/"team11_ros.log",env)
@@ -131,14 +165,25 @@ def main():
                        out/"clock_bridge.log",env)
         files.append(f)
 
-        deadline=time.monotonic()+75.
+        deadline=time.monotonic()+args.startup_timeout
+        last_notice=0.
         camera_seen=False
         while time.monotonic()<deadline:
             if gz.poll() is not None:
-                print("[TEAM11 ERROR] Gazebo terminated; check gazebo.log",file=sys.stderr)
+                print("[TEAM11 ERROR] Gazebo server exited (code=%s)" %
+                      gz.returncode,file=sys.stderr)
+                print_log_tail(out/"gazebo.log")
+                return 2
+            if gui is not None and gui.poll() is not None:
+                print("[TEAM11 ERROR] Gazebo GUI exited (code=%s)" %
+                      gui.returncode,file=sys.stderr)
+                print_log_tail(out/"gazebo_gui.log")
+                print_log_tail(out/"gazebo.log",count=8)
                 return 2
             if bridge.poll() is not None:
-                print("[TEAM11 ERROR] ROS launch terminated; check team11_ros.log",file=sys.stderr)
+                print("[TEAM11 ERROR] ROS launch terminated (code=%s)" %
+                      bridge.returncode,file=sys.stderr)
+                print_log_tail(out/"team11_ros.log")
                 return 2
             topics=call(["gz","topic","-l"],env,timeout=4)
             if topics.returncode==0:
@@ -148,10 +193,19 @@ def main():
                 if camera_seen and pose_seen:
                     print("[TEAM11] Gazebo RGB and own-pose topics advertised",flush=True)
                     break
+            if time.monotonic()-last_notice>=10.:
+                last_notice=time.monotonic()
+                print("[TEAM11] Loading simulator; waiting for camera + "
+                      "pose topics (timeout %ds)" % args.startup_timeout,
+                      flush=True)
             time.sleep(1)
         else:
-            print("[TEAM11 ERROR] Camera or pose topic missing; inspect logs",
-                  file=sys.stderr)
+            print("[TEAM11 ERROR] Camera or pose topic missing after %ds" %
+                  args.startup_timeout,file=sys.stderr)
+            print_log_tail(out/"gazebo.log",count=15)
+            if gui is not None:
+                print_log_tail(out/"gazebo_gui.log",count=15)
+            print_log_tail(out/"team11_ros.log",count=15)
             return 2
 
         # Let ROS camera subscribers observe red lamps BEFORE they disappear.
@@ -184,9 +238,17 @@ def main():
         end=time.monotonic()+args.seconds
         shown=0
         while time.monotonic()<end:
-            if gz.poll() is not None or bridge.poll() is not None:
-                print("[TEAM11 WARNING] Gazebo or ROS launch exited; inspect logs",
+            if gz.poll() is not None or bridge.poll() is not None or (
+                gui is not None and gui.poll() is not None
+            ):
+                print("[TEAM11 WARNING] Gazebo server, GUI, or ROS exited",
                       flush=True)
+                if gz.poll() is not None:
+                    print_log_tail(out/"gazebo.log")
+                if bridge.poll() is not None:
+                    print_log_tail(out/"team11_ros.log")
+                if gui is not None and gui.poll() is not None:
+                    print_log_tail(out/"gazebo_gui.log")
                 break
             try:
                 data=(out/"team11_ros.log").read_text(
@@ -210,7 +272,7 @@ def main():
         summary(out/"team11_ros.log")
         return 130
     finally:
-        for p in (gate,clock,bridge,gz):
+        for p in (gate,clock,bridge,gui,gz):
             stop(p)
         for fd in files:
             fd.close()

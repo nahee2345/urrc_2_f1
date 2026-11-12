@@ -74,6 +74,10 @@ def build_world(track: str, grid: int, path: Path, road_stride: int = 8):
 
     road=child(world,"model",name="team11_csv_test_road")
     child(road,"static","true")
+    # A single static link avoids hundreds of link entities and substantially
+    # reduces Gazebo world load/GUI attach latency without changing the
+    # physical road surface geometry.
+    surface=child(road,"link",name="track_surface")
     indices=list(range(0,len(points),road_stride))
     if indices[-1]!=len(points)-1:
         indices.append(len(points)-1)
@@ -85,15 +89,15 @@ def build_world(track: str, grid: int, path: Path, road_stride: int = 8):
         distance=math.hypot(dx,dy)
         if distance<0.05:
             continue
-        link=child(road,"link",name=f"patch_{k:04d}")
         angle=math.atan2(dy,dx)
         slope=-math.atan2(dz,distance)
-        child(link,"pose",string_pose(
+        patch_pose=string_pose(
             (a["x_m"]+b["x_m"])/2,(a["y_m"]+b["y_m"])/2,
-            (a["z_m"]+b["z_m"])/2-.075,0.,slope,angle))
+            (a["z_m"]+b["z_m"])/2-.075,0.,slope,angle)
         width=max(.6,min(a["road_width_m"],b["road_width_m"]))
         for kind in ("collision","visual"):
-            shape=child(link,kind,name=f"road_{kind}")
+            shape=child(surface,kind,name=f"patch_{k:04d}_{kind}")
+            child(shape,"pose",patch_pose)
             box_geometry(shape,distance+.12,width,.15)
             if kind=="visual":
                 material=child(shape,"material")
