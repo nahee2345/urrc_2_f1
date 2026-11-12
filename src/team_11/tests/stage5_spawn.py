@@ -19,7 +19,8 @@ def make_command(pkg,track,grid):
     pos=next(p for p in meta["grid"] if p["position"]==grid)
     model=Path(__file__).resolve().parents[1]/"models"/"team11_yellow_car"/"model.sdf"
     if os.environ.get("TEAM11_PRACTICE_LIGHTWEIGHT")=="1":
-        # Stage7-only lightweight copy: no zoom camera or GPU LiDAR.\n        # Official submitted model is untouched.
+        # Stage7-only lightweight copy: no zoom camera or GPU LiDAR.
+        # Official submitted model is untouched.
         folder=Path(os.environ.get("TEAM11_PRACTICE_DIR",str(Path.home()/".cache"/"team11_practice")))
         folder.mkdir(parents=True,exist_ok=True)
         tree=ET.parse(model)
