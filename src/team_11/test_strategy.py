@@ -30,6 +30,16 @@ class StrategyTests(unittest.TestCase):
         p=self.track.lanes[lane][index]
         return Vehicle(p["x_m"],p["y_m"],p["yaw_rad"],speed,stamp,name)
 
+    def test_15ms_straight_cap_and_corner_braking(self):
+        self.track.curvature=[0.0]*self.track.n
+        commands=[]
+        for i in range(90):
+            commands.append(self.planner.step(self.car(5,speed=15),[],1.0+i*.2))
+        self.assertAlmostEqual(commands[-1].speed,15.0,places=5)
+        self.assertTrue(all(0 <= c.speed <= 15.0 for c in commands))
+        self.track.curvature=[.2]*self.track.n
+        reduced=self.planner.step(self.car(5,speed=15),[],19.2)
+        self.assertLess(reduced.speed,15.0)
     def test_wait_gate(self):
         cmd=self.planner.step(self.car(5),[],1,False)
         self.assertEqual(cmd.speed,0)
