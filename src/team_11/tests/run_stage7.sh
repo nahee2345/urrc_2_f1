@@ -57,15 +57,13 @@ for i in $(seq 1 90); do
   sleep 1
 done
 if (( READY == 0 )); then echo "Gazebo create service timeout" >&2; exit 1; fi
-echo "[3/8] Spawn car in official grid $GRID"
-python3 "$TEAM/tests/stage5_spawn.py" --track "$TRACK" --grid "$GRID" --official "$OFFICIAL" >"$LOG/spawn.log" 2>&1 || { cat "$LOG/spawn.log"; exit 1; }
-echo "[4/8] Start ROS bridges for control and RGB camera"
+echo "[2/8] Prepare ROS bridges before spawning vehicle"
 ros2 run ros_gz_bridge parameter_bridge "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
   "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$LOG/bridge.log" 2>&1 &
 BRIDGE_PID=$!; PIDS+=("$BRIDGE_PID")
 sleep 3
 if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then echo "Bridge failed" >&2; cat "$LOG/bridge.log"; exit 1; fi
-echo "[5/8] Start camera detector, gated vehicle adapter and one-second test driver"
+echo "[2/8] Prepare camera detector, gated adapter and test driver before vehicle spawn"
 ros2 run team_11 team11_signal_camera >"$LOG/camera.log" 2>&1 &
 CAMERA_PID=$!; PIDS+=("$CAMERA_PID")
 ros2 run team_11 team11_stage5_adapter >"$LOG/adapter.log" 2>&1 &
@@ -76,22 +74,24 @@ sleep 4
 for pid in "$CAMERA_PID" "$ADAPTER_PID" "$DRIVE_PID"; do
   if ! kill -0 "$pid" 2>/dev/null; then echo "ROS node failed" >&2; tail -50 "$LOG/camera.log" "$LOG/adapter.log" "$LOG/drive.log"; exit 1; fi
 done
-echo "[6/8] Camera and adapter are ready. All controls are currently STOP."
+echo "[3/8] Spawn car in official grid $GRID AFTER ROS nodes are running"
+python3 "$TEAM/tests/stage5_spawn.py" --track "$TRACK" --grid "$GRID" --official "$OFFICIAL" >"$LOG/spawn.log" 2>&1 || { cat "$LOG/spawn.log"; exit 1; }
+echo "[4/8] Wait for onboard camera frames after spawning. Controls stay STOP."
 echo "[TEAM11] Camera diagnostics before lights:"
 tail -8 "$LOG/camera.log" || true
-if ! grep -q "DIAG frames=" "$LOG/camera.log"; then
+if ! grep -q "FRAME_READY source=" "$LOG/camera.log"; then
   echo "[TEAM11] FAIL: Camera is not providing frames; do not start signals." >&2
   echo "[TEAM11] Check $LOG/bridge.log and /camera_11 QoS." >&2
   exit 4
 fi
-echo "[7/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
+echo "[5/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
 rm -f "$LOG"/signal_*.png
 if [[ "${TEAM11_STAGE7_CAPTURE_IMAGES:-1}" == "1" ]]; then
   touch "$LOG/signal_capture.active"
 fi
 python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$LOG/lights.log" 2>&1 || { echo "Official lights failed" >&2; tail -60 "$LOG/lights.log"; exit 1; }
 rm -f "$LOG/signal_capture.active"
-echo "[8/8] Observe camera-gated one-second motion"
+echo "[6/8] Observe camera-gated one-second motion"
 sleep 3
 if grep -q "START: 4+ red lamps observed, now ALL OFF" "$LOG/camera.log" &&
    grep -q "FINISHED: One-second pulse complete" "$LOG/drive.log" &&
