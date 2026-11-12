@@ -42,6 +42,8 @@ class RaceV11ReadinessTests(unittest.TestCase):
         self.assertEqual(manifest["entry_id"],"team_11")
         self.assertIn("/race/start/team_11",launch)
         self.assertIn("/team11/pose_11",launch)
+        self.assertIn("/team11/odom_11@nav_msgs/msg/Odometry[gz.msgs.Odometry",launch)
+        self.assertIn('odom_world_aligned', (PKG/"control.py").read_text())
         self.assertEqual(manifest["vehicle_model_file"],
                          "src/team_11/models/team11_car/model.sdf")
 

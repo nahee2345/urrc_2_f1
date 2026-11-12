@@ -9,10 +9,13 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Float32
 from sensor_msgs.msg import Image
 from tf2_msgs.msg import TFMessage
+from nav_msgs.msg import Odometry
 
 from team11_race.planner import Planner, RouteMap
 from team11_race.camera_start import LightTransition, red_evidence
-from team11_race.pose_decode import extract_vehicle_pose, pose_frame_examples
+from team11_race.pose_decode import (
+    extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
+)
 from team11_race.trackdetect import (TRACKS, discover_world, map_assets,
                                       matching_grid, match_map_from_spawn)
 
@@ -78,6 +81,11 @@ class Team11Control(Node):
         self.camera_frames=0
         self.pose_frames=0
         self.pose_unrecognized=0
+        self.last_tf_wall=0.
+        self.odom_frames=0
+        self.odom_world_valid=False
+        self.odom_rejected=0
+        self.last_odom_probe=0.
         self.pose_source=""
         self.pose=None
         self.pose_wall=0.
@@ -100,6 +108,10 @@ class Team11Control(Node):
                                  self.gate_callback,10)
         self.create_subscription(TFMessage,"/team11/pose_11",
                                  self.pose_callback,10)
+        # Independent Ackermann odometry, accepted as map/world coordinates
+        # only after matching a unique bundled start grid.
+        self.create_subscription(Odometry,"/team11/odom_11",
+                                 self.odom_callback,10)
         self.create_subscription(Image,"/team11/start_image_11",
                                  self.camera_callback,10)
         self.create_timer(.05,self.tick)
@@ -142,6 +154,41 @@ class Team11Control(Node):
         self.pose=(x,y,z,yaw)
         self.pose_source=frame
         self.pose_wall=time.monotonic()
+        self.last_tf_wall=self.pose_wall
+
+    def odom_callback(self,msg):
+        self.odom_frames+=1
+        now=time.monotonic()
+        # Prefer the native own-model world pose whenever it is fresh.
+        if now-self.last_tf_wall<0.5:
+            return
+        p=msg.pose.pose.position
+        q=msg.pose.pose.orientation
+        values=(float(p.x),float(p.y),float(p.z),
+                float(yaw_from_quaternion(q)))
+        if not all(math.isfinite(v) for v in values):
+            return
+        if not self.odom_world_valid:
+            if now-self.last_odom_probe<1.0:
+                return
+            self.last_odom_probe=now
+            # An Ackermann odom stream may be local to the wheel origin.
+            # Never treat local (0,0,0) as the global world pose.
+            if match_map_from_spawn(self.share,values) is None:
+                self.odom_rejected+=1
+                if self.odom_rejected in (1,5,20):
+                    self.get_logger().warning(
+                        "TEAM11 odom not world-aligned; ignoring frame=%s "
+                        "xyz=(%.3f,%.3f,%.3f)" %
+                        (msg.header.frame_id,*values[:3]))
+                return
+            self.odom_world_valid=True
+            self.get_logger().info(
+                "TEAM11 independent odom aligned with official start grid; "
+                "using as own pose fallback")
+        self.pose=values
+        self.pose_wall=now
+        self.pose_source="self_odom_world_aligned"
 
     def camera_callback(self,msg):
         self.camera_frames+=1
@@ -166,12 +213,14 @@ class Team11Control(Node):
         self.get_logger().warning(
             "TEAM11 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
             "red_seen=%s evidence=%d peak=%d camera_out=%s "
-            "pose_messages=%d unmatched_pose=%d pose_fresh=%s "
+            "pose_messages=%d unmatched_pose=%d odom_frames=%d "
+            "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
             "track=%s grid=%s" %
             (reason,self.allowed,self.mode,self.camera_frames,
              self.camera_gate.saw_red,self.camera_gate.last_red,
              self.camera_gate.peak,self.camera_go,self.pose_frames,
-             self.pose_unrecognized,
+             self.pose_unrecognized,self.odom_frames,
+             self.odom_world_valid,self.pose_source,
              self.pose is not None and now-self.pose_wall<=1.,
              self.track,self.grid))
 
