@@ -39,8 +39,12 @@ def prepare(track,official,output):
         raise ValueError("Official five-light gantry missing; refusing practice world")
     world_file=output/(track+"_practice.sdf")
     tree.write(world_file,encoding="unicode",xml_declaration=True)
-    gui=ET.parse(gui_source)
-    root=gui.getroot()
+    # Gazebo GUI config has multiple top-level elements (<window>, <plugin>).
+    # Wrap only for ElementTree parsing, then write children without wrapper.
+    raw=gui_source.read_text(encoding="utf-8")
+    raw=raw.replace('<?xml version="1.0"?>', "", 1)
+    raw=raw.replace("<?xml version='1.0' encoding='utf-8'?>", "", 1)
+    root=ET.fromstring("<config_root>"+raw+"</config_root>")
     keep={"MinimalScene","GzSceneManager","InteractiveViewControl","CameraTracking","WorldControl","EntityTree"}
     for plugin in list(root.findall("plugin")):
         if plugin.get("filename") not in keep:
@@ -48,7 +52,8 @@ def prepare(track,official,output):
     if not any(p.get("filename")=="CameraTracking" for p in root.findall("plugin")):
         raise ValueError("CameraTracking Follow GUI plugin missing")
     gui_file=output/(track+"_practice.gui.config")
-    gui.write(gui_file,encoding="unicode",xml_declaration=True)
+    gui_file.write_text('<?xml version="1.0"?>\n'+
+        "".join(ET.tostring(child,encoding="unicode") for child in root),encoding="utf-8")
     print("PRACTICE_WORLD="+str(world_file),flush=True)
     print("PRACTICE_GUI="+str(gui_file),flush=True)
     print("MAP_CAMERAS_REMOVED="+str(len(removed)),flush=True)
