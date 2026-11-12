@@ -80,7 +80,7 @@ class SignalNode(Node):
         if now-self.last_log>1.:
             self.get_logger().info("camera red_lamps=%d armed=%s started=%s" % (
                 lamps,selected.armed_at is not None,selected.started))
-            self.get_logger().info(f"DIAG source={source} frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps} peak_red_sample={self.red_peak}")
+            self.get_logger().info(f"DIAG frames={self.frames} source={source} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps} peak_red_sample={self.red_peak}")
             self.last_log=now
     @staticmethod
     def sample_red(msg):
