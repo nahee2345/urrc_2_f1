@@ -26,6 +26,11 @@ class StartPolicyTests(unittest.TestCase):
         self.assertEqual(choose_start("signal",True,False,False,True,0.),
                          "OFFICIAL_SIGNAL")
 
+    def test_competition_uses_advanced_straight_speed_limit(self):
+        source=(ROOT/"team11_race/control.py").read_text()
+        self.assertIn('("max_speed_mps",15.0)',source)
+        self.assertIn("RaceDirector()",source)
+
     def test_four_or_five_red_then_all_off(self):
         model=LightTransition()
         for frame in (16,24):

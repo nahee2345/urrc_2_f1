@@ -44,7 +44,7 @@ class Team11Control(Node):
             ("race_start_topic","/race/start/team_11"),
             ("speed_topic","/team11/speed_11"),
             ("steering_topic","/team11/steering_11"),
-            ("max_speed_mps",10.0)):
+            ("max_speed_mps",15.0)):
             self.declare_parameter(k,v)
         self.mode=str(self.get_parameter("race_start_mode").value)
         if self.mode not in ("signal","camera"):
@@ -58,6 +58,7 @@ class Team11Control(Node):
         self.last_strategy_reason=""
         self.perception=LaserTracker()
         self.director=RaceDirector()
+        self.camera_processed=0
         self.pose_frames=0
         self.pose_unrecognized=0
         self.last_tf_wall=0.
@@ -179,18 +180,29 @@ class Team11Control(Node):
     def scan_callback(self,msg,side):
         if self.pose is None:
             return
+        scan_now=time.monotonic()
+        # Gazebo sensors run at 30Hz each; process at most 15Hz per side
+        # to prevent LiDAR callbacks from starving pose and control timers.
+        last=self.perception.last_front if side=="front" else self.perception.last_rear
+        if scan_now-last<.06:
+            return
         try:
             self.perception.update(
                 msg.ranges,float(msg.angle_min),float(msg.angle_increment),
                 float(msg.range_min),float(msg.range_max),side,self.pose,
                 self.planner.speed if self.planner is not None else 0.,
-                time.monotonic())
+                scan_now)
         except (TypeError,ValueError,OverflowError) as exc:
             self.get_logger().warning(
                 "TEAM11 %s LiDAR invalid: %s" % (side,str(exc)))
 
     def camera_callback(self,msg):
         self.camera_frames+=1
+        # 20Hz RGB source -> 10Hz high-resolution detection. Four dark
+        # frames still require real successive camera updates.
+        if self.camera_frames%2:
+            return
+        self.camera_processed+=1
         amount=red_evidence(msg.data,int(msg.width),int(msg.height),
                             int(msg.step),str(msg.encoding))
         previous_red=self.camera_gate.saw_red
@@ -211,13 +223,13 @@ class Team11Control(Node):
         self.last_health_report=now
         self.get_logger().warning(
             "TEAM11 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
-            "red_seen=%s evidence=%d peak=%d camera_out=%s "
+            "camera_processed=%d red_seen=%s evidence=%d peak=%d camera_out=%s "
             "pose_messages=%d unmatched_pose=%d odom_frames=%d "
             "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
             "track=%s grid=%s lidar_frames=%d nearby=%d "
             "adjacent_moving=%s start_source=%s strategy=%s" %
             (reason,self.allowed,self.mode,self.camera_frames,
-             self.camera_gate.saw_red,self.camera_gate.last_red,
+             self.camera_processed,self.camera_gate.saw_red,self.camera_gate.last_red,
              self.camera_gate.peak,self.camera_go,self.pose_frames,
              self.pose_unrecognized,self.odom_frames,
              self.odom_world_valid,self.pose_source,
