@@ -7,11 +7,13 @@ from pathlib import Path
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry
 
 from team11_race.planner import Planner, RouteMap
+from team11_race.perception import LaserTracker
+from team11_race.strategy import RaceDirector, Decision
 from team11_race.camera_start import LightTransition, red_evidence
 from team11_race.pose_decode import (
     extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
@@ -79,6 +81,11 @@ class Team11Control(Node):
         self.camera_go=False
         self.camera_gate=LightTransition()
         self.camera_frames=0
+        self.gate_true_at=0.
+        self.start_source=""
+        self.last_strategy_reason=""
+        self.perception=LaserTracker()
+        self.director=RaceDirector()
         self.pose_frames=0
         self.pose_unrecognized=0
         self.last_tf_wall=0.
@@ -114,6 +121,10 @@ class Team11Control(Node):
                                  self.odom_callback,10)
         self.create_subscription(Image,"/team11/start_image_11",
                                  self.camera_callback,10)
+        self.create_subscription(LaserScan,"/team11/front_scan_11",
+            lambda msg:self.scan_callback(msg,"front"),10)
+        self.create_subscription(LaserScan,"/team11/rear_scan_11",
+            lambda msg:self.scan_callback(msg,"rear"),10)
         self.create_timer(.05,self.tick)
         self.get_logger().info("TEAM11 initialized; awaiting own pose, world and race gate")
 
@@ -122,7 +133,10 @@ class Team11Control(Node):
         self.steer_pub.publish(Float32(data=float(steering)))
 
     def gate_callback(self,msg):
+        previously=self.allowed
         self.allowed=bool(msg.data)
+        if self.allowed and not previously:
+            self.gate_true_at=time.monotonic()
         if not self.allowed:
             self.publish(0.,0.)
             self.get_logger().info("TEAM11 external race gate FALSE; drive stopped")
@@ -190,6 +204,19 @@ class Team11Control(Node):
         self.pose_wall=now
         self.pose_source="self_odom_world_aligned"
 
+    def scan_callback(self,msg,side):
+        if self.pose is None:
+            return
+        try:
+            self.perception.update(
+                msg.ranges,float(msg.angle_min),float(msg.angle_increment),
+                float(msg.range_min),float(msg.range_max),side,self.pose,
+                self.planner.speed if self.planner is not None else 0.,
+                time.monotonic())
+        except (TypeError,ValueError,OverflowError) as exc:
+            self.get_logger().warning(
+                "TEAM11 %s LiDAR invalid: %s" % (side,str(exc)))
+
     def camera_callback(self,msg):
         self.camera_frames+=1
         amount=red_evidence(msg.data,int(msg.width),int(msg.height),
@@ -215,14 +242,19 @@ class Team11Control(Node):
             "red_seen=%s evidence=%d peak=%d camera_out=%s "
             "pose_messages=%d unmatched_pose=%d odom_frames=%d "
             "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
-            "track=%s grid=%s" %
+            "track=%s grid=%s lidar_frames=%d nearby=%d "
+            "adjacent_moving=%s start_source=%s strategy=%s" %
             (reason,self.allowed,self.mode,self.camera_frames,
              self.camera_gate.saw_red,self.camera_gate.last_red,
              self.camera_gate.peak,self.camera_go,self.pose_frames,
              self.pose_unrecognized,self.odom_frames,
              self.odom_world_valid,self.pose_source,
              self.pose is not None and now-self.pose_wall<=1.,
-             self.track,self.grid))
+             self.track,self.grid,self.perception.frames,
+             len(self.perception.visible(now)),
+             self.perception.neighbor_motion(self.pose,now)
+                if self.pose is not None else False,
+             self.start_source,self.last_strategy_reason))
 
     def prepare_route(self,now):
         if self.pose is None or self.planner is not None:
@@ -250,7 +282,8 @@ class Team11Control(Node):
                      math.hypot(route.sample(k,s)[0]-self.pose[0],
                                 route.sample(k,s)[1]-self.pose[1]))
             self.planner=Planner(
-                route,lane,max_speed=float(self.get_parameter("max_speed_mps").value))
+                route,lane,max_speed=float(self.get_parameter("max_speed_mps").value),
+                external_strategy=True)
             self.track=name
             self.grid=slot
             self.get_logger().info(f"TEAM11 map={name} grid={slot} initial_route={lane+1}")
@@ -267,19 +300,57 @@ class Team11Control(Node):
             return
         if self.planner is None:
             self.prepare_route(now)
-        if not self.allowed or (self.mode=="camera" and not self.camera_go):
+        if not self.allowed:
             self.publish(0.,0.)
             self.last_tick=0.
-            if self.allowed:
-                self.report_wait(now,"CAMERA_NO_RED_THEN_DARK")
             return
+        if self.mode=="camera" and not self.camera_go:
+            # The operator's start gate is authoritative: absolutely never
+            # start while it remains false. Camera is primary evidence.
+            # Once the gate is TRUE, an observed nearby car actually moving
+            # is alternate evidence when the gantry is outside camera view.
+            if self.perception.neighbor_motion(self.pose,now):
+                self.camera_go=True
+                self.start_source="NEIGHBOR_MOVED_AFTER_GATE"
+            elif self.gate_true_at and now-self.gate_true_at>=.75 and (
+                not self.perception.neighbor_present(self.pose,now) or
+                now-self.gate_true_at>=2.0):
+                # Solo qualifying has no adjacent car to observe. The
+                # organizer's TRUE signal is the single authoritative
+                # lights-out command, so it is a safe final fallback.
+                self.camera_go=True
+                self.start_source="OFFICIAL_GATE_CAMERA_FALLBACK"
+            else:
+                self.publish(0.,0.)
+                self.last_tick=0.
+                self.report_wait(now,"CAMERA_OR_NEIGHBOR_NOT_READY")
+                return
+            self.get_logger().warning("TEAM11 start fallback: %s" %
+                                      self.start_source)
+        elif self.mode=="camera" and not self.start_source:
+            self.start_source="CAMERA_LIGHTS_OUT"
+        elif self.mode=="signal" and not self.start_source:
+            self.start_source="OFFICIAL_SIGNAL"
         if self.planner is None:
             self.publish(0.,0.)
             self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
             return
         dt=.05 if self.last_tick<=0 else min(.20,now-self.last_tick)
         self.last_tick=now
-        speed,steer,status=self.planner.step(self.pose,dt)
+        decision=Decision(None,float("inf"),"ROUTE_INITIALIZING")
+        if self.planner.last_s is not None:
+            decision=self.director.choose(
+                self.planner,self.pose,self.perception.visible(now),now)
+            if decision.lane is not None:
+                moved=self.planner.request_lane(decision.lane,decision.reason)
+                if moved:
+                    self.get_logger().info(
+                        "TEAM11 STRATEGY %s lane=%d -> %d threat=%d ttc=%.2f" %
+                        (decision.reason,self.planner.lane+1,
+                         self.planner.target+1,decision.target_id,decision.ttc))
+        self.last_strategy_reason=decision.reason
+        speed,steer,status=self.planner.step(
+            self.pose,dt,traffic_speed_cap=decision.speed_cap)
         if status not in ("DRIVE","BAD_DT"):
             self.publish(0.,0.)
             if not self.announced:
@@ -292,7 +363,9 @@ class Team11Control(Node):
                 f"map={self.track} route={self.planner.target+1} "
                 f"speed={speed:.2f} steering_right_deg={math.degrees(steer):.1f} "
                 f"physical_distance={self.planner.travel:.1f} "
-                f"laps={self.planner.laps}")
+                f"laps={self.planner.laps} "
+                f"strategy={self.last_strategy_reason} "
+                f"start={self.start_source} targets={len(self.perception.visible(now))}")
             self.last_report=now
 
 

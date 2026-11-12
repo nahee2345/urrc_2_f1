@@ -19,7 +19,10 @@ def red_evidence(data, width: int, height: int, step: int, encoding: str, stride
     # A broad ROI catches the high gantry on different grid slots; ignore
     # screen edges and the lower bumper/road where opponent paint may appear.
     xmin,xmax=int(width*.08),int(width*.92)
-    ymin,ymax=int(height*.08),int(height*.78)
+    # At grid 11 the gantry sits much lower in the image than at grid 1.
+    # Cover nearly the full vertical field; red->dark still requires the
+    # official start gate before any vehicle movement.
+    ymin,ymax=int(height*.04),int(height*.96)
     active=0
     for y in range(ymin,ymax,stride):
         row=y*step
