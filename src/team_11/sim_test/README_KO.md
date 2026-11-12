@@ -1,86 +1,100 @@
-# TEAM11 내장 맵 Gazebo 신호·주행 검증
+# TEAM11 공식 GitHub 맵으로 Gazebo 주행·신호 시험
 
-`urrc_2_f1`의 `src/team_11/maps/{track}/centerline.csv`와 `track.json`만
-읽어 **별도의 시험용 Gazebo SDF**를 생성합니다. 모델, 조향/속도 제어기,
-카메라, 전/후 LiDAR는 제출용 `team11_race`와 **동일한 것**을 사용합니다.
-기존 경로, 원본 대회장, 타 참가팀 파일은 수정하지 않습니다. 백업하지 않습니다.
+기본 실행은 `nahee2345/urrc_f1_ws` **GitHub main의 공식 3D 맵**을
+선택 트랙만 다운로드하고, 도로·벽·연석·노면 표시·출발 게이트를
+실제 Gazebo 메시(SDF+OBJ)로 사용합니다.
 
-**주의:** 내장 데이터는 CSV 경로이지 공식 Gazebo 맵 월드/연석/환경 메시가
-아닙니다. 이 시험에서 생성되는 도로는 CSV 중앙선을 따라 박스를 연결한
-근사 도로이므로 **공식 대회 맵에서의 충돌/2랩 완주 통과를 의미하지 않습니다.**
+다운로드 위치:
+`~/urrc_2_f1/build/team11_official_maps_cache/urrc_f1_ws/`
 
-## 시험 실행
+- **기존 `~/urrc_f1_ws`는 읽거나 수정하지 않습니다.**
+- 기존 `src/team_11/maps/` 경로 데이터와 차량 모델은 덮어쓰지 않습니다.
+- 다운로드된 공식 중앙선 SHA-256과 TEAM11 경로 중앙선이 일치해야 실행합니다.
+- GUI는 공식 저장소의 `{track}_grid.gui.config`를 사용합니다.
+- 시험 월드는 `build/team11_gazebo_tests/`에 생성하며 백업 폴더는 없습니다.
+- 공식 맵 파일은 변경 없이 그대로 사용하지만, 시험용 TEAM11 차량과
+  빨간 신호등 모델은 임시 월드에 **별도로 추가**합니다.
+- 이는 공식 트랙 메시 기반의 독립 시험으로, 대회장 운영 매니저의
+  랩 계측, 실제 출발 순서, 다중 차량 스폰 등을 그대로 재현하지는 않습니다.
+
+## 1. 기본 Monza 1번 그리드 GUI 실행
 
 ```bash
 cd ~/urrc_2_f1
+git switch main
 git pull --ff-only origin main
 bash src/team_11/sim_test/run.sh --track monza --grid 1 --seconds 90
 ```
 
-- 화면 없이 실행하려면 `--headless`를 추가합니다. OGRE2/EGL 환경이 필요합니다.
-- 11번 그리드: `--grid 11`
-- 다른 트랙: `--track spa`, `--track monaco`, `--track cota`,
-  `--track hungaroring`, `--track baku`
-- `Ctrl+C`로 중단하면 관측된 부분 결과가 출력됩니다.
+처음 실행할 때 필요한 공식 모델 파일만 GitHub에서 내려받습니다.
+다음 실행에는 같은 캐시를 재사용합니다.
 
-## 시험 순서 및 검증 항목
-
-1. ROS 2 Jazzy용 실제 `team11_race` 패키지를 새로 빌드합니다.
-2. 내장 CSV로 트랙 전체를 연결한 물리 충돌 도로를 생성하고,
-   선택 그리드에 팀 차량을 실제 물리 시뮬레이션으로 스폰합니다.
-3. 5개의 빨간 램프를 **하나의 모델**로 켜서 전방 카메라에 8초간 노출합니다.
-4. Gazebo UserCommands의 **단 한 번의 제거 명령**으로 5개를 함께 끕니다.
-5. 제거 성공 후에만 `/race/start/team_11` BOOL TRUE를 지속 발행합니다.
-6. ROS 카메라, 차량 자체 pose, 맵/그리드 인식, 출발 출처,
-   실제 이동 거리(own pose 기반)를 확인합니다.
-7. 결과와 로그는 `build/team11_gazebo_tests/`에 보존합니다.
-   **백업 폴더를 만들지 않습니다.**
-
-**검증 성공 기준:** 카메라에서 빨간불 감지 및 소등 감지,
-TEAM11 자체 위치 수신, 지도/출발 그리드 식별,
-`TEAM11 START source=CAMERA_LIGHTS_OUT`,
-실측 이동거리 1m 초과가 모두 확인되어야 PASS입니다.
-
-`OFFICIAL_GATE_SOLO` 등으로 출발하면 이동했더라도
-**카메라 신호 인식 성공으로 판정하지 않습니다.**
-
-Gazebo 센서 렌더링/그래픽 드라이버 환경 문제는
-`gazebo.log`를 확인하십시오.
-
-
-## Gazebo 화면이 나타나지 않는 경우
-
-기존에는 Gazebo 서버/GUI를 하나의 프로세스로 실행하고 서버 실패 시
-자동으로 창까지 종료해 원인 확인이 어려웠습니다. 이제 Gazebo 서버와
-그래픽 GUI를 **별도 프로세스**로 실행하며, GUI 종료 원인을 터미널과
-`gazebo_gui.log`에 함께 표시합니다.
-
-- **화면 있는 Ubuntu 데스크톱**에서 일반 명령을 실행합니다.
-- 원격 SSH 등 GUI가 없다면 `--headless`를 추가하여 차량·센서만 검사합니다.
-- 대형 CSV 맵 로딩은 시간이 걸릴 수 있어 기본 준비 제한을 180초로 확대했습니다.
-- 더 오래 걸리면 `--startup-timeout 240` 옵션을 사용할 수 있습니다.
-- 시험 월드는 수백 개의 `link` 대신 **하나의 정적 링크**에 도로의 충돌/시각 형상을 넣어
-  월드 로딩과 GUI 초기화를 가볍게 했습니다.
-
-기본 Gazebo GUI 자체가 열리는지 단독 확인할 명령:
+11번 그리드 실행:
 
 ```bash
-gz sim shapes.sdf -v 4
+bash src/team_11/sim_test/run.sh --track monza --grid 11 --seconds 90
 ```
 
-이 간단한 Gazebo 기본 월드에서도 창이 열리지 않으면 TEAM 11 코드가
-아닌 Gazebo/Qt/OpenGL/그래픽 드라이버 환경 문제일 가능성이 높습니다.
+다른 트랙: `--track spa`, `--track monaco`, `--track cota`,
+`--track hungaroring`, `--track baku`.
 
-로그 확인:
+GitHub에 변경된 공식 맵을 새로 반영할 때:
+
+```bash
+bash src/team_11/sim_test/run.sh --track monza --grid 1 --seconds 90 --refresh-maps
+```
+
+만약 공식 중앙선이 실제로 변경되어 내장 경로와 달라졌다면,
+차량이 잘못된 경로를 추종하지 않도록 오류를 내고 실행을 차단합니다.
+
+## 2. 카메라 신호등 시험 과정
+
+1. 공식 원본 `{track}_race.sdf`를 복사해 임시 Gazebo 월드를 만듭니다.
+2. 정식 `team11_car/model.sdf` 차량을 지정 그리드에 배치합니다.
+3. 공식 출발 게이트의 다섯 렌즈 위치에 발광 빨간불을 추가합니다.
+4. ROS 제어기에서 **실제 카메라 빨간불 감지 및 자체 위치 수신**을 확인합니다.
+5. Gazebo 요청 한 번으로 다섯 신호등을 동시에 제거합니다.
+6. 소등 성공 후 `/race/start/team_11`에 TRUE를 발행합니다.
+7. 카메라 소등 감지, 실제 출발 근거와 차량 이동 거리를 로그에 표시합니다.
+
+`CAMERA_LIGHTS_OUT`가 아닌 `OFFICIAL_GATE_SOLO`로 출발하면,
+차량이 이동하더라도 **카메라 출발 인식 성공으로 판정하지 않습니다.**
+
+기본 90초는 소등 이후의 관찰 시간이며, 초기 공식 메시 다운로드와
+Gazebo 초기화 과정은 별도입니다.
+
+## 3. 기존 CSV 사각형 시험장 (선택 사용)
+
+종전의 내장 CSV를 직사각형 물리 도로로 재구성하는 시험장은
+`--csv-test`를 명시한 경우에만 사용합니다.
+
+```bash
+bash src/team_11/sim_test/run.sh --track monza --grid 1 --seconds 90 --csv-test
+```
+
+이 시험장은 공식 도로·벽 모양과 일치하지 않습니다.
+
+## 4. GUI·로딩 오류 진단
+
+오류가 발생하면 Gazebo GUI/서버 및 ROS 로그의 마지막 내용을
+터미널에 표시합니다. 별도 로그는 다음에서 찾을 수 있습니다.
 
 ```bash
 cd ~/urrc_2_f1
-LOG_DIR=$(find build/team11_gazebo_tests -type f -name gazebo_gui.log \\
+LOG_DIR=$(find build/team11_gazebo_tests -type f -name gazebo.log \\
   -printf '%T@ %h\n' | sort -nr | head -1 | cut -d' ' -f2-)
 echo "$LOG_DIR"
-tail -n 60 "$LOG_DIR/gazebo_gui.log"
 tail -n 60 "$LOG_DIR/gazebo.log"
+tail -n 60 "$LOG_DIR/gazebo_gui.log"
+tail -n 60 "$LOG_DIR/team11_ros.log"
 ```
 
-`Qt platform plugin`, `OpenGL`, `Ogre`, `display` 관련 오류가
-출력되면 해당 메시지를 기준으로 그래픽 환경을 진단해야 합니다.
+- GUI가 있는 Ubuntu 데스크톱에서 위의 기본 명령을 실행하십시오.
+- 별도 화면이 없는 환경은 `--headless`를 추가할 수 있습니다.
+- 준비가 느리면 `--startup-timeout 240`을 사용할 수 있습니다.
+- Gazebo 자체 GUI 진단: `gz sim shapes.sdf -v 4`.
+- 공식 메시가 무겁고 대형 트랙에서 GUI/OGRE2 문제가 발생할 수 있습니다.
+
+**전체 성공 판정:** 빨간불 검출, 소등 검출, `CAMERA_LIGHTS_OUT`
+출발, 자기 위치 수신, 맵/그리드 선택, 실측 이동거리 1m 초과가
+모두 확인되어야 합니다.
