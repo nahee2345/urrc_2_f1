@@ -77,13 +77,19 @@ done
 echo "[3/8] Spawn car in official grid $GRID AFTER ROS nodes are running"
 python3 "$TEAM/tests/stage5_spawn.py" --track "$TRACK" --grid "$GRID" --official "$OFFICIAL" >"$LOG/spawn.log" 2>&1 || { cat "$LOG/spawn.log"; exit 1; }
 echo "[4/8] Wait for onboard camera frames after spawning. Controls stay STOP."
-echo "[TEAM11] Camera diagnostics before lights:"
-tail -8 "$LOG/camera.log" || true
-if ! grep -q "FRAME_READY source=" "$LOG/camera.log"; then
-  echo "[TEAM11] FAIL: Camera is not providing frames; do not start signals." >&2
-  echo "[TEAM11] Check $LOG/bridge.log and /camera_11 QoS." >&2
+echo "[TEAM11] Waiting for first real camera image after vehicle spawn"
+CAMERA_READY=0
+for i in $(seq 1 90); do
+  if grep -q "FRAME_READY source=" "$LOG/camera.log"; then CAMERA_READY=1; break; fi
+  if ! kill -0 "$WORLD_PID" 2>/dev/null || ! kill -0 "$CAMERA_PID" 2>/dev/null; then break; fi
+  sleep .5
+done
+if [[ "$CAMERA_READY" -ne 1 ]]; then
+  echo "[TEAM11] FAIL: Camera did not produce a frame after spawn; lights will not run." >&2
+  tail -40 "$LOG/camera.log" "$LOG/bridge.log" "$LOG/world.log" >&2 || true
   exit 4
 fi
+echo "[TEAM11] Camera ready; signal sequence may start"
 echo "[5/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
 rm -f "$LOG"/signal_*.png
 if [[ "${TEAM11_STAGE7_CAPTURE_IMAGES:-1}" == "1" ]]; then
