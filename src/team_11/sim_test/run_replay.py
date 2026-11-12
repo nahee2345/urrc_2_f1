@@ -68,6 +68,7 @@ def summary(path):
         ("자체 차량 위치 수신","TEAM11 own pose ready" in source),
         ("맵·그리드·경로 선택",bool(route)),
         ("출발 명령 승인",bool(sources)),
+        ("카메라 신호 기반 출발",bool(sources) and sources[0]=="CAMERA_LIGHTS_OUT"),
         ("실제 주행 거리 1m 초과",bool(speeds) and max(speeds)>1.0),
     ]
     print("\n[TEAM11] 실제 Gazebo 시험 결과")
