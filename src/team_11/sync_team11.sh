@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 REPO_URL="https://github.com/nahee2345/urrc_2_f1.git"
-DEST="\${1:-$HOME/urrc_2_f1}"
+DEST="${1:-$HOME/urrc_2_f1}"
 if [[ ! -e "$DEST" ]]; then
     git clone --branch main "$REPO_URL" "$DEST"
 elif [[ -d "$DEST/.git" ]]; then

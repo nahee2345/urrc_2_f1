@@ -17,21 +17,21 @@ Official map source: [urrc_f1_ws](https://github.com/nahee2345/urrc_f1_ws). NEVE
 
 ## Local checkout or update
 From another directory, first time:
-\`\`\`bash
+```bash
 git clone https://github.com/nahee2345/urrc_2_f1.git ~/urrc_2_f1
-\`\`\`
+```
 Every later update:
-\`\`\`bash
+```bash
 cd ~/urrc_2_f1 && bash src/team_11/sync_team11.sh
-\`\`\`
+```
 This script only updates this Git checkout and does not delete unsaved work. You must run it after changes are pushed; there is no unattended automatic update.
 
 ## Generate 18 paths locally
-\`\`\`bash
+```bash
 cd ~/urrc_2_f1
 python3 src/team_11/routes.py --track-package ~/urrc_f1_ws/src/urrc_track_gazebo --output src/team_11/generated_routes
-\`\`\`
+```
 Run portable stdlib tests:
-\`\`\`bash
+```bash
 PYTHONPATH=src/team_11 python3 -m unittest discover -s src/team_11 -p 'test_*.py'
-\`\`\`
+```
