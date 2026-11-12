@@ -58,7 +58,7 @@ def count_red_lamps(data, width, height, step, encoding):
     # All bright lamps are in a horizontal row, equally spaced (within
     # perspective tolerance). Require neighboring groups to be separated.
     if len(segments)<4:
-        return min(5,len(segments))
+        return max(min(3,len(segments)),distant_lamps(view,width,height,step,red_index,blue_index))
     centers=[(lo+hi)/2 for lo,hi in segments]
     # Check the longest valid sequence first. Otherwise a real five-lamp
     # pattern is incorrectly returned as four when its first four match.
