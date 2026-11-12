@@ -1,7 +1,13 @@
 import unittest
+from pathlib import Path
 from team_11.race_context import TRACKS,configure,neutral_context,lane_relative_to_ego
 
 class RaceContextTests(unittest.TestCase):
+    def test_no_reserved_node_context_assignment(self):
+        node_source=(Path(__file__).parent/'team_11'/'context_node.py').read_text()
+        self.assertNotIn('self.context=',node_source)
+        self.assertIn('self.race_session=configure(track,grid)',node_source)
+
     def test_all_tracks_11_slots(self):
         for track in TRACKS:
             for grid in range(1,12):

@@ -17,19 +17,19 @@ class ContextNode(Node):
         self.declare_parameter("grid",0)
         track=self.get_parameter("track").value
         grid=int(self.get_parameter("grid").value)
-        self.context=configure(track,grid)
+        self.race_session=configure(track,grid)
         self.context_publisher=self.create_publisher(String,"/race_context_11",10)
         self.lane_publisher=self.create_publisher(Int32,"/initial_lane_11",10)
         self.create_timer(1.0,self.publish_context)
         self.publish_context()
     def publish_context(self):
         self.context_publisher.publish(String(data=json.dumps({
-            "track":self.context.track,
-            "grid":self.context.grid,
-            "initial_lane":self.context.initial_lane,
+            "track":self.race_session.track,
+            "grid":self.race_session.grid,
+            "initial_lane":self.race_session.initial_lane,
             "coordinate_data_for_driving":False,
         },sort_keys=True)))
-        self.lane_publisher.publish(Int32(data=self.context.initial_lane))
+        self.lane_publisher.publish(Int32(data=self.race_session.initial_lane))
 
 def main(args=None):
     rclpy.init(args=args)
