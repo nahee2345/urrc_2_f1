@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the *competition ROS controller* on a CSV-reconstructed Gazebo world.
+"""Run the TEAM11 competition ROS controller on actual upstream URRC track meshes.
 
-Checks independent own-model pose, RGB red->dark signal, issued Twist and
-measured physical distance. Never touches the official organizer workspace.
+The default downloads the official 3D map from urrc_f1_ws GitHub into
+urrc_2_f1/build/ without modifying either original source checkout.
+The old synthetic box road is available only with --csv-test.
 """
 from __future__ import annotations
 
@@ -18,6 +19,8 @@ import time
 from pathlib import Path
 
 from generate_world import TRACKS, build_world
+from official_maps import sync_official_map
+from generate_official_world import build_official_world
 
 ROOT=Path(__file__).resolve().parents[3]
 
@@ -104,6 +107,10 @@ def main():
                     help="Run Gazebo server without GUI (requires OGRE2/EGL)")
     ap.add_argument("--startup-timeout",type=int,default=180,
                     help="Wait for Gazebo camera/pose topics (default: 180s)")
+    ap.add_argument("--csv-test",action="store_true",
+                    help="Legacy synthetic box-road test (default uses official GitHub 3D map)")
+    ap.add_argument("--refresh-maps",action="store_true",
+                    help="Update cached official map files from upstream GitHub main")
     args=ap.parse_args()
     if args.seconds<10:
         ap.error("--seconds must be at least 10")
@@ -123,12 +130,31 @@ def main():
     out=ROOT/"build"/"team11_gazebo_tests"/f"{args.track}_g{args.grid:02d}_{stamp}"
     out.mkdir(parents=True,exist_ok=True)
     world=out/"race_world.sdf"
-    info=build_world(args.track,args.grid,world)
-    print("[TEAM11] Generated from embedded CSV:",info)
+    official_package=None
+    if args.csv_test:
+        info=build_world(args.track,args.grid,world)
+        print("[TEAM11 MAP] Legacy CSV approximation selected",flush=True)
+    else:
+        try:
+            official_package,revision=sync_official_map(
+                ROOT,args.track,refresh=args.refresh_maps)
+            info=build_official_world(args.track,args.grid,official_package,world)
+        except (RuntimeError,OSError,ValueError,subprocess.SubprocessError) as exc:
+            print("[TEAM11 ERROR] Official map unavailable: %s" % exc,
+                  file=sys.stderr)
+            return 2
+        print("[TEAM11 MAP] Using OFFICIAL 3D track from "
+              "nahee2345/urrc_f1_ws @ %s" % revision,flush=True)
+    print("[TEAM11] World:",info)
     print("[TEAM11] Output:",out,flush=True)
-    print("[TEAM11] IMPORTANT: reconstructed road, not official organizer SDF.")
 
     env=os.environ.copy()
+    if official_package is not None:
+        mesh_resource=str(official_package/"models")
+        env["GZ_SIM_RESOURCE_PATH"]=(
+            mesh_resource+os.pathsep+env.get("GZ_SIM_RESOURCE_PATH",""))
+        print("[TEAM11 MAP] GZ_SIM_RESOURCE_PATH:",
+              env["GZ_SIM_RESOURCE_PATH"],flush=True)
     env["GZ_PARTITION"]="team11_replay_"+str(os.getpid())
     # Keep ROS isolated so user can run the full test without other ROS nodes.
     env["ROS_DOMAIN_ID"]=str(70+os.getpid()%80)
@@ -141,6 +167,9 @@ def main():
         gz_cmd.append("--headless-rendering")
     gz_cmd.append(str(world))
     gui_cmd=["gz","sim","-g","-v","4"]
+    if official_package is not None:
+        gui_cmd+=["--gui-config",
+                  str(official_package/"worlds"/f"{args.track}_grid.gui.config")]
 
     gz=gui=bridge=clock=gate=None
     files=[]
