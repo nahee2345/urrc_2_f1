@@ -41,6 +41,16 @@ class ModelContract(unittest.TestCase):
         sensors = self.model.findall("link[@name='base_link']/sensor")
         self.assertEqual({x.findtext("topic") for x in sensors},{"/scan_11","/camera_11"})
 
+    def test_forward_direction_markers_and_wheel_axes(self):
+        base = self.model.find("link[@name='base_link']")
+        self.assertIsNotNone(base.find("sensor[@name='team11_start_camera']"))
+        visuals = {v.attrib["name"]:v for v in base.findall("visual")}
+        self.assertAlmostEqual(float(visuals["front_marker_left"].findtext("pose").split()[0]), .263)
+        self.assertAlmostEqual(float(visuals["rear_marker_left"].findtext("pose").split()[0]), -.263)
+        for name in ("front_left","front_right","rear_left","rear_right"):
+            wheel=self.model.find("link[@name='"+name+"_wheel']")
+            self.assertAlmostEqual(float(wheel.findtext("pose").split()[3]), -1.5707963268)
+
     def test_ackermann_plugin(self):
         plugin=self.model.find("plugin")
         self.assertEqual(plugin.get("filename"),"gz-sim-ackermann-steering-system")
