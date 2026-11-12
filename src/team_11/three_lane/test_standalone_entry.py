@@ -21,7 +21,7 @@ class StandaloneSubmissionTests(unittest.TestCase):
         self.assertTrue((self.package/"package.xml").is_file())
         self.assertTrue((self.package/"setup.py").is_file())
         self.assertFalse((self.package/"team11_race"/"package.xml").exists())
-        self.assertEqual(root["entry_id"],"team11")
+        self.assertEqual(root["entry_id"],"team_11")
         self.assertEqual(root["ros_package"],"team11_race")
         self.assertTrue((self.package/root["vehicle_model_file"].removeprefix("src/team_11/")).is_file())
         for key in ("speed_topic","steering_topic","lidar_topic"):
@@ -60,6 +60,7 @@ class StandaloneSubmissionTests(unittest.TestCase):
         for topic in topics:
             self.assertTrue(topic.startswith("/team11/"),topic)
             self.assertTrue(topic.endswith("_11"),topic)
+        self.assertEqual(root.find("model").attrib["name"], "team_11")
         self.assertIn("/team11/pose_11",topics)
         self.assertIn("/team11/cmd_vel_11",topics)
         self.assertIn("/team11/start_image_11",topics)
@@ -70,7 +71,11 @@ class StandaloneSubmissionTests(unittest.TestCase):
             self.assertNotIn("urrc_2/",content)
             self.assertNotIn("urrc_f1_ws/",content)
         launch=(self.package/"launch/race.launch.py").read_text()
-        self.assertIn("/race/start/team11",launch)
+        self.assertIn("/race/start/team_11",launch)
+        controller=(self.package/"team11_race/control.py").read_text()
+        adapter=(self.package/"team11_race/adapter.py").read_text()
+        self.assertIn('("race_start_topic","/race/start/team_11")',controller)
+        self.assertIn('("race_start_topic","/race/start/team_11")',adapter)
         self.assertNotIn("gz sim",launch)
         self.assertNotIn("ros_gz_sim",launch)
 

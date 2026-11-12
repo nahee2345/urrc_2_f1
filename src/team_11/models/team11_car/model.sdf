@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <sdf version="1.9">
-  <model name="team11">
+  <model name="team_11">
     <static>false</static><self_collide>false</self_collide><allow_auto_disable>false</allow_auto_disable>
     <link name="base_link">
       <!-- The base_link frame is now at the organizer-reported collision AABB center.
