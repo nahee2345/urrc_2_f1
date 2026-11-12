@@ -237,9 +237,38 @@ def main():
             print_log_tail(out/"team11_ros.log",count=15)
             return 2
 
-        # Let ROS camera subscribers observe red lamps BEFORE they disappear.
-        print("[TEAM11] Five red lamps ON. Holding signal for 8 seconds.",flush=True)
-        time.sleep(8)
+        # Topic advertisement is NOT evidence of real camera frames.
+        # Keep the five lights ON until the actual ROS controller confirms
+        # red pixels and our vehicle's world pose, or fail explicitly.
+        print("[TEAM11] Five red lamps ON; checking real ROS camera frames",
+              flush=True)
+        ready_deadline=time.monotonic()+45.
+        while time.monotonic()<ready_deadline:
+            if gz.poll() is not None or bridge.poll() is not None or (
+                gui is not None and gui.poll() is not None
+            ):
+                print("[TEAM11 ERROR] Process exited before camera red confirmation",
+                      file=sys.stderr)
+                print_log_tail(out/"gazebo.log",count=12)
+                print_log_tail(out/"team11_ros.log",count=18)
+                if gui is not None:print_log_tail(out/"gazebo_gui.log",count=10)
+                return 2
+            evidence=(out/"team11_ros.log").read_text(
+                encoding="utf-8",errors="replace")
+            if ("TEAM11 camera red confirmed" in evidence and
+                    "TEAM11 own pose ready" in evidence):
+                print("[TEAM11] REAL camera red and own vehicle pose confirmed",
+                      flush=True)
+                break
+            time.sleep(.5)
+        else:
+            print("[TEAM11 ERROR] Camera has NOT confirmed visible red lamps "
+                  "and own pose after 45s; not forcing a false camera PASS",
+                  file=sys.stderr)
+            print_log_tail(out/"team11_ros.log",count=25)
+            print_log_tail(out/"gazebo.log",count=12)
+            return 3
+        time.sleep(1)
         # One Gazebo user-command remove transaction switches all five off.
         service=f"/world/{args.track}/remove"
         removed=call(["gz","service","-s",service,
