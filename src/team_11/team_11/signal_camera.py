@@ -4,6 +4,8 @@ Official competition mode also requires race/start/<id> true: this stage7
 local trial only grants start after its own red-lamps-on then off detection.
 """
 import time
+import os
+from pathlib import Path
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -21,6 +23,10 @@ class SignalNode(Node):
         self.peak_lamps=0
         self.image_encoding="none"
         self.image_size="unknown"
+        self.diag_dir=Path(os.environ["TEAM11_CAMERA_DIAG_DIR"]) if os.environ.get("TEAM11_CAMERA_DIAG_DIR") else None
+        self.saved_before=False
+        self.saved_candidate=False
+        self.red_peak=0
         self.last_log=-1.e10
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
         self.create_subscription(Image,"/camera_11",self.on_frame,qos_profile_sensor_data)
@@ -41,14 +47,53 @@ class SignalNode(Node):
             if now-self.last_log>2.:
                 self.get_logger().warning("Invalid camera image: "+str(exc))
         self.peak_lamps=max(self.peak_lamps,lamps)
+        red_pixels=self.sample_red(msg) if valid else 0
+        self.red_peak=max(self.red_peak,red_pixels)
+        if self.diag_dir and not self.saved_before and valid:
+            self.save_image(msg,'camera_before.ppm')
+            self.saved_before=True
+        if self.diag_dir and not self.saved_candidate and red_pixels>5 and valid:
+            self.save_image(msg,'camera_red_candidate.ppm')
+            self.saved_candidate=True
         before=self.gate.started
         if self.gate.observe(lamps,now,valid) and not before:
             self.get_logger().info("START: 4+ red lamps observed, now ALL OFF")
         if now-self.last_log>1.:
             self.get_logger().info("camera red_lamps=%d armed=%s started=%s" % (
                 lamps,self.gate.armed_at is not None,self.gate.started))
-            self.get_logger().info(f"DIAG frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps}")
+            self.get_logger().info(f"DIAG frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps} peak_red_sample={self.red_peak}")
             self.last_log=now
+    @staticmethod
+    def sample_red(msg):
+        data=memoryview(msg.data)
+        r_idx=0 if msg.encoding.lower()=="rgb8" else 2
+        b_idx=2 if r_idx==0 else 0
+        hits=0
+        for y in range(0,int(msg.height*.85),8):
+            for x in range(0,msg.width,8):
+                i=y*msg.step+x*3
+                r,g,b=data[i+r_idx],data[i+1],data[i+b_idx]
+                if r>=65 and r-g>=20 and r>=1.45*max(1,g,b):
+                    hits+=1
+        return hits
+
+    def save_image(self,msg,name):
+        self.diag_dir.mkdir(parents=True,exist_ok=True)
+        rows=[]
+        data=memoryview(msg.data)
+        for y in range(msg.height):
+            row=bytes(data[y*msg.step:y*msg.step+msg.width*3])
+            if msg.encoding.lower()=="bgr8":
+                swapped=bytearray(len(row))
+                for i in range(0,len(row),3):
+                    swapped[i:i+3]=bytes((row[i+2],row[i+1],row[i]))
+                row=bytes(swapped)
+            rows.append(row)
+        header=("P6"+chr(10)+str(msg.width)+" "+str(msg.height)+chr(10)+"255"+chr(10)).encode()
+        dest=self.diag_dir/name
+        dest.write_bytes(header+b"".join(rows))
+        self.get_logger().info("Saved onboard camera: "+str(dest))
+
     def tick(self):
         # Even after a start, stop if camera stream dies.
         fresh=time.monotonic()-self.last_frame<=.65
@@ -58,5 +103,8 @@ def main(args=None):
     rclpy.init(args=args)
     n=SignalNode()
     try:rclpy.spin(n)
-    finally:n.destroy_node();rclpy.shutdown()
+    finally:
+        n.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 if __name__=="__main__":main()
