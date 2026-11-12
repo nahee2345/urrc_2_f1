@@ -120,8 +120,8 @@ for GRID in $(seq 1 11); do
     continue
   fi
   echo "[TEAM11] Camera ready; triggering official five red lights"
-  if ! python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$DIR/lights.log" 2>&1; then
-    echo "[TEAM11] Grid $GRID official lights failed"
+  if ! timeout -s INT -k 5s 70s python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$DIR/lights.log" 2>&1; then
+    echo "[TEAM11] Grid $GRID official lights failed or timed out"
     printf '%s,%d,FAIL,official_lights\n' "$TRACK" "$GRID" >>"$SUMMARY"
     failed=$((failed+1))
     continue
