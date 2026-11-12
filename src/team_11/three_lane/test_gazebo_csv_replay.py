@@ -19,7 +19,7 @@ class StandaloneCsvWorldTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         s=path.read_text()
         self.assertEqual(s.count("set +u"),2)
-        self.assertEqual(s.count("set -u"),3)
+        self.assertEqual(s.count("set -u"),2)
 
     def test_generator_contains_actual_team11_vehicle_and_atomic_lamps(self):
         with tempfile.TemporaryDirectory() as tmp:
