@@ -35,8 +35,16 @@ def prepare(track,official,output):
         if light.get("name")=="sun":
             shadow=light.find("cast_shadows")
             if shadow is not None:shadow.text="false"
-    if len(world.findall("light[@name='race_red_1']"))!=1 or len(world.findall("light[@name='race_red_5']"))!=1:
-        raise ValueError("Official five-light gantry missing; refusing practice world")
+    # Latest official lights_v10 spawns five red lenses from
+    # <track>_signal_active.sdf; older maps embed race_red_1..5.
+    # Do not reject the new world just because static race_red lights are absent.
+    static_lights={light.get("name") for light in world.findall("light")}
+    active_template=official/"worlds"/(track+"_signal_active.sdf")
+    has_static=all("race_red_"+str(i) in static_lights for i in range(1,6))
+    if not has_static and not active_template.is_file():
+        raise ValueError("Neither static five-red lights nor official signal_active template found")
+    signal_mode="static" if has_static else "dynamic_signal_active"
+    print("SIGNAL_MODE="+signal_mode,flush=True)
     world_file=output/(track+"_practice.sdf")
     tree.write(world_file,encoding="unicode",xml_declaration=True)
     # Gazebo GUI config has multiple top-level elements (<window>, <plugin>).
