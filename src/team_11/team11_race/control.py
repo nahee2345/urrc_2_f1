@@ -11,6 +11,8 @@ from sensor_msgs.msg import Image
 from tf2_msgs.msg import TFMessage
 
 from team11_race.planner import Planner, RouteMap
+from team11_race.camera_start import LightTransition, red_evidence
+from team11_race.pose_decode import extract_vehicle_pose, pose_frame_examples
 from team11_race.trackdetect import (TRACKS, discover_world, map_assets,
                                       matching_grid, match_map_from_spawn)
 
@@ -72,9 +74,11 @@ class Team11Control(Node):
             raise ValueError("Invalid race_start_mode")
         self.allowed=False
         self.camera_go=False
-        self.red_frames=0
-        self.off_frames=0
-        self.saw_red=False
+        self.camera_gate=LightTransition()
+        self.camera_frames=0
+        self.pose_frames=0
+        self.pose_unrecognized=0
+        self.pose_source=""
         self.pose=None
         self.pose_wall=0.
         self.last_tick=0.
@@ -84,6 +88,8 @@ class Team11Control(Node):
         self.planner=None
         self.announced=False
         self.last_report=0.
+        self.last_health_report=0.
+        self.started_at=time.monotonic()
         self.share=share_directory()
         self.speed_pub=self.create_publisher(
             Float32,str(self.get_parameter("speed_topic").value),10)
@@ -108,43 +114,66 @@ class Team11Control(Node):
             self.publish(0.,0.)
             self.get_logger().info("TEAM11 external race gate FALSE; drive stopped")
         else:
-            self.get_logger().info("TEAM11 external race gate TRUE")
+            self.get_logger().info(
+                "TEAM11 external race gate TRUE; camera_frames=%s "
+                "red_seen=%s all_off=%s pose_frames=%s own_pose=%s map=%s" %
+                (self.camera_frames,self.camera_gate.saw_red,self.camera_go,
+                 self.pose_frames,self.pose is not None,self.track))
 
     def pose_callback(self,msg):
-        # Own PosePublisher broadcasts the model and its base_link.
-        for tf in msg.transforms:
-            child=tf.child_frame_id.lower()
-            tail=child.replace("::","/").split("/")[-1]
-            if tail not in ("team_11","base_link"):
-                continue
-            if tail=="base_link" and "team_11" not in child:
-                continue
-            t=tf.transform.translation
-            yaw=quaternion_yaw(tf.transform.rotation)
-            values=(float(t.x),float(t.y),float(t.z),yaw)
-            if all(math.isfinite(v) for v in values):
-                self.pose=values
-                self.pose_wall=time.monotonic()
-                return
+        # Gazebo PosePublisher -> private /team11/pose_11. The Pose_V->TF
+        # converter may name frames as team_11, team_11::base_link or
+        # base_link. Prefer the model world pose over a relative link pose.
+        self.pose_frames+=1
+        result=extract_vehicle_pose(msg)
+        if result is None:
+            self.pose_unrecognized+=1
+            if self.pose_unrecognized in (1,40,200):
+                self.get_logger().warning(
+                    "TEAM11 own pose TF frames unrecognized: %s" %
+                    (pose_frame_examples(msg),))
+            return
+        x,y,z,yaw,frame=result
+        if self.pose is None:
+            self.get_logger().info(
+                "TEAM11 own pose ready: frame=%s xyz=(%.3f,%.3f,%.3f) yaw=%.3f" %
+                (frame,x,y,z,yaw))
+        self.pose=(x,y,z,yaw)
+        self.pose_source=frame
+        self.pose_wall=time.monotonic()
 
     def camera_callback(self,msg):
-        if self.camera_go:
+        self.camera_frames+=1
+        amount=red_evidence(msg.data,int(msg.width),int(msg.height),
+                            int(msg.step),str(msg.encoding))
+        previous_red=self.camera_gate.saw_red
+        self.camera_go=self.camera_gate.update(amount)
+        if not previous_red and self.camera_gate.saw_red:
+            self.get_logger().info(
+                "TEAM11 camera red confirmed: evidence=%d peak=%d" %
+                (amount,self.camera_gate.peak))
+        if self.camera_go and not self.announced:
+            self.get_logger().info(
+                "TEAM11 camera LIGHTS OUT confirmed (red->dark stable); "
+                "race gate also required")
+            # Do not reuse self.announced; it belongs to SAFE STOP.
+            self.announced=True
+
+    def report_wait(self,now,reason):
+        if now-self.last_health_report<3.0:
             return
-        active=count_red_lamps(msg)
-        if active<0:
-            return
-        if active>=4:
-            self.red_frames+=1
-            self.off_frames=0
-            if self.red_frames>=2:self.saw_red=True
-        elif active==0 and self.saw_red:
-            self.off_frames+=1
-            if self.off_frames>=4:
-                self.camera_go=True
-                self.get_logger().info("TEAM11 four/five red lights then all off")
-        else:
-            self.off_frames=0
-            if active<4:self.red_frames=0
+        self.last_health_report=now
+        self.get_logger().warning(
+            "TEAM11 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
+            "red_seen=%s evidence=%d peak=%d camera_out=%s "
+            "pose_messages=%d unmatched_pose=%d pose_fresh=%s "
+            "track=%s grid=%s" %
+            (reason,self.allowed,self.mode,self.camera_frames,
+             self.camera_gate.saw_red,self.camera_gate.last_red,
+             self.camera_gate.peak,self.camera_go,self.pose_frames,
+             self.pose_unrecognized,
+             self.pose is not None and now-self.pose_wall<=1.,
+             self.track,self.grid))
 
     def prepare_route(self,now):
         if self.pose is None or self.planner is not None:
@@ -156,7 +185,9 @@ class Team11Control(Node):
             name=discover_world()
             if name is None:
                 result=match_map_from_spawn(self.share,self.pose)
-                if result is None:return
+                if result is None:
+                    self.report_wait(now,"MAP_NOT_IDENTIFIED_FROM_SPAWN")
+                    return
                 name,slot=result
             else:
                 slot=matching_grid(map_assets(self.share,name),self.pose)
@@ -180,15 +211,19 @@ class Team11Control(Node):
         now=time.monotonic()
         if self.pose is None or now-self.pose_wall>1.:
             self.publish(0.,0.)
+            self.report_wait(now,"NO_OWN_POSE")
             return
         if self.planner is None:
             self.prepare_route(now)
         if not self.allowed or (self.mode=="camera" and not self.camera_go):
             self.publish(0.,0.)
             self.last_tick=0.
+            if self.allowed:
+                self.report_wait(now,"CAMERA_NO_RED_THEN_DARK")
             return
         if self.planner is None:
             self.publish(0.,0.)
+            self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
             return
         dt=.05 if self.last_tick<=0 else min(.20,now-self.last_tick)
         self.last_tick=now
@@ -217,9 +252,16 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        node.publish(0.,0.)
+        # SIGINT may already have invalidated the ROS context; never publish
+        # into a shutdown context (the v11 log's secondary exception).
+        if rclpy.ok():
+            try:
+                node.publish(0.,0.)
+            except Exception:
+                pass
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__=="__main__":
