@@ -12,6 +12,7 @@ class Adapter(Node):
         self.declare_parameter("test_bypass_gate", False)
         self.bypass=bool(self.get_parameter("test_bypass_gate").value)
         self.gate=False
+        self.last_gate=-1.e10
         self.speed=self.steer=0.
         self.ts=self.tt=-1.e10
         self.pub=self.create_publisher(Twist,"/model/team_11/cmd_vel_11",10)
@@ -25,10 +26,12 @@ class Adapter(Node):
         self.steer=float(msg.data); self.tt=time.monotonic()
     def on_gate(self,msg):
         self.gate=bool(msg.data)
+        self.last_gate=time.monotonic()
     def tick(self):
         now=time.monotonic()
         speed,yaw=convert(self.speed,self.steer,
-            self.gate or self.bypass,now-self.ts<.4,now-self.tt<.4)
+            (self.gate and now-self.last_gate<.35) or self.bypass,
+            now-self.ts<.4,now-self.tt<.4)
         cmd=Twist();cmd.linear.x=speed;cmd.angular.z=yaw
         self.pub.publish(cmd)
 

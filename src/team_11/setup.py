@@ -23,6 +23,8 @@ setup(
         "team11_controller = team_11.ros_controller:main",
         "team11_stage5_adapter = team_11.stage5_adapter:main",
         "team11_stage5_manual = team_11.stage5_manual:main",
-        "team11_context = team_11.context_node:main"
+        "team11_context = team_11.context_node:main",
+        "team11_signal_camera = team_11.signal_camera:main",
+        "team11_stage7_drive = team_11.stage7_drive:main"
     ]},
 )
