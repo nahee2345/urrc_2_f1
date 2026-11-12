@@ -60,12 +60,13 @@ def count_red_lamps(data, width, height, step, encoding):
     if len(segments)<4:
         return min(5,len(segments))
     centers=[(lo+hi)/2 for lo,hi in segments]
-    for i in range(len(centers)):
-        for j in range(i+3,min(len(centers),i+5)):
-            sample=centers[i:j+1]
-            if not (4 <= len(sample) <= 5):continue
-            gaps=[sample[k+1]-sample[k] for k in range(len(sample)-1)]
+    # Check the longest valid sequence first. Otherwise a real five-lamp
+    # pattern is incorrectly returned as four when its first four match.
+    for count in (5, 4):
+        for i in range(len(centers) - count + 1):
+            sample=centers[i:i+count]
+            gaps=[sample[k+1]-sample[k] for k in range(count-1)]
             mean=sum(gaps)/len(gaps)
             if mean>=2 and all(abs(d-mean)<=max(5,mean*.6) for d in gaps):
-                return len(sample)
+                return count
     return min(3,len(segments))

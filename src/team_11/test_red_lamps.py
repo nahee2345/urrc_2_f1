@@ -19,6 +19,16 @@ class RedPixelsTests(unittest.TestCase):
             with self.subTest(lamps=lamps):
                 pixels,w,h,stride=frame(lamps)
                 self.assertEqual(count_red_lamps(pixels,w,h,stride,'rgb8'),lamps)
+    def test_five_lamps_preferred_over_first_four(self):
+        pixels,w,h,stride=frame(5)
+        self.assertEqual(count_red_lamps(pixels,w,h,stride,'rgb8'),5)
+
+    def test_bgr8_five_lamps(self):
+        pixels,w,h,stride=frame(5)
+        for i in range(0,len(pixels),3):
+            pixels[i],pixels[i+2]=pixels[i+2],pixels[i]
+        self.assertEqual(count_red_lamps(pixels,w,h,stride,'bgr8'),5)
+
     def test_requires_four_then_dark(self):
         gate=StartGate()
         for i in range(5):
