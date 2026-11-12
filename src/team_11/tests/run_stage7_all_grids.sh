@@ -136,8 +136,20 @@ for GRID in $(seq 1 11); do
     passed=$((passed+1))
   else
     max_lamps="$(grep -o 'peak_lamps=[0-9]*' "$DIR/camera.log" | tail -1 || true)"
-    echo "[TEAM11] GRID $GRID FAIL: ${max_lamps:-no_camera_diagnostics}"
-    printf '%s,%d,FAIL,%s\n' "$TRACK" "$GRID" "${max_lamps:-no_camera_diagnostics}" >>"$SUMMARY"
+    reason="unknown"
+    if ! grep -q "ARMED source=" "$DIR/camera.log"; then
+      reason="no_stable_four_red"
+    elif ! grep -q "START: 4+ red lamps observed, now ALL OFF" "$DIR/camera.log"; then
+      reason="red_seen_but_no_all_off"
+    elif grep -q "STOP: Camera start permission lost" "$DIR/drive.log"; then
+      reason="permission_lost"
+    elif ! grep -q "FINISHED: One-second pulse complete" "$DIR/drive.log"; then
+      reason="forward_not_finished"
+    else
+      reason="unconfirmed_light_sequence"
+    fi
+    echo "[TEAM11] GRID $GRID FAIL: $reason ${max_lamps:-no_camera_diagnostics}"
+    printf '%s,%d,FAIL,%s_%s\n' "$TRACK" "$GRID" "$reason" "${max_lamps:-unknown}" >>"$SUMMARY"
     failed=$((failed+1))
   fi
 done
