@@ -3,7 +3,7 @@
   "display_name": "TEAM 11 Path Following",
   "ros_package": "team11_race",
   "algorithm_launch_file": "race.launch.py",
-  "vehicle_model_file": "src/team11_race/models/team11_car/model.sdf",
+  "vehicle_model_file": "src/team_11/models/team11_car/model.sdf",
   "vehicle_model_format": "sdf",
   "base_link_name": "base_link",
   "spawn_z_offset_m": 0.04,

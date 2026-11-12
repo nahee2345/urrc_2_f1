@@ -8,9 +8,8 @@ launch 파일, 제어기, 6개 맵의 중앙선·그리드·3개 주행 경로�
 **대회장 `urrc_f1_ws` 원본 맵·코드·설정은 수정하지 않습니다.**
 
 대회장 접수기는 제출 폴더의 `race_entry.json`과
-`team11_race/package.xml`을 읽어 설치할 수 있습니다.
-대표 패키지 `team11_race` 하나만 전달해도
-해당 패키지 내부에도 `race_entry.json` 및 모든 주행 데이터가 포함되어 있습니다.
+`package.xml`을 읽어 설치할 수 있습니다.
+`team_11` 폴더가 ROS 2 패키지의 루트이며 `package.xml`, `race_entry.json` 및 6개 맵 경로를 포함합니다.
 
 ## 내부 토픽 충돌 방지
 
@@ -50,14 +49,14 @@ LiDAR는 주행 경로 결정에 사용하지 않습니다.
 
 미수신/오류/타임아웃 시 속도 명령은 0입니다.
 연습용 `three_lane/run_demo.py`는 별도 시연 실행기이며
-대회 제출용 `team11_race/launch/race.launch.py`와 다릅니다.
+대회 제출용 `launch/race.launch.py`와 다릅니다.
 
 ## 다른 노트북 설치
 
 ```bash
 # 예시: 전달 받은 team_11 폴더가 ~/team_11 에 있을 때
 mkdir -p ~/team11_ws/src
-cp -a ~/team_11/team11_race ~/team11_ws/src/
+cp -a ~/team_11 ~/team11_ws/src/
 cd ~/team11_ws
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install --packages-select team11_race

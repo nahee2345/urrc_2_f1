@@ -11,7 +11,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 MODEL = (Path(__file__).resolve().parents[1] /
-         "team11_race/models/team11_car/model.sdf")
+         "models/team11_car/model.sdf")
 
 # Baseline model-frame Z values before the base_link frame is recentered.
 BASE_CHILD_Z = {
