@@ -61,7 +61,7 @@ class TacticsReview(unittest.TestCase):
     def test_04_rear_ttc_within_five_seconds_is_defended(self):
         # Rear in lane 2, >3s but <5s away from catching up.
         ego=self.car(30,lane=1,speed=4)
-        rear=self.car(10,lane=2,speed=8,name="rear")
+        rear=self.car(5,lane=2,speed=8,name="rear")
         gap,_=self.planner._relative(ego,rear,30)
         ttc=(-gap-1)/(rear.speed-ego.speed)
         self.assertGreater(ttc,3)
