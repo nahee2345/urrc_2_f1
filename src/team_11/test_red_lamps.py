@@ -47,6 +47,35 @@ class RedPixelsTests(unittest.TestCase):
                 pixels[at:at+3]=bytes((240,20,20))
         self.assertEqual(count_red_lamps(pixels,w,h,stride,'rgb8'),5)
 
+    def test_small_distant_lamps_lower_in_image(self):
+        # Simulate 11th grid: 3x4 pixel red lamps lower than original ROI.
+        w,h=300,140
+        for lamps in (4,5):
+            pixels=bytearray(w*h*3)
+            for k in range(lamps):
+                for y in range(66,72):
+                    for x in range(90+11*k,94+11*k):
+                        i=(y*w+x)*3
+                        pixels[i:i+3]=bytes((255,0,0))
+            self.assertEqual(count_red_lamps(pixels,w,h,w*3,'rgb8'),lamps)
+
+    def test_small_lamps_with_red_sidewalls(self):
+        w,h=300,140
+        pixels=bytearray(w*h*3)
+        for y in range(70,h):
+            for x in range(0,60):
+                i=(y*w+x)*3
+                pixels[i:i+3]=bytes((220,22,22))
+            for x in range(245,w):
+                i=(y*w+x)*3
+                pixels[i:i+3]=bytes((220,22,22))
+        for k in range(5):
+            for y in range(66,72):
+                for x in range(90+11*k,94+11*k):
+                    i=(y*w+x)*3
+                    pixels[i:i+3]=bytes((255,0,0))
+        self.assertEqual(count_red_lamps(pixels,w,h,w*3,'rgb8'),5)
+
     def test_requires_four_then_dark(self):
         gate=StartGate()
         for i in range(5):
