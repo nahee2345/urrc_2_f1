@@ -19,7 +19,7 @@ from pathlib import Path
 
 from generate_world import TRACKS, build_world
 
-ROOT=Path(__file__).resolve().parents[2]
+ROOT=Path(__file__).resolve().parents[3]
 
 
 def launch(cmd,output,env):
