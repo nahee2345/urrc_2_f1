@@ -35,6 +35,11 @@ colcon build --packages-select team_11 --symlink-install >"$LOG/build.log" 2>&1 
 set +u
 source "$ROOT/install/setup.bash"
 set -u
+echo "[TEAM11 stage6] Session context: track=$TRACK grid=$GRID lane=$(( GRID % 2 == 1 ? 1 : 3 ))"
+ros2 run team_11 team11_context --ros-args -p track:="$TRACK" -p grid:="$GRID" >"$LOG/context.log" 2>&1 &
+CONTEXT_PID=$!; PIDS+=("$CONTEXT_PID")
+sleep 1
+if ! kill -0 "$CONTEXT_PID" 2>/dev/null; then cat "$LOG/context.log" >&2; exit 1; fi
 echo "[2/6] Open official $TRACK (official asset preparation is handled by its own launcher)"
 bash "$OFFICIAL/run_track.sh" "$TRACK" --view grid >"$LOG/world.log" 2>&1 &
 WORLD_PID=$!; PIDS+=("$WORLD_PID")
