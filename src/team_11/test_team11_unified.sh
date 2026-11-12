@@ -14,12 +14,18 @@ if [[ "${1:-}" == "--ros" ]]; then
     echo "ROS 2 Jazzy was not found at /opt/ros/jazzy/setup.bash" >&2
     exit 2
   fi
+  # ROS 2 / ament setup files assume unset environment variables are allowed.
+  # Bash nounset (-u) must be disabled temporarily while sourcing them.
+  set +u
   # shellcheck disable=SC1091
   source /opt/ros/jazzy/setup.bash
+  set -u
   cd "$ws_root"
   colcon build --base-paths src/team_11 --packages-select team11_race --symlink-install
+  set +u
   # shellcheck disable=SC1091
   source "$ws_root/install/setup.bash"
+  set -u
   ros2 pkg prefix team11_race
   echo "[TEAM11] ROS 2 build PASS"
 fi
