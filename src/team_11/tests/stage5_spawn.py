@@ -19,14 +19,14 @@ def make_command(pkg,track,grid):
     pos=next(p for p in meta["grid"] if p["position"]==grid)
     model=Path(__file__).resolve().parents[1]/"models"/"team11_yellow_car"/"model.sdf"
     if os.environ.get("TEAM11_PRACTICE_LIGHTWEIGHT")=="1":
-        # Runtime-only practice copy; official race model is untouched.
+        # Stage7-only lightweight copy: no zoom camera or GPU LiDAR.\n        # Official submitted model is untouched.
         folder=Path(os.environ.get("TEAM11_PRACTICE_DIR",str(Path.home()/".cache"/"team11_practice")))
         folder.mkdir(parents=True,exist_ok=True)
         tree=ET.parse(model)
         link=tree.getroot().find("model/link[@name='base_link']")
         if link is None:raise ValueError("base_link missing")
         for sensor in list(link.findall("sensor")):
-            if sensor.get("name")=="team11_start_zoom_camera":
+            if sensor.get("name") in ("team11_start_zoom_camera","team11_lidar"):
                 link.remove(sensor)
         model=folder/"team11_lightweight.sdf"
         tree.write(model,encoding="unicode",xml_declaration=True)
