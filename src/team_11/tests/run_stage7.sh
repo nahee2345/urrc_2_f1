@@ -83,7 +83,7 @@ else
   tail -15 "$LOG/drive.log" || true
 fi
 echo "[TEAM11] Logs: $LOG"
-echo "[TEAM11] Onboard camera: $LOG/camera_before.ppm"
-echo "[TEAM11] Red candidate: $LOG/camera_red_candidate.ppm (when observed)"
+echo "[TEAM11] Onboard camera: $LOG/camera_before.png"
+echo "[TEAM11] Red candidate: $LOG/camera_red_candidate.png (when observed)"
 echo "[TEAM11] Press Ctrl+C when finished viewing the Gazebo window."
 wait "$WORLD_PID" || true
