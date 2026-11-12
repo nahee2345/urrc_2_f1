@@ -6,6 +6,7 @@ local trial only grants start after its own red-lamps-on then off detection.
 import time
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from .signal_core import StartGate
@@ -16,14 +17,21 @@ class SignalNode(Node):
         super().__init__("team11_signal_camera")
         self.gate=StartGate()
         self.last_frame=-1.e10
+        self.frames=0
+        self.peak_lamps=0
+        self.image_encoding="none"
+        self.image_size="unknown"
         self.last_log=-1.e10
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
-        self.create_subscription(Image,"/camera_11",self.on_frame,10)
+        self.create_subscription(Image,"/camera_11",self.on_frame,qos_profile_sensor_data)
         self.create_timer(.1,self.tick)
         self.get_logger().info("WAIT: require 4+ red lamps THEN all-off; initial dark is NOT start")
     def on_frame(self,msg):
         now=time.monotonic()
         self.last_frame=now
+        self.frames+=1
+        self.image_encoding=msg.encoding
+        self.image_size=f"{msg.width}x{msg.height}"
         try:
             lamps=count_red_lamps(msg.data,msg.width,msg.height,msg.step,msg.encoding)
             valid=True
@@ -32,12 +40,14 @@ class SignalNode(Node):
             valid=False
             if now-self.last_log>2.:
                 self.get_logger().warning("Invalid camera image: "+str(exc))
+        self.peak_lamps=max(self.peak_lamps,lamps)
         before=self.gate.started
         if self.gate.observe(lamps,now,valid) and not before:
             self.get_logger().info("START: 4+ red lamps observed, now ALL OFF")
         if now-self.last_log>1.:
             self.get_logger().info("camera red_lamps=%d armed=%s started=%s" % (
                 lamps,self.gate.armed_at is not None,self.gate.started))
+            self.get_logger().info(f"DIAG frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps}")
             self.last_log=now
     def tick(self):
         # Even after a start, stop if camera stream dies.

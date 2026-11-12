@@ -61,6 +61,13 @@ for pid in "$CAMERA_PID" "$ADAPTER_PID" "$DRIVE_PID"; do
   if ! kill -0 "$pid" 2>/dev/null; then echo "ROS node failed" >&2; tail -50 "$LOG/camera.log" "$LOG/adapter.log" "$LOG/drive.log"; exit 1; fi
 done
 echo "[6/8] Camera and adapter are ready. All controls are currently STOP."
+echo "[TEAM11] Camera diagnostics before lights:"
+tail -8 "$LOG/camera.log" || true
+if ! grep -q "DIAG frames=" "$LOG/camera.log"; then
+  echo "[TEAM11] FAIL: Camera is not providing frames; do not start signals." >&2
+  echo "[TEAM11] Check $LOG/bridge.log and /camera_11 QoS." >&2
+  exit 4
+fi
 echo "[7/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
 python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$LOG/lights.log" 2>&1 || { echo "Official lights failed" >&2; tail -60 "$LOG/lights.log"; exit 1; }
 echo "[8/8] Observe camera-gated one-second motion"
@@ -69,7 +76,9 @@ if grep -q "FINISHED: One-second pulse complete" "$LOG/drive.log"; then
   echo "[TEAM11] PASS: camera gate allowed a completed 1-second forward pulse"
 else
   echo "[TEAM11] NOT VERIFIED: detector did not confirm start; vehicle should remain stopped"
-  tail -20 "$LOG/camera.log" || true
+  tail -30 "$LOG/camera.log" || true
+  echo "[TEAM11] Official sequence duration and errors:"
+  tail -20 "$LOG/lights.log" || true
   tail -15 "$LOG/drive.log" || true
 fi
 echo "[TEAM11] Logs: $LOG"
