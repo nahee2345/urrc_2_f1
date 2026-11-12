@@ -51,6 +51,14 @@ class ModelContract(unittest.TestCase):
             wheel=self.model.find("link[@name='"+name+"_wheel']")
             self.assertAlmostEqual(float(wheel.findtext("pose").split()[3]), -1.5707963268)
 
+    def test_wheels_support_15ms_target(self):
+        radius=.045
+        required_omega=15.0/radius
+        for side in ("front_left","front_right","rear_left","rear_right"):
+            joint=self.model.find(f"joint[@name='{side}_wheel_joint']")
+            self.assertIsNotNone(joint)
+            self.assertGreaterEqual(float(joint.findtext("axis/limit/velocity")),required_omega)
+
     def test_ackermann_plugin(self):
         plugin=self.model.find("plugin")
         self.assertEqual(plugin.get("filename"),"gz-sim-ackermann-steering-system")
