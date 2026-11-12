@@ -1,8 +1,0 @@
-cmake_minimum_required(VERSION 3.16)
-project(urrc_team11 LANGUAGES CXX)
-find_package(gz-sim8 REQUIRED)
-find_package(gz-transport13 REQUIRED)
-find_package(gz-msgs10 REQUIRED)
-add_library(urrc_team11 SHARED Team11ThreeLane.cc)
-set_target_properties(urrc_team11 PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(urrc_team11 PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
