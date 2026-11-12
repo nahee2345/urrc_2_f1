@@ -51,11 +51,21 @@ class StrategyTests(unittest.TestCase):
         p=planner()
         p.route.curve=.035
         targets=[actor(1,42.,0.,5.),
-                 actor(2,25.,-.765,18.,"rear")]
+                 actor(2,18.,-.765,18.,"rear")]
         d=RaceDirector().choose(p,(30.,0.,0.,0.),targets,1.)
         self.assertEqual(d.reason,"FRONT_PASS")
         self.assertEqual(d.lane,0)
         self.assertLess(d.ttc,3.)
+
+    def test_collision_risk_blocks_front_overtake_even_with_ttc_below_three(self):
+        # The rear car would collide with the leftward change during the
+        # maneuver, so safety must outrank the front-passing preference.
+        p=planner()
+        d=RaceDirector().choose(
+            p,(30.,0.,0.,0.),
+            [actor(1,42.,0.,5.),actor(2,25.,-.765,18.,"rear")],1.)
+        self.assertEqual(d.reason,"FRONT_FOLLOW")
+        self.assertIsNone(d.lane)
 
     def test_no_early_overtake_or_distant_car(self):
         p=planner()
