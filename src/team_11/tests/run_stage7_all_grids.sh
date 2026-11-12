@@ -12,6 +12,8 @@ mkdir -p "$LOGROOT"
 SUMMARY="$LOGROOT/summary.csv"
 printf 'track,grid,result,detail\n' >"$SUMMARY"
 export GZ_PARTITION="${GZ_PARTITION:-urrc_practice_$(id -u)}"
+export PYTHONUNBUFFERED=1
+export RCUTILS_LOGGING_BUFFERED_STREAM=0
 set +u
 source /opt/ros/jazzy/setup.bash
 set -u
@@ -77,7 +79,17 @@ for i in $(seq 1 90); do
   fi
   sleep 1
 done
-if [[ "$world_ready" -ne 1 ]]; then echo "[TEAM11] World service timeout" >&2; exit 2; fi
+if [[ "$world_ready" -ne 1 ]]; then
+  echo "[TEAM11] World service timeout" >&2
+  tail -50 "$LOGROOT/world.log" >&2
+  exit 2
+fi
+sleep 3
+if ! kill -0 "$WORLD_PID" 2>/dev/null; then
+  echo "[TEAM11] Gazebo exited before rendering was ready" >&2
+  tail -50 "$LOGROOT/world.log" >&2
+  exit 2
+fi
 ros2 run ros_gz_bridge parameter_bridge \
   "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" \
   "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
@@ -127,15 +139,24 @@ for GRID in $(seq 1 11); do
   ros2 run team_11 team11_stage7_drive >"$DIR/drive.log" 2>&1 &
   GRID_PIDS+=("$!")
   camera_ready=0
-  for i in $(seq 1 40); do
-    if grep -q "DIAG frames=" "$DIR/camera.log" 2>/dev/null; then camera_ready=1; break; fi
+  for i in $(seq 1 90); do
+    if grep -q "FRAME_READY source=" "$DIR/camera.log" 2>/dev/null; then camera_ready=1; break; fi
+    if ! kill -0 "$WORLD_PID" 2>/dev/null || ! kill -0 "${GRID_PIDS[0]}" 2>/dev/null; then
+      echo "[TEAM11] Gazebo world or camera node exited" >&2
+      break
+    fi
     sleep .5
   done
   if [[ "$camera_ready" -ne 1 ]]; then
-    echo "[TEAM11] Grid $GRID camera timeout"
-    printf '%s,%d,FAIL,no_camera_frames\n' "$TRACK" "$GRID" >>"$SUMMARY"
-    failed=$((failed+1))
-    continue
+    echo "[TEAM11] GRID $GRID: camera/map failed to initialize; stopping batch." >&2
+    echo "[TEAM11] camera.log:" >&2
+    tail -40 "$DIR/camera.log" >&2 || true
+    echo "[TEAM11] bridge.log:" >&2
+    tail -25 "$LOGROOT/bridge.log" >&2 || true
+    echo "[TEAM11] world.log:" >&2
+    tail -40 "$LOGROOT/world.log" >&2 || true
+    printf '%s,%d,ERROR,camera_or_world_unavailable\n' "$TRACK" "$GRID" >>"$SUMMARY"
+    exit 8
   fi
   echo "[TEAM11] Camera ready; triggering official five red lights"
   if ! timeout -s INT -k 5s 70s python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$DIR/lights.log" 2>&1; then
