@@ -111,8 +111,7 @@ for GRID in $(seq 1 "$GRID_END"); do
     wait "$BRIDGE_PID" 2>/dev/null || true
     BRIDGE_PID=""
   fi
-  remove_car
-  sleep 1
+  if (( GRID > 1 )); then remove_car; fi
   echo "[TEAM11] Step 2: start camera, adapter and test driver BEFORE vehicle spawn"
   # Reset the camera light gate for every grid, without restarting Gazebo.
   TEAM11_CAMERA_DIAG_DIR="" ros2 run team_11 team11_signal_camera >"$DIR/camera.log" 2>&1 &
@@ -151,9 +150,14 @@ for GRID in $(seq 1 "$GRID_END"); do
   if [[ "${TEAM11_PRACTICE_FOLLOW:-0}" == "1" ]]; then
     echo "[TEAM11] Follow team_11 via Gazebo GUI"
     # /gui/follow is a GUI camera service, NOT an extra camera sensor.
-    gz service -s /gui/follow --reqtype gz.msgs.StringMsg \
-      --reptype gz.msgs.Boolean --timeout 1000 \
-      --req 'data: "team_11"' >"$DIR/follow.log" 2>&1 || true
+    : >"$DIR/follow.log"
+    for follow_attempt in 1 2 3; do
+      gz service -s /gui/follow --reqtype gz.msgs.StringMsg \
+        --reptype gz.msgs.Boolean --timeout 1000 \
+        --req 'data: "team_11"' >>"$DIR/follow.log" 2>&1 || true
+      if grep -q "data: true" "$DIR/follow.log"; then break; fi
+      sleep .5
+    done
   fi
   echo "[TEAM11] Post-spawn camera bridge: waiting for Gazebo sensor topic"
   topic_ready=0
