@@ -34,6 +34,9 @@ class SignalNode(Node):
         self.last_signal_capture=-1.e10
         self.signal_capture_count=0
         self.last_log=-1.e10
+        self.prev_signal_counts={"wide":None,"zoom":None}
+        self.armed_sources=set()
+        self.start_source=None
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
         self.create_subscription(Image,"/camera_11",lambda msg:self.on_frame(msg,"wide"),qos_profile_sensor_data)
         self.create_subscription(Image,"/camera_zoom_11",lambda msg:self.on_frame(msg,"zoom"),qos_profile_sensor_data)
@@ -74,8 +77,21 @@ class SignalNode(Node):
             self.last_signal_capture=now
         before=self.gate.started or self.zoom_gate.started
         selected=self.zoom_gate if source=="zoom" else self.gate
+        old_armed = selected.armed_at is not None
         selected.observe(lamps,now,valid)
+        if not old_armed and selected.armed_at is not None:
+            self.armed_sources.add(source)
+            self.get_logger().info(f"ARMED source={source} count={lamps} frames={self.frames}")
+        if old_armed and selected.armed_at is None and not selected.started:
+            self.get_logger().warning(f"RESET source={source} count={lamps} frames={self.frames} reason=timeout_or_invalid")
+        if (selected.armed_at is not None or lamps>=4 or self.prev_signal_counts[source]!=lamps):
+            self.get_logger().info(
+                f"SIGNAL source={source} count={lamps} lit_run={selected.lit_run}"
+                f" dark_run={selected.dark_run} armed={selected.armed_at is not None}"
+                f" started={selected.started}")
+        self.prev_signal_counts[source]=lamps
         if (self.gate.started or self.zoom_gate.started) and not before:
+            self.start_source=source
             self.get_logger().info("START: 4+ red lamps observed, now ALL OFF (source="+source+")")
         if now-self.last_log>1.:
             self.get_logger().info("camera red_lamps=%d armed=%s started=%s" % (
