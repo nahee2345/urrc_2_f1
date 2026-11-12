@@ -10,7 +10,7 @@ class StartGate:
     required_lamps: int = 4
     lit_frames: int = 2
     dark_frames: int = 3
-    max_gap_s: float = 2.5
+    max_gap_s: float = 4.0
 
     def __post_init__(self):
         self.lit_run = 0
