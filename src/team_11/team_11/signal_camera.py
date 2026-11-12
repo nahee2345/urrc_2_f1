@@ -20,7 +20,9 @@ class SignalNode(Node):
     def __init__(self):
         super().__init__("team11_signal_camera")
         self.gate=StartGate()
+        self.zoom_gate=StartGate()
         self.last_frame=-1.e10
+        self.last_zoom_frame=-1.e10
         self.frames=0
         self.peak_lamps=0
         self.image_encoding="none"
@@ -33,12 +35,16 @@ class SignalNode(Node):
         self.signal_capture_count=0
         self.last_log=-1.e10
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
-        self.create_subscription(Image,"/camera_11",self.on_frame,qos_profile_sensor_data)
+        self.create_subscription(Image,"/camera_11",lambda msg:self.on_frame(msg,"wide"),qos_profile_sensor_data)
+        self.create_subscription(Image,"/camera_zoom_11",lambda msg:self.on_frame(msg,"zoom"),qos_profile_sensor_data)
         self.create_timer(.1,self.tick)
         self.get_logger().info("WAIT: require 4+ red lamps THEN all-off; initial dark is NOT start")
-    def on_frame(self,msg):
+    def on_frame(self,msg,source="wide"):
         now=time.monotonic()
-        self.last_frame=now
+        if source=="zoom":
+            self.last_zoom_frame=now
+        else:
+            self.last_frame=now
         self.frames+=1
         self.image_encoding=msg.encoding
         self.image_size=f"{msg.width}x{msg.height}"
@@ -53,26 +59,28 @@ class SignalNode(Node):
         self.peak_lamps=max(self.peak_lamps,lamps)
         red_pixels=self.sample_red(msg) if valid else 0
         self.red_peak=max(self.red_peak,red_pixels)
-        if self.diag_dir and not self.saved_before and valid:
+        if self.diag_dir and source=='wide' and not self.saved_before and valid:
             self.save_image(msg,'camera_before.png')
             self.saved_before=True
-        if self.diag_dir and not self.saved_candidate and red_pixels>5 and valid:
+        if self.diag_dir and source=='wide' and not self.saved_candidate and red_pixels>5 and valid:
             self.save_image(msg,'camera_red_candidate.png')
             self.saved_candidate=True
         # Capture the ACTUAL official light sequence. Previous "red candidate"
         # frames were triggered by red crash barriers before lamps lit.
         marker=self.diag_dir/"signal_capture.active" if self.diag_dir else None
-        if marker and marker.is_file() and self.signal_capture_count<32 and now-self.last_signal_capture>=.30 and valid:
+        if source=="wide" and marker and marker.is_file() and self.signal_capture_count<32 and now-self.last_signal_capture>=.30 and valid:
             self.save_image(msg,f"signal_{self.signal_capture_count:02d}.png")
             self.signal_capture_count+=1
             self.last_signal_capture=now
-        before=self.gate.started
-        if self.gate.observe(lamps,now,valid) and not before:
-            self.get_logger().info("START: 4+ red lamps observed, now ALL OFF")
+        before=self.gate.started or self.zoom_gate.started
+        selected=self.zoom_gate if source=="zoom" else self.gate
+        selected.observe(lamps,now,valid)
+        if (self.gate.started or self.zoom_gate.started) and not before:
+            self.get_logger().info("START: 4+ red lamps observed, now ALL OFF (source="+source+")")
         if now-self.last_log>1.:
             self.get_logger().info("camera red_lamps=%d armed=%s started=%s" % (
-                lamps,self.gate.armed_at is not None,self.gate.started))
-            self.get_logger().info(f"DIAG frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps} peak_red_sample={self.red_peak}")
+                lamps,selected.armed_at is not None,selected.started))
+            self.get_logger().info(f"DIAG source={source} frames={self.frames} encoding={self.image_encoding} size={self.image_size} peak_lamps={self.peak_lamps} peak_red_sample={self.red_peak}")
             self.last_log=now
     @staticmethod
     def sample_red(msg):
@@ -113,8 +121,10 @@ class SignalNode(Node):
 
     def tick(self):
         # Even after a start, stop if camera stream dies.
-        fresh=time.monotonic()-self.last_frame<=.65
-        self.publisher.publish(Bool(data=self.gate.started and fresh))
+        now=time.monotonic()
+        wide_ready=self.gate.started and now-self.last_frame<=.65
+        zoom_ready=self.zoom_gate.started and now-self.last_zoom_frame<=.65
+        self.publisher.publish(Bool(data=wide_ready or zoom_ready))
 
 def main(args=None):
     rclpy.init(args=args)
