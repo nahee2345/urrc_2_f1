@@ -154,8 +154,8 @@ class Planner:
 
     def _corner_speed(self, index, ego_speed):
         curvature = self.track.corner(index, ego_speed)
-        # Geometric limit from 2m/s^2 lateral acceleration; cap at 10m/s.
-        speed_limit = min(10.0, math.sqrt(2.0 / max(curvature, 1e-6)))
+        # Geometric limit from 2m/s^2 lateral acceleration; max 15m/s on straights.
+        speed_limit = min(15.0, math.sqrt(2.0 / max(curvature, 1e-6)))
         return curvature, speed_limit
 
     def step(self, ego, others, now, enabled=True):
@@ -274,7 +274,7 @@ class Planner:
                 desired_speed = min(desired_speed, max(0.0, nearest[1].speed +
                                                     .5 * (nearest[0] - 2.0)))
         if self.mode in ("PASS", "DEFEND") and not sharp:
-            desired_speed = min(10.0, desired_speed + .5)
+            desired_speed = min(15.0, desired_speed + .5)
         # Separate braking and acceleration slopes.
         desired_speed = clamp(desired_speed, self.last_speed - 4.0 * dt,
                               self.last_speed + 2.0 * dt)
