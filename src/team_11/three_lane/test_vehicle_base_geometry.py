@@ -1,7 +1,7 @@
 """Regression: organizer race_v9 base_link collision AABB center mismatch.
 
-The offending organizer diagnostic was (0, 0, +0.0615)m from base_link.
-Reframe only base_link by +0.0615m; counter-translate all of its child
+The earlier organizer diagnostic used an offset of +0.05m.\nThe full 3D collision AABB spans Z=-0.04 to +0.14m,\nso its center is +0.05m, closing the 0.0115m mismatch.
+Reframe only base_link by +0.05m; counter-translate all of its child
 visual/collision/sensor poses and the inertial center-of-mass pose to keep
 the same physical car geometry, wheel contacts and sensor world positions.
 """
@@ -55,12 +55,12 @@ class VehicleBaseGeometryTest(unittest.TestCase):
         cls.base = cls.model.find("link[@name='base_link']")
         assert cls.base is not None
 
-    def test_base_link_origin_matches_reported_collision_center(self):
+    def test_base_link_origin_matches_full_collision_center(self):
         offset = pose(self.base)
-        for actual, expected in zip(offset, (0, 0, .0615, 0, 0, 0)):
+        for actual, expected in zip(offset, (0, 0, .05, 0, 0, 0)):
             self.assertAlmostEqual(actual, expected, places=7)
         # Organizer's reported collision AABB center minus new base origin.
-        self.assertAlmostEqual(.0615 - offset[2], 0., places=7)
+        self.assertAlmostEqual(.05 - offset[2], 0., places=7)
 
     def test_all_base_children_retain_previous_model_frame_positions(self):
         origin = pose(self.base)
