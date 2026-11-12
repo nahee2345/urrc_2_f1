@@ -27,7 +27,7 @@ def count_red_lamps(data, width, height, step, encoding):
             if red >= 180 and green <= 90 and blue <= 90 and red >= green*2:
                 ys[y] += 1
     if max(ys[ylo:yhi] or [0]) < 2:
-        return 0
+        return distant_lamps(view,width,height,step,red_index,blue_index)
     # Find scanline with greatest count and restrict pixels to 12% of the
     # image height around it to reject unrelated red objects.
     center = max(range(ylo,yhi),key=lambda y:ys[y])
@@ -69,4 +69,39 @@ def count_red_lamps(data, width, height, step, encoding):
             mean=sum(gaps)/len(gaps)
             if mean>=2 and all(abs(d-mean)<=max(5,mean*.6) for d in gaps):
                 return count
-    return min(3,len(segments))
+    return max(min(3,len(segments)),distant_lamps(view,width,height,step,red_index,blue_index))
+
+def distant_lamps(view,width,height,step,red_index,blue_index):
+    """Perspective-tolerant small-lamp row detector for rear grid positions.
+
+    Search image upper-middle, but only recognize 4/5 small red marks
+    separated at approximately equal gaps. Broad red crash barriers cannot
+    count as lamp marks. Does not depend on track coordinate or grid metadata.
+    """
+    xlo,xhi=int(width*.22),int(width*.78)
+    ylo,yhi=int(height*.07),int(height*.60)
+    for y in range(ylo,yhi,2):
+        groups=[]
+        start=None
+        last=None
+        for x in range(xlo,xhi,2):
+            i=y*step+3*x
+            r,g,b=view[i+red_index],view[i+1],view[i+blue_index]
+            red=(r>=185 and r>=g*2 and r>=b*2 and g<=100 and b<=100)
+            if red:
+                if start is None:start=x
+                last=x
+            elif start is not None:
+                if 2<=last-start+2<=max(22,int(width*.035)):
+                    groups.append((start+last)/2)
+                start=last=None
+        if start is not None and 2<=last-start+2<=max(22,int(width*.035)):
+            groups.append((start+last)/2)
+        for size in (5,4):
+            for k in range(len(groups)-size+1):
+                points=groups[k:k+size]
+                gaps=[points[i+1]-points[i] for i in range(size-1)]
+                mean=sum(gaps)/len(gaps)
+                if 3<=mean<=width*.11 and all(abs(d-mean)<=max(3,mean*.4) for d in gaps):
+                    return size
+    return 0
