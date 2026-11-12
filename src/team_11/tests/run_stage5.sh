@@ -10,9 +10,12 @@ TEAM="$ROOT/src/team_11"
 OFFICIAL="${URRC_OFFICIAL_WS:-$HOME/urrc_f1_ws}"
 if [[ ! -f "$OFFICIAL/run_track.sh" ]]; then echo "Missing official launcher: $OFFICIAL/run_track.sh" >&2; exit 2; fi
 if [[ ! -f "/opt/ros/jazzy/setup.bash" ]]; then echo "ROS 2 Jazzy not installed" >&2; exit 2; fi
-for cmd in gz ros2 colcon python3; do command -v "$cmd" >/dev/null || { echo "Missing: $cmd" >&2; exit 2; }; done
 export GZ_PARTITION="${GZ_PARTITION:-urrc_practice_$(id -u)}"
+# ROS environment scripts use optional unset variables, incompatible with nounset.
+set +u
 source /opt/ros/jazzy/setup.bash
+set -u
+for cmd in gz ros2 colcon python3; do command -v "$cmd" >/dev/null || { echo "Missing: $cmd" >&2; exit 2; }; done
 LOG="$ROOT/log/team11_stage5"
 mkdir -p "$LOG"
 PIDS=()
@@ -29,7 +32,9 @@ trap cleanup EXIT
 echo "[1/6] Build team_11"
 cd "$ROOT"
 colcon build --packages-select team_11 --symlink-install >"$LOG/build.log" 2>&1 || { cat "$LOG/build.log"; exit 1; }
+set +u
 source "$ROOT/install/setup.bash"
+set -u
 echo "[2/6] Open official $TRACK (official asset preparation is handled by its own launcher)"
 bash "$OFFICIAL/run_track.sh" "$TRACK" --view grid >"$LOG/world.log" 2>&1 &
 WORLD_PID=$!; PIDS+=("$WORLD_PID")
