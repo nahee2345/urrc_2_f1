@@ -1,9 +1,9 @@
-"""Regression: organizer race_v9 base_link collision AABB center mismatch.
+"""Check TEAM11 base_link frame against the full 3D collision AABB.
 
-The earlier organizer diagnostic used an offset of +0.05m.\nThe full 3D collision AABB spans Z=-0.04 to +0.14m,\nso its center is +0.05m, closing the 0.0115m mismatch.
-Reframe only base_link by +0.05m; counter-translate all of its child
-visual/collision/sensor poses and the inertial center-of-mass pose to keep
-the same physical car geometry, wheel contacts and sensor world positions.
+Initial local-frame diagnostic used a +0.0615m reference. The complete
+vehicle's collision AABB is -0.040m..+0.140m along model Z and its center
+is +0.050m. This removes the remaining 0.0115m (1.15cm) discrepancy
+without changing original car, wheel, sensor or center-of-mass positions.
 """
 from pathlib import Path
 import math
@@ -47,6 +47,47 @@ def pose(element):
         raise ValueError("invalid SDF pose")
     return data
 
+def complete_collision_aabb(model):
+    """Compute every link's collision extents in model coordinates.
+
+    All links have zero Euler rotation in this car. Cylinder wheels have
+    local 90-degree X rotation, so their Z extent is the tire radius.
+    """
+    minima=[float("inf")]*3
+    maxima=[float("-inf")]*3
+    for link in model.findall("link"):
+        link_pose=pose(link)
+        self_rot=link_pose[3:]
+        if any(abs(v)>1e-8 for v in self_rot):
+            raise ValueError("Unsupported rotated model link in AABB regression")
+        for collision in link.findall("collision"):
+            child=pose(collision)
+            center=[link_pose[i]+child[i] for i in range(3)]
+            geometry=collision.find("geometry")
+            box=geometry.find("box") if geometry is not None else None
+            cylinder=geometry.find("cylinder") if geometry is not None else None
+            if box is not None:
+                if any(abs(v)>1e-8 for v in child[3:]):
+                    raise ValueError("Unexpected rotated box in TEAM11 geometry")
+                size=[float(v) for v in box.findtext("size").split()]
+                extent=[v/2 for v in size]
+            elif cylinder is not None:
+                radius=float(cylinder.findtext("radius"))
+                length=float(cylinder.findtext("length"))
+                roll,pitch,yaw=child[3:]
+                if abs(pitch)>1e-8 or abs(yaw)>1e-8:
+                    raise ValueError("Unexpected cylinder rotation in TEAM11 geometry")
+                # Rotated circular cylinder (symmetry axis originally +Z).
+                ux,uy,uz=0.,-math.sin(roll),math.cos(roll)
+                extent=[abs(unit)*length/2 + radius*math.sqrt(max(0.,1-unit**2))
+                        for unit in (ux,uy,uz)]
+            else:
+                raise ValueError("Unrecognized collision primitive")
+            for axis in range(3):
+                minima[axis]=min(minima[axis],center[axis]-extent[axis])
+                maxima[axis]=max(maxima[axis],center[axis]+extent[axis])
+    return minima,maxima
+
 
 class VehicleBaseGeometryTest(unittest.TestCase):
     @classmethod
@@ -56,11 +97,15 @@ class VehicleBaseGeometryTest(unittest.TestCase):
         assert cls.base is not None
 
     def test_base_link_origin_matches_full_collision_center(self):
-        offset = pose(self.base)
-        for actual, expected in zip(offset, (0, 0, .05, 0, 0, 0)):
-            self.assertAlmostEqual(actual, expected, places=7)
-        # Organizer's reported collision AABB center minus new base origin.
-        self.assertAlmostEqual(.05 - offset[2], 0., places=7)
+        offset=pose(self.base)
+        low,high=complete_collision_aabb(self.model)
+        for axis in range(3):
+            with self.subTest(axis=axis):
+                centroid=(low[axis]+high[axis])/2
+                self.assertAlmostEqual(centroid,offset[axis],places=7)
+        self.assertAlmostEqual(low[2],-.04,places=7)
+        self.assertAlmostEqual(high[2],.14,places=7)
+        self.assertAlmostEqual(offset[2],.05,places=7)
 
     def test_all_base_children_retain_previous_model_frame_positions(self):
         origin = pose(self.base)
