@@ -113,6 +113,23 @@ for GRID in $(seq 1 11); do
   stop_grid
   remove_car
   sleep 1
+  echo "[TEAM11] Step 2: start camera, adapter and test driver BEFORE vehicle spawn"
+  # Reset the camera light gate for every grid, without restarting Gazebo.
+  TEAM11_CAMERA_DIAG_DIR="" ros2 run team_11 team11_signal_camera >"$DIR/camera.log" 2>&1 &
+  GRID_PIDS+=("$!")
+  ros2 run team_11 team11_stage5_adapter >"$DIR/adapter.log" 2>&1 &
+  GRID_PIDS+=("$!")
+  ros2 run team_11 team11_stage7_drive >"$DIR/drive.log" 2>&1 &
+  GRID_PIDS+=("$!")
+  sleep 2
+  for pid in "${GRID_PIDS[@]}"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[TEAM11] Pre-spawn ROS node failed" >&2
+      tail -30 "$DIR/camera.log" "$DIR/adapter.log" "$DIR/drive.log" >&2 || true
+      exit 8
+    fi
+  done
+  echo "[TEAM11] Step 3: spawn vehicle in grid $GRID AFTER ROS setup"
   spawned=0
   for attempt in 1 2 3; do
     if python3 "$TEAM/tests/stage5_spawn.py" --official "$OFFICIAL" --track "$TRACK" --grid "$GRID" >"$DIR/spawn_attempt_${attempt}.log" 2>&1; then
@@ -131,13 +148,6 @@ for GRID in $(seq 1 11); do
     failed=$((failed+1))
     continue
   fi
-  # Reset the camera light gate for every grid, without restarting Gazebo.
-  TEAM11_CAMERA_DIAG_DIR="" ros2 run team_11 team11_signal_camera >"$DIR/camera.log" 2>&1 &
-  GRID_PIDS+=("$!")
-  ros2 run team_11 team11_stage5_adapter >"$DIR/adapter.log" 2>&1 &
-  GRID_PIDS+=("$!")
-  ros2 run team_11 team11_stage7_drive >"$DIR/drive.log" 2>&1 &
-  GRID_PIDS+=("$!")
   camera_ready=0
   for i in $(seq 1 90); do
     if grep -q "FRAME_READY source=" "$DIR/camera.log" 2>/dev/null; then camera_ready=1; break; fi
