@@ -221,7 +221,13 @@ for GRID in $(seq 1 "$GRID_END"); do
     exit 8
   fi
   echo "[TEAM11] Camera ready; triggering official five red lights"
-  if ! timeout -s INT -k 5s 70s python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$DIR/lights.log" 2>&1; then
+  LIGHTS_ARGS=(--track "$TRACK" --timeout 35)
+  if [[ "${TEAM11_PRACTICE_LIGHTWEIGHT:-0}" == "1" ]]; then
+    # Spectator cameras have deliberately been removed in practice mode.
+    # Vehicle-camera readiness was verified above instead.
+    LIGHTS_ARGS+=(--skip-camera-check)
+  fi
+  if ! timeout -s INT -k 5s 70s python3 "$PKG/scripts/traffic_lights_v10.py" "${LIGHTS_ARGS[@]}" >"$DIR/lights.log" 2>&1; then
     echo "[TEAM11] Grid $GRID official lights failed or timed out"
     printf '%s,%d,FAIL,official_lights\n' "$TRACK" "$GRID" >>"$SUMMARY"
     failed=$((failed+1))
