@@ -46,3 +46,41 @@ TEAM11 자체 위치 수신, 지도/출발 그리드 식별,
 
 Gazebo 센서 렌더링/그래픽 드라이버 환경 문제는
 `gazebo.log`를 확인하십시오.
+
+
+## Gazebo 화면이 나타나지 않는 경우
+
+기존에는 Gazebo 서버/GUI를 하나의 프로세스로 실행하고 서버 실패 시
+자동으로 창까지 종료해 원인 확인이 어려웠습니다. 이제 Gazebo 서버와
+그래픽 GUI를 **별도 프로세스**로 실행하며, GUI 종료 원인을 터미널과
+`gazebo_gui.log`에 함께 표시합니다.
+
+- **화면 있는 Ubuntu 데스크톱**에서 일반 명령을 실행합니다.
+- 원격 SSH 등 GUI가 없다면 `--headless`를 추가하여 차량·센서만 검사합니다.
+- 대형 CSV 맵 로딩은 시간이 걸릴 수 있어 기본 준비 제한을 180초로 확대했습니다.
+- 더 오래 걸리면 `--startup-timeout 240` 옵션을 사용할 수 있습니다.
+- 시험 월드는 수백 개의 `link` 대신 **하나의 정적 링크**에 도로의 충돌/시각 형상을 넣어
+  월드 로딩과 GUI 초기화를 가볍게 했습니다.
+
+기본 Gazebo GUI 자체가 열리는지 단독 확인할 명령:
+
+```bash
+gz sim shapes.sdf -v 4
+```
+
+이 간단한 Gazebo 기본 월드에서도 창이 열리지 않으면 TEAM 11 코드가
+아닌 Gazebo/Qt/OpenGL/그래픽 드라이버 환경 문제일 가능성이 높습니다.
+
+로그 확인:
+
+```bash
+cd ~/urrc_2_f1
+LOG_DIR=$(find build/team11_gazebo_tests -type f -name gazebo_gui.log \\
+  -printf '%T@ %h\n' | sort -nr | head -1 | cut -d' ' -f2-)
+echo "$LOG_DIR"
+tail -n 60 "$LOG_DIR/gazebo_gui.log"
+tail -n 60 "$LOG_DIR/gazebo.log"
+```
+
+`Qt platform plugin`, `OpenGL`, `Ogre`, `display` 관련 오류가
+출력되면 해당 메시지를 기준으로 그래픽 환경을 진단해야 합니다.

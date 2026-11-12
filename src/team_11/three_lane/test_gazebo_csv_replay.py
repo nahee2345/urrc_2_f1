@@ -37,10 +37,27 @@ class StandaloneCsvWorldTests(unittest.TestCase):
             lights=world.find("model[@name='team11_test_lights']")
             self.assertEqual(len(lights.findall("link/visual")),5)
             self.assertEqual(lights.findtext("static"),"true")
-            self.assertIsNotNone(world.find("model[@name='team11_csv_test_road']"))
+            road=world.find("model[@name='team11_csv_test_road']")
+            self.assertIsNotNone(road)
+            self.assertEqual(len(road.findall("link")),1)
+            self.assertGreater(len(road.findall("link/collision")),200)
+            self.assertEqual(len(road.findall("link/visual")),
+                             len(road.findall("link/collision")))
             names=[p.get("filename") for p in world.findall("plugin")]
             self.assertIn("gz-sim-sensors-system",names)
             self.assertIn("gz-sim-user-commands-system",names)
+
+    def test_gui_and_server_are_independent_and_failures_are_printed(self):
+        source=(TEAM/"sim_test/run_replay.py").read_text()
+        self.assertIn('gz_cmd=["gz","sim","-s","-r","-v","4"]',source)
+        self.assertIn('gui_cmd=["gz","sim","-g","-v","4"]',source)
+        self.assertIn('gui,f=launch(gui_cmd,out/"gazebo_gui.log",env)',source)
+        self.assertIn('GUI exited (code=',source)
+        self.assertIn('print_log_tail(out/"gazebo_gui.log")',source)
+        self.assertIn('default=180',source)
+        self.assertIn('os.environ.get("DISPLAY")',source)
+        self.assertIn('os.environ.get("WAYLAND_DISPLAY")',source)
+        self.assertIn('for p in (gate,clock,bridge,gui,gz)',source)
 
     def test_replay_grids_1_and_11_use_bundled_track_coordinates(self):
         import json
