@@ -80,7 +80,10 @@ def distant_lamps(view,width,height,step,red_index,blue_index):
     """
     xlo,xhi=int(width*.22),int(width*.78)
     ylo,yhi=int(height*.07),int(height*.60)
-    for y in range(ylo,yhi,2):
+    # A small number of horizontal stripes keeps the ROS callback responsive
+    # even with simultaneous wide + zoom streams on resource-limited GPUs.
+    scan_stride=max(4,height//120)
+    for y in range(ylo,yhi,scan_stride):
         groups=[]
         start=None
         last=None
