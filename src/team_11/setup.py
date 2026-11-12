@@ -1,5 +1,6 @@
 from setuptools import setup
 from glob import glob
+import os
 
 setup(
     name="team_11",
@@ -9,6 +10,8 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/team_11"]),
         ("share/team_11", ["package.xml", "README.md"]),
+        ("share/team_11/models/team11_yellow_car", ["models/team11_yellow_car/model.sdf"]),
+        ("share/team_11/tests", ["tests/model_test_world.sdf"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

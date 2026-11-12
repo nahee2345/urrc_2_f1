@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<sdf version="1.9"><world name="team11_model_test">
+<physics name="default" type="ignored"><max_step_size>.001</max_step_size><real_time_factor>1</real_time_factor></physics>
+<plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+<plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+<plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+<plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+<scene><ambient>.65 .65 .65 1</ambient><background>.5 .65 .85 1</background></scene>
+<light name="sun" type="directional"><pose>0 0 5 0 0 0</pose><direction>-.5 -.5 -1</direction><diffuse>.95 .95 .95 1</diffuse><specular>.1 .1 .1 1</specular></light>
+<model name="floor"><static>true</static><link name="ground"><collision name="ground_collision"><geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry></collision><visual name="ground_visual"><geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry><material><diffuse>.3 .3 .3 1</diffuse></material></visual></link></model>
+<include><uri>model://team11_yellow_car</uri><name>team_11</name><pose>0 0 .09 0 0 0</pose></include>
+</world></sdf>
