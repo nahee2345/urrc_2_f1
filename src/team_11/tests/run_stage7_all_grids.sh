@@ -38,9 +38,15 @@ stop_grid() {
   GRID_PIDS=()
 }
 remove_car() {
-  gz service -s "/world/$TRACK/remove" --reqtype gz.msgs.Entity \
+  # Official race manager uses type: MODEL, not numeric type: 2.
+  # Gazebo removal is asynchronous; check the Boolean reply and allow physics
+  # updates before creating another entity with exactly the same name.
+  local answer=""
+  answer="$(gz service -s "/world/$TRACK/remove" --reqtype gz.msgs.Entity \
     --reptype gz.msgs.Boolean --timeout 5000 \
-    --req 'name: "team_11" type: 2' >/dev/null 2>&1 || true
+    --req 'name: "team_11" type: MODEL' 2>&1)" || true
+  printf '%s\n' "$answer" >>"$LOGROOT/remove.log"
+  sleep 2
 }
 cleanup() {
   trap - EXIT INT TERM
@@ -95,9 +101,21 @@ for GRID in $(seq 1 11); do
   stop_grid
   remove_car
   sleep 1
-  if ! python3 "$TEAM/tests/stage5_spawn.py" --official "$OFFICIAL" --track "$TRACK" --grid "$GRID" >"$DIR/spawn.log" 2>&1; then
-    echo "[TEAM11] Grid $GRID spawn FAIL"
-    printf '%s,%d,FAIL,spawn\n' "$TRACK" "$GRID" >>"$SUMMARY"
+  spawned=0
+  for attempt in 1 2 3; do
+    if python3 "$TEAM/tests/stage5_spawn.py" --official "$OFFICIAL" --track "$TRACK" --grid "$GRID" >"$DIR/spawn_attempt_${attempt}.log" 2>&1; then
+      spawned=1
+      cp "$DIR/spawn_attempt_${attempt}.log" "$DIR/spawn.log"
+      break
+    fi
+    echo "[TEAM11] Grid $GRID spawn attempt $attempt failed; checking removal"
+    cat "$DIR/spawn_attempt_${attempt}.log" >&2
+    remove_car
+    sleep 2
+  done
+  if [[ "$spawned" -ne 1 ]]; then
+    echo "[TEAM11] Grid $GRID spawn FAIL after 3 attempts"
+    printf '%s,%d,FAIL,spawn_after_3_attempts\n' "$TRACK" "$GRID" >>"$SUMMARY"
     failed=$((failed+1))
     continue
   fi
