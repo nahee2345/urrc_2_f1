@@ -60,7 +60,8 @@ if (( READY == 0 )); then echo "Gazebo create service timeout" >&2; exit 1; fi
 echo "[3/8] Spawn car in official grid $GRID"
 python3 "$TEAM/tests/stage5_spawn.py" --track "$TRACK" --grid "$GRID" --official "$OFFICIAL" >"$LOG/spawn.log" 2>&1 || { cat "$LOG/spawn.log"; exit 1; }
 echo "[4/8] Start ROS bridges for control and RGB camera"
-ros2 run ros_gz_bridge parameter_bridge "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$LOG/bridge.log" 2>&1 &
+ros2 run ros_gz_bridge parameter_bridge "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
+  "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$LOG/bridge.log" 2>&1 &
 BRIDGE_PID=$!; PIDS+=("$BRIDGE_PID")
 sleep 3
 if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then echo "Bridge failed" >&2; cat "$LOG/bridge.log"; exit 1; fi

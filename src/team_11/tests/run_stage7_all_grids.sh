@@ -75,6 +75,7 @@ if [[ "$world_ready" -ne 1 ]]; then echo "[TEAM11] World service timeout" >&2; e
 ros2 run ros_gz_bridge parameter_bridge \
   "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" \
   "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
+  "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" \
   >"$LOGROOT/bridge.log" 2>&1 &
 BRIDGE_PID=$!
 sleep 2

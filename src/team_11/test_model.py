@@ -39,7 +39,7 @@ class ModelContract(unittest.TestCase):
 
     def test_independent_sensors(self):
         sensors = self.model.findall("link[@name='base_link']/sensor")
-        self.assertEqual({x.findtext("topic") for x in sensors},{"/scan_11","/camera_11"})
+        self.assertEqual({x.findtext("topic") for x in sensors},{"/scan_11","/camera_11","/camera_zoom_11"})
 
     def test_forward_direction_markers_and_wheel_axes(self):
         base = self.model.find("link[@name='base_link']")
