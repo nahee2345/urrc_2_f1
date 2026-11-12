@@ -24,6 +24,7 @@ class SignalNode(Node):
         self.last_frame=-1.e10
         self.last_zoom_frame=-1.e10
         self.frames=0
+        self.ready_sources=set()
         self.peak_lamps=0
         self.image_encoding="none"
         self.image_size="unknown"
@@ -59,6 +60,9 @@ class SignalNode(Node):
             valid=False
             if now-self.last_log>2.:
                 self.get_logger().warning("Invalid camera image: "+str(exc))
+        if valid and source not in self.ready_sources:
+            self.ready_sources.add(source)
+            self.get_logger().info(f'FRAME_READY source={source} encoding={msg.encoding} size={msg.width}x{msg.height}')
         self.peak_lamps=max(self.peak_lamps,lamps)
         red_pixels=self.sample_red(msg) if valid else 0
         self.red_peak=max(self.red_peak,red_pixels)
