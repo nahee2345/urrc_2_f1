@@ -20,6 +20,7 @@ export TEAM11_CAMERA_DIAG_DIR="$LOG"
 PIDS=()
 cleanup() {
   trap - EXIT INT TERM
+  rm -f "$LOG/signal_capture.active"
   echo "[TEAM11] Stopping stage7 processes"
   for pid in "${PIDS[@]}"; do kill -INT "$pid" 2>/dev/null || true; done
   for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
@@ -70,7 +71,10 @@ if ! grep -q "DIAG frames=" "$LOG/camera.log"; then
   exit 4
 fi
 echo "[7/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
+rm -f "$LOG"/signal_*.png
+touch "$LOG/signal_capture.active"
 python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$LOG/lights.log" 2>&1 || { echo "Official lights failed" >&2; tail -60 "$LOG/lights.log"; exit 1; }
+rm -f "$LOG/signal_capture.active"
 echo "[8/8] Observe camera-gated one-second motion"
 sleep 3
 if grep -q "FINISHED: One-second pulse complete" "$LOG/drive.log"; then
@@ -84,6 +88,6 @@ else
 fi
 echo "[TEAM11] Logs: $LOG"
 echo "[TEAM11] Onboard camera: $LOG/camera_before.png"
-echo "[TEAM11] Red candidate: $LOG/camera_red_candidate.png (when observed)"
+echo "[TEAM11] Actual lamp-on sequence: $LOG/signal_00.png .. signal_*.png"
 echo "[TEAM11] Press Ctrl+C when finished viewing the Gazebo window."
 wait "$WORLD_PID" || true
