@@ -60,7 +60,7 @@ class StandaloneSubmissionTests(unittest.TestCase):
         for topic in topics:
             self.assertTrue(topic.startswith("/team11/"),topic)
             self.assertTrue(topic.endswith("_11"),topic)
-        self.assertEqual(root.attrib["name"], "team_11")
+        self.assertEqual(root.find("model").attrib["name"], "team_11")
         self.assertIn("/team11/pose_11",topics)
         self.assertIn("/team11/cmd_vel_11",topics)
         self.assertIn("/team11/start_image_11",topics)
