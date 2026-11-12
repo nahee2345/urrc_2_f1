@@ -192,6 +192,8 @@ for GRID in $(seq 1 "$GRID_END"); do
     tail -40 "$DIR/camera.log" >&2 || true
     echo "[TEAM11] bridge.log:" >&2
     tail -25 "$DIR/bridge.log" >&2 || true
+    gz topic -i -t /camera_11 >"$DIR/gz_camera_info.log" 2>&1 || true
+    ros2 topic info /camera_11 -v >"$DIR/ros_camera_info.log" 2>&1 || true
     echo "[TEAM11] world.log:" >&2
     tail -40 "$LOGROOT/world.log" >&2 || true
     printf '%s,%d,ERROR,camera_or_world_unavailable\n' "$TRACK" "$GRID" >>"$SUMMARY"
