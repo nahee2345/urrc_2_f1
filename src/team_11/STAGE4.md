@@ -23,7 +23,7 @@ On a machine with Gazebo Harmonic:
 
 ```bash
 cd ~/urrc_2_f1
-gz sim -r -v 3 src/team_11/tests/model_test_world.sdf
+GZ_SIM_RESOURCE_PATH="$PWD/src/team_11/models${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}" gz sim -r -v 3 src/team_11/tests/model_test_world.sdf
 ```
 
 Look for yellow chassis, four wheels with ground contact, no explosion/collision drift, and check topics:
