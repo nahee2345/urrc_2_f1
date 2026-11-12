@@ -56,7 +56,7 @@ cleanup() {
   trap - EXIT INT TERM
   stop_grid
   remove_car
-  if [[ -n "$BRIDGE_PID" ]]; then kill -TERM "$BRIDGE_PID" 2>/dev/null || true; fi
+  if [[ -n "$BRIDGE_PID" ]]; then kill -TERM "$BRIDGE_PID" 2>/dev/null || true; wait "$BRIDGE_PID" 2>/dev/null || true; fi
   if [[ -n "$WORLD_PID" ]]; then
     kill -INT "$WORLD_PID" 2>/dev/null || true
     sleep 1
@@ -92,27 +92,22 @@ if ! kill -0 "$WORLD_PID" 2>/dev/null; then
   tail -50 "$LOGROOT/world.log" >&2
   exit 2
 fi
-ros2 run ros_gz_bridge parameter_bridge \
-  "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" \
-  "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
-  "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" \
-  >"$LOGROOT/bridge.log" 2>&1 &
-BRIDGE_PID=$!
-sleep 2
-if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
-  tail -30 "$LOGROOT/bridge.log"; exit 2
-fi
 passed=0
 failed=0
 for GRID in $(seq 1 "$GRID_END"); do
   echo
-  echo "===== $TRACK GRID $GRID / 11 ====="
+  echo "===== $TRACK GRID $GRID / $GRID_END ====="
   DIR="$LOGROOT/grid_$(printf '%02d' "$GRID")"
   mkdir -p "$DIR"
   : >"$DIR/camera.log"
   : >"$DIR/drive.log"
   : >"$DIR/lights.log"
   stop_grid
+  if [[ -n "$BRIDGE_PID" ]]; then
+    kill -TERM "$BRIDGE_PID" 2>/dev/null || true
+    wait "$BRIDGE_PID" 2>/dev/null || true
+    BRIDGE_PID=""
+  fi
   remove_car
   sleep 1
   echo "[TEAM11] Step 2: start camera, adapter and test driver BEFORE vehicle spawn"
@@ -150,6 +145,38 @@ for GRID in $(seq 1 "$GRID_END"); do
     failed=$((failed+1))
     continue
   fi
+  echo "[TEAM11] Post-spawn camera bridge: waiting for Gazebo sensor topic"
+  topic_ready=0
+  for i in $(seq 1 50); do
+    if gz topic -l 2>/dev/null | grep -Fxq "/camera_11"; then topic_ready=1; break; fi
+    if ! kill -0 "$WORLD_PID" 2>/dev/null; then break; fi
+    sleep .4
+  done
+  if [[ "$topic_ready" -ne 1 ]]; then
+    echo "[TEAM11] No Gazebo /camera_11 topic after spawn; stop before lights" >&2
+    gz topic -l >"$DIR/gz_topics.log" 2>&1 || true
+    tail -40 "$DIR/spawn.log" "$LOGROOT/world.log" >&2 || true
+    printf '%s,%d,ERROR,gz_camera_topic_missing\n' "$TRACK" "$GRID" >>"$SUMMARY"
+    exit 8
+  fi
+  if [[ "${TEAM11_SIGNAL_WIDE_ONLY:-0}" == "1" ]]; then
+    ros2 run ros_gz_bridge parameter_bridge \
+      "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" \
+      "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$DIR/bridge.log" 2>&1 &
+  else
+    ros2 run ros_gz_bridge parameter_bridge \
+      "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" \
+      "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
+      "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$DIR/bridge.log" 2>&1 &
+  fi
+  BRIDGE_PID=$!
+  sleep 2
+  if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+    echo "[TEAM11] Bridge failed after vehicle spawn" >&2
+    tail -40 "$DIR/bridge.log" >&2 || true
+    printf '%s,%d,ERROR,bridge_failed\n' "$TRACK" "$GRID" >>"$SUMMARY"
+    exit 8
+  fi
   camera_ready=0
   for i in $(seq 1 90); do
     if grep -q "FRAME_READY source=" "$DIR/camera.log" 2>/dev/null; then camera_ready=1; break; fi
@@ -164,7 +191,7 @@ for GRID in $(seq 1 "$GRID_END"); do
     echo "[TEAM11] camera.log:" >&2
     tail -40 "$DIR/camera.log" >&2 || true
     echo "[TEAM11] bridge.log:" >&2
-    tail -25 "$LOGROOT/bridge.log" >&2 || true
+    tail -25 "$DIR/bridge.log" >&2 || true
     echo "[TEAM11] world.log:" >&2
     tail -40 "$LOGROOT/world.log" >&2 || true
     printf '%s,%d,ERROR,camera_or_world_unavailable\n' "$TRACK" "$GRID" >>"$SUMMARY"
