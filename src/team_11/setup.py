@@ -22,6 +22,7 @@ setup(
     entry_points={"console_scripts": [
         "team11_controller = team_11.ros_controller:main",
         "team11_stage5_adapter = team_11.stage5_adapter:main",
-        "team11_stage5_manual = team_11.stage5_manual:main"
+        "team11_stage5_manual = team_11.stage5_manual:main",
+        "team11_context = team_11.context_node:main"
     ]},
 )
