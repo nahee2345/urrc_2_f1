@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 # 11-grid batch: keep ONE official world and bridge alive, replace ONLY team_11 vehicle.
 TRACK="${1:-monza}"
+GRID_END="${TEAM11_GRID_END:-11}"
+if ! [[ "$GRID_END" =~ ^([1-9]|10|11)$ ]]; then echo "GRID_END must be 1..11" >&2; exit 2; fi
 case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *) echo "Unsupported track" >&2; exit 2;; esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TEAM="$ROOT/src/team_11"
@@ -18,7 +20,7 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 cd "$ROOT"
-echo "[TEAM11] Building once; one Gazebo world reused for all 11 grids"
+echo "[TEAM11] Building once; one Gazebo world reused for grids 1..$GRID_END"
 colcon build --packages-select team_11 --symlink-install >"$LOGROOT/build.log" 2>&1 || { tail -40 "$LOGROOT/build.log"; exit 2; }
 set +u
 source "$ROOT/install/setup.bash"
@@ -102,7 +104,7 @@ if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
 fi
 passed=0
 failed=0
-for GRID in $(seq 1 11); do
+for GRID in $(seq 1 "$GRID_END"); do
   echo
   echo "===== $TRACK GRID $GRID / 11 ====="
   DIR="$LOGROOT/grid_$(printf '%02d' "$GRID")"
@@ -168,6 +170,13 @@ for GRID in $(seq 1 11); do
     printf '%s,%d,ERROR,camera_or_world_unavailable\n' "$TRACK" "$GRID" >>"$SUMMARY"
     exit 8
   fi
+  sleep 2
+  if ! grep -q "DIAG frames=" "$DIR/camera.log"; then
+    echo "[TEAM11] Grid $GRID image processing stalled; signal not triggered" >&2
+    tail -35 "$DIR/camera.log" >&2
+    printf '%s,%d,ERROR,camera_processing_stalled\n' "$TRACK" "$GRID" >>"$SUMMARY"
+    exit 8
+  fi
   echo "[TEAM11] Camera ready; triggering official five red lights"
   if ! timeout -s INT -k 5s 70s python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$DIR/lights.log" 2>&1; then
     echo "[TEAM11] Grid $GRID official lights failed or timed out"
@@ -205,7 +214,7 @@ done
 stop_grid
 remove_car
 echo
-echo "[TEAM11] Results: PASS $passed / 11, FAIL $failed / 11"
+echo "[TEAM11] Results: PASS $passed / $GRID_END, FAIL $failed / $GRID_END"
 echo "[TEAM11] Summary: $SUMMARY"
 cat "$SUMMARY"
 if [[ "$failed" -gt 0 ]]; then exit 1; fi
