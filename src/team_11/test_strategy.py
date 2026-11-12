@@ -44,7 +44,7 @@ class StrategyTests(unittest.TestCase):
 
     def test_only_defend_if_no_front(self):
         ego=self.car(20,1,4,1)
-        rear=self.car(17,2,6,1,"rear")
+        rear=self.car(10,2,10,1,"rear")
         cmd=self.planner.step(ego,[rear],1)
         self.assertEqual(cmd.mode,"DEFEND")
         self.assertEqual(cmd.lane,2)

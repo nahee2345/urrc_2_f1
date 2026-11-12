@@ -230,8 +230,14 @@ class Planner:
                     reason = "complete staged passing move"
             elif front_ttc <= 5.0 and nearest is not None:
                 dest = self._candidate(ego, others, index)
+                # Never cross an occupied middle lane to reach the far lane.
+                if dest is not None and abs(dest - self.lane) == 2:
+                    if self._blocked(2, ego, others, index, 5.0, 4.0):
+                        dest = None
+                    else:
+                        dest = 2
                 if dest is not None:
-                    self.target = 2 if abs(dest - self.lane) == 2 else dest
+                    self.target = dest
                     self.pass_name = nearest[1].name
                     self.mode = "PASS"
                     self.lane_start = now
