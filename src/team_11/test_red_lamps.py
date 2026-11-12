@@ -29,6 +29,24 @@ class RedPixelsTests(unittest.TestCase):
             pixels[i],pixels[i+2]=pixels[i+2],pixels[i]
         self.assertEqual(count_red_lamps(pixels,w,h,stride,'bgr8'),5)
 
+
+    def test_red_barriers_outside_signal_region(self):
+        pixels,w,h,stride=frame(0)
+        for y in range(h):
+            for x in range(w):
+                if x>=int(w*.80) or (y>=int(h*.58) and x<int(w*.27)):
+                    at=(y*w+x)*3
+                    pixels[at:at+3]=bytes((240,20,20))
+        self.assertEqual(count_red_lamps(pixels,w,h,stride,'rgb8'),0)
+
+    def test_lamps_with_red_barriers(self):
+        pixels,w,h,stride=frame(5)
+        for y in range(h):
+            for x in range(int(w*.8),w):
+                at=(y*w+x)*3
+                pixels[at:at+3]=bytes((240,20,20))
+        self.assertEqual(count_red_lamps(pixels,w,h,stride,'rgb8'),5)
+
     def test_requires_four_then_dark(self):
         gate=StartGate()
         for i in range(5):
