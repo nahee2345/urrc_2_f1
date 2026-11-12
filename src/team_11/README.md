@@ -1,42 +1,37 @@
-# TEAM 11 — URRC F1 autonomous race car
+# TEAM 11 — race driving prototype (stage 2)
 
-## Source of truth
-- Official map source: `nahee2345/urrc_f1_ws/src/urrc_track_gazebo`
-- **Never edit official track worlds, meshes or signal assets.**
-- Six tracks: monza, spa, monaco, cota, hungaroring, baku.
-- ROS 2 Jazzy / Gazebo Harmonic target; each TEAM-owned ROS topic ends in `_11`.
-- The standalone participant package will be `src/team_11`; the official track package is an external runtime dependency.
-- This revision is **stage 1: route generation + contract**. It is NOT a running autonomous vehicle yet.
+Official map source: [urrc_f1_ws](https://github.com/nahee2345/urrc_f1_ws). NEVER modify official track worlds, meshes, grids, signals or other teams' packages.
 
-## Lane geometry
-- Three lanes from the **driver's right to left**: 1 (right), 2 (middle), 3 (left).
-- Car dimensions: desired 0.55 x 0.25 x 0.18 m, subject to official event maximum.
-- Clearance measured from car's outer side to the road boundary/wall: >=0.50 m.
-- Given width W and car width B: maximum center offset = W/2 - B/2 - 0.50.
-- Three lane centers = [-offset, 0, +offset] in left-positive coordinates, with offset not exceeding the geometric maximum.
-- If the calculated offset is insufficient for three **distinct, safely usable** lanes, mark the segment as narrow: no passing/defensive lateral move there. Do not silently violate wall clearance.
-- Road width is a **provided estimate**, not surveyed lane/wall geometry. Confirm physical collision clearance in Gazebo.
-- Source CSV has `x_m,y_m,z_m,yaw_rad,road_width_m`. Files close by connecting last row back to first.
-- One set of three lane path files per track; do not render path visuals into the official world.
+## Implemented
+- routes.py: 3 lanes (1 right / 2 center / 3 left) for each of six official centerline CSVs; <= boundary width estimates and clearance guard.
+- strategy.py: map-indexing; pure pursuit steering limited to +/-30 degrees and steering rate <=90 deg/s; curvature-dependent speed cap and ~3s lookahead; front vehicle TTC <=5s passing trigger; nearby-free-lane checking; 1->3 via lane 2 with minimum 2 seconds; rear threat <=3s defensive positioning; no lane changes in sharp corners; speed/steering slew and emergency map-loss stop. Opponent timestamps, lane and longitudinal gap evaluated in a common map frame.
+- tests: synthetic geometry and tactical scenarios.
+- sync_team11.sh: clone or fast-forward update the local working copy, stopping on local changes.
 
-## Driving state machine
-1. WAIT_SIGNAL -> JOIN -> CRUISE -> PASS / DEFEND -> CRUISE. CORNER constraints override PASS/DEFEND.
-2. Spawn grid automatically inferred from nearest official grid pose (only if distance and orientation are plausible). Odd -> lane 1; even -> lane 3. Use a smooth, curvature-bounded merge.
-3. PASS: only when a forward car exists, time-to-contact <=5 s, available next lane is free and straight/mild bend. From lane 1 to 3 (or inverse) occupy lane 2 for ~2 s **provided it remains safe**. Return/complete once other car is behind with longitudinal gap.
-4. Accelerate moderately only within tire/friction and collision constraints. Never accelerate into an occupied gap.
-5. DEFEND: only with no forward car and rear-car overtake/encounter prediction <=3 s. Choose a safe and reachable path to cover likely passing lane. No rapid changes or contact risk. Disable in sharp corners. After being passed in a corner, consider a normal pass on the next straight.
-6. CORNER: detect from track curvature and steering demand; pre-brake to feasible corner speed about 3 s before entry; release restriction at corner exit. Respect steering angle/rate, yaw rate, and lateral acceleration bounds.
-7. SIGNAL: visual cameras must see >=4 of five sequential red lamps illuminated, followed by all lamps extinguished. Fallback only if visual signal unreliable and a neighbouring car shows **sustained forward movement**; never confuse jitter with a race start. Default to stopped on uncertainty.
-8. No change to official race timing, traffic light orchestration, or map rendering.
+## NOT YET COMPLETE / unsafe to race
+- ROS2 subscriptions, odometry, camera detection, traffic lights, Gazebo vehicle model/spawn and command bridges are still missing. **This is not a driveable ROS2/Gazebo package yet.**
+- Generated routes are not committed; generate using the installed official source data.
+- Tactical path arbitration remains a prototype. Do NOT interpret these tests as 6-map successful driving. Grid-start autodetection, true collision prediction, jerk-limited 5th-degree lane changes, passing clearance proof, physical lateral friction, real rear-vehicle motion tracking, and full-speed validation still need implementation.
+- Centerline road widths are estimated, NOT surveyed wall boundaries. A >=0.5 m gap to actual collision meshes must be separately verified.
+- Defence must not cause deliberate contact or violate race rules. Safety overrides competitive position.
 
-## Portability requirements
-- TEAM package uses no absolute personal paths.
-- Discover sibling `urrc_track_gazebo` in the same ROS workspace or via `ament_index_python` / `URRC_TRACK_PACKAGE_DIR`.
-- Map selected from active Gazebo world or explicit parameter; verify name against six allowed tracks.
-- Every TEAM-created ROS topic uses suffix `_11`. Frame IDs are namespaced to avoid collisions (for example `team_11/base_link`); actual required `base_link` link is geometrically at the vehicle's 3D centre.
-- Validate at least start lights, all 11 grid camera views, the route and map match, launch portability, and 3 laps with traffic before calling it PASS.
+## Local checkout or update
+From another directory, first time:
+\`\`\`bash
+git clone https://github.com/nahee2345/urrc_2_f1.git ~/urrc_2_f1
+\`\`\`
+Every later update:
+\`\`\`bash
+cd ~/urrc_2_f1 && bash src/team_11/sync_team11.sh
+\`\`\`
+This script only updates this Git checkout and does not delete unsaved work. You must run it after changes are pushed; there is no unattended automatic update.
 
-## Current stage 1 deliverables
-- `routes.py` — imports external official centerline and exports 18 route CSVs, 6 metadata JSON files.
-- `test_routes.py` — geometric invariants on synthetic loops.
-- The ROS2/Gazebo car model, camera stack, route tracker, perception, decision state machine and actual integration are **not implemented in this commit**.
+## Generate 18 paths locally
+\`\`\`bash
+cd ~/urrc_2_f1
+python3 src/team_11/routes.py --track-package ~/urrc_f1_ws/src/urrc_track_gazebo --output src/team_11/generated_routes
+\`\`\`
+Run portable stdlib tests:
+\`\`\`bash
+PYTHONPATH=src/team_11 python3 -m unittest discover -s src/team_11 -p 'test_*.py'
+\`\`\`
