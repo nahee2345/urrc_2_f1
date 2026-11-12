@@ -106,7 +106,8 @@ class RouteMap:
 
 
 class Planner:
-    def __init__(self,route: RouteMap,first_lane: int,max_speed=MAP_SPEED_CAP):
+    def __init__(self,route: RouteMap,first_lane: int,max_speed=MAP_SPEED_CAP,
+                 external_strategy: bool = False):
         self.route=route
         self.lane=first_lane
         self.target=first_lane
@@ -119,6 +120,23 @@ class Planner:
         self.max_speed=max_speed
         self.laps=0
         self.invalid_reason=None
+        self.external_strategy=external_strategy
+        self.offtrack_frames=0
+        self.change_reason="INITIAL"
+        self.change_count=0
+
+    def request_lane(self,target: int,reason: str = "RACE_DIRECTOR")->bool:
+        """Commit an adjacent lane change, then finish before any next choice."""
+        if (target not in (0,1,2) or abs(target-self.target)!=1 or
+                self.changing or self.invalid_reason):
+            return False
+        self.lane=self.target
+        self.target=target
+        self.changing=True
+        self.change_distance=0.
+        self.change_reason=reason
+        self.change_count+=1
+        return True
 
     def stop(self,reason):
         self.speed=0.
@@ -133,7 +151,8 @@ class Planner:
         b=self.route.sample(self.target,s)
         return tuple(a[i]+progress*(b[i]-a[i]) for i in range(3))
 
-    def step(self,pose: tuple[float,float,float,float],dt:float):
+    def step(self,pose: tuple[float,float,float,float],dt:float,
+             traffic_speed_cap: float = float("inf")):
         if self.invalid_reason:
             return 0.,0.,self.invalid_reason
         if dt<=0. or dt>.25:
@@ -143,7 +162,15 @@ class Planner:
             return self.stop("INVALID_POSE")
         s,error,road_width=self.route.nearest(x,y)
         safe_center=road_width/2.-.125-.08
-        if error>safe_center or safe_center<.1:
+        if safe_center<.1:
+            return self.stop("ROAD_TOO_NARROW")
+        # A single noisy sample must not latch a permanent OFF_TRACK,
+        # while repeated physical road departures still stop the car.
+        if error>safe_center+.03:
+            self.offtrack_frames+=1
+        else:
+            self.offtrack_frames=0
+        if self.offtrack_frames>=3:
             return self.stop("OFF_TRACK")
         if self.last_s is None:
             self.last_s=s
@@ -165,11 +192,9 @@ class Planner:
         # Corner preview: merge side lane to the middle only if maneuver
         # remains feasible and 3->2/1->2 is a one-lane change.
         curvature=max(self.route.curvature(s+a) for a in (6.,18.,30.))
-        if not self.changing and self.target!=1 and curvature>=.030:
-            self.lane=self.target
-            self.target=1
-            self.changing=True
-            self.change_distance=0.
+        if (not self.external_strategy and not self.changing and
+                self.target!=1 and curvature>=.030):
+            self.request_lane(1,"CORNER_CENTER")
         lookahead=clamp(2.5+.35*self.speed,3.,7.5)
         goal=self._point(s+lookahead,preview=lookahead)
         alpha=wrap(math.atan2(goal[1]-y,goal[0]-x)-yaw)
@@ -194,6 +219,8 @@ class Planner:
             speed_cap=min(speed_cap,5.)
         elif abs(desired_steer)>.175:
             speed_cap=min(speed_cap,7.)
+        if math.isfinite(traffic_speed_cap):
+            speed_cap=min(speed_cap,max(0.,traffic_speed_cap))
         if self.changing:
             width=abs(float(self.route.meta["route_spacing_m"]))
             lane_speed=LANE_SHIFT*math.sqrt(MAX_LATERAL_A/max(.001,5.774*width))

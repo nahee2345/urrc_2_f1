@@ -7,11 +7,14 @@ from pathlib import Path
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry
 
 from team11_race.planner import Planner, RouteMap
+from team11_race.perception import LaserTracker
+from team11_race.strategy import RaceDirector, Decision
+from team11_race.start_policy import choose_start
 from team11_race.camera_start import LightTransition, red_evidence
 from team11_race.pose_decode import (
     extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
@@ -33,35 +36,6 @@ def quaternion_yaw(q):
                       1.-2.*(q.y*q.y+q.z*q.z))
 
 
-def count_red_lamps(image: Image) -> int:
-    """Conservative five-column red sampling of the upward-facing start camera.
-
-    Counts red lamp columns, not road pixels. Invalid images return -1.
-    Camera geometry may need real Gazebo calibration on the competition PC.
-    """
-    w,h,step=int(image.width),int(image.height),int(image.step)
-    encoding=str(image.encoding).lower()
-    if w<200 or h<100 or encoding not in ("rgb8","bgr8") or step<w*3:
-        return -1
-    buf=image.data
-    if len(buf)<step*h:
-        return -1
-    red_indices=(0,1,2) if encoding=="rgb8" else (2,1,0)
-    counts=[0]*5
-    start=int(w*.22);end=int(w*.78)
-    for y in range(int(h*.18),int(h*.67),5):
-        row=y*step
-        for x in range(start,end,4):
-            i=row+3*x
-            r=int(buf[i+red_indices[0]])
-            g=int(buf[i+red_indices[1]])
-            b=int(buf[i+red_indices[2]])
-            if r>=135 and r>g*1.7 and r>b*1.7 and r-g>65:
-                idx=min(4,int((x-start)*5/max(1,end-start)))
-                counts[idx]+=1
-    return sum(v>=7 for v in counts)
-
-
 class Team11Control(Node):
     def __init__(self):
         super().__init__("team11_controller_11")
@@ -70,7 +44,7 @@ class Team11Control(Node):
             ("race_start_topic","/race/start/team_11"),
             ("speed_topic","/team11/speed_11"),
             ("steering_topic","/team11/steering_11"),
-            ("max_speed_mps",10.0)):
+            ("max_speed_mps",15.0)):
             self.declare_parameter(k,v)
         self.mode=str(self.get_parameter("race_start_mode").value)
         if self.mode not in ("signal","camera"):
@@ -79,6 +53,12 @@ class Team11Control(Node):
         self.camera_go=False
         self.camera_gate=LightTransition()
         self.camera_frames=0
+        self.gate_true_at=0.
+        self.start_source=""
+        self.last_strategy_reason=""
+        self.perception=LaserTracker()
+        self.director=RaceDirector()
+        self.camera_processed=0
         self.pose_frames=0
         self.pose_unrecognized=0
         self.last_tf_wall=0.
@@ -114,6 +94,10 @@ class Team11Control(Node):
                                  self.odom_callback,10)
         self.create_subscription(Image,"/team11/start_image_11",
                                  self.camera_callback,10)
+        self.create_subscription(LaserScan,"/team11/front_scan_11",
+            lambda msg:self.scan_callback(msg,"front"),10)
+        self.create_subscription(LaserScan,"/team11/rear_scan_11",
+            lambda msg:self.scan_callback(msg,"rear"),10)
         self.create_timer(.05,self.tick)
         self.get_logger().info("TEAM11 initialized; awaiting own pose, world and race gate")
 
@@ -122,7 +106,10 @@ class Team11Control(Node):
         self.steer_pub.publish(Float32(data=float(steering)))
 
     def gate_callback(self,msg):
+        previously=self.allowed
         self.allowed=bool(msg.data)
+        if self.allowed and not previously:
+            self.gate_true_at=time.monotonic()
         if not self.allowed:
             self.publish(0.,0.)
             self.get_logger().info("TEAM11 external race gate FALSE; drive stopped")
@@ -190,8 +177,32 @@ class Team11Control(Node):
         self.pose_wall=now
         self.pose_source="self_odom_world_aligned"
 
+    def scan_callback(self,msg,side):
+        if self.pose is None:
+            return
+        scan_now=time.monotonic()
+        # Gazebo sensors run at 30Hz each; process at most 15Hz per side
+        # to prevent LiDAR callbacks from starving pose and control timers.
+        last=self.perception.last_front if side=="front" else self.perception.last_rear
+        if scan_now-last<.06:
+            return
+        try:
+            self.perception.update(
+                msg.ranges,float(msg.angle_min),float(msg.angle_increment),
+                float(msg.range_min),float(msg.range_max),side,self.pose,
+                self.planner.speed if self.planner is not None else 0.,
+                scan_now)
+        except (TypeError,ValueError,OverflowError) as exc:
+            self.get_logger().warning(
+                "TEAM11 %s LiDAR invalid: %s" % (side,str(exc)))
+
     def camera_callback(self,msg):
         self.camera_frames+=1
+        # 20Hz RGB source -> 10Hz high-resolution detection. Four dark
+        # frames still require real successive camera updates.
+        if self.camera_frames%2:
+            return
+        self.camera_processed+=1
         amount=red_evidence(msg.data,int(msg.width),int(msg.height),
                             int(msg.step),str(msg.encoding))
         previous_red=self.camera_gate.saw_red
@@ -212,17 +223,22 @@ class Team11Control(Node):
         self.last_health_report=now
         self.get_logger().warning(
             "TEAM11 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
-            "red_seen=%s evidence=%d peak=%d camera_out=%s "
+            "camera_processed=%d red_seen=%s evidence=%d peak=%d camera_out=%s "
             "pose_messages=%d unmatched_pose=%d odom_frames=%d "
             "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
-            "track=%s grid=%s" %
+            "track=%s grid=%s lidar_frames=%d nearby=%d "
+            "adjacent_moving=%s start_source=%s strategy=%s" %
             (reason,self.allowed,self.mode,self.camera_frames,
-             self.camera_gate.saw_red,self.camera_gate.last_red,
+             self.camera_processed,self.camera_gate.saw_red,self.camera_gate.last_red,
              self.camera_gate.peak,self.camera_go,self.pose_frames,
              self.pose_unrecognized,self.odom_frames,
              self.odom_world_valid,self.pose_source,
              self.pose is not None and now-self.pose_wall<=1.,
-             self.track,self.grid))
+             self.track,self.grid,self.perception.frames,
+             len(self.perception.visible(now)),
+             self.perception.neighbor_motion(self.pose,now)
+                if self.pose is not None else False,
+             self.start_source,self.last_strategy_reason))
 
     def prepare_route(self,now):
         if self.pose is None or self.planner is not None:
@@ -250,7 +266,8 @@ class Team11Control(Node):
                      math.hypot(route.sample(k,s)[0]-self.pose[0],
                                 route.sample(k,s)[1]-self.pose[1]))
             self.planner=Planner(
-                route,lane,max_speed=float(self.get_parameter("max_speed_mps").value))
+                route,lane,max_speed=float(self.get_parameter("max_speed_mps").value),
+                external_strategy=True)
             self.track=name
             self.grid=slot
             self.get_logger().info(f"TEAM11 map={name} grid={slot} initial_route={lane+1}")
@@ -267,19 +284,41 @@ class Team11Control(Node):
             return
         if self.planner is None:
             self.prepare_route(now)
-        if not self.allowed or (self.mode=="camera" and not self.camera_go):
+        permission=choose_start(
+            self.mode,self.allowed,self.camera_gate.started,
+            self.perception.neighbor_motion(self.pose,now),
+            self.perception.neighbor_present(self.pose,now),
+            now-self.gate_true_at if self.gate_true_at else 0.)
+        if permission is None:
             self.publish(0.,0.)
             self.last_tick=0.
             if self.allowed:
-                self.report_wait(now,"CAMERA_NO_RED_THEN_DARK")
+                self.report_wait(now,"CAMERA_OR_NEIGHBOR_NOT_READY")
             return
+        if not self.start_source:
+            self.start_source=permission
+            self.get_logger().info("TEAM11 START source=%s" % permission)
+        self.camera_go=True
         if self.planner is None:
             self.publish(0.,0.)
             self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
             return
         dt=.05 if self.last_tick<=0 else min(.20,now-self.last_tick)
         self.last_tick=now
-        speed,steer,status=self.planner.step(self.pose,dt)
+        decision=Decision(None,float("inf"),"ROUTE_INITIALIZING")
+        if self.planner.last_s is not None:
+            decision=self.director.choose(
+                self.planner,self.pose,self.perception.visible(now),now)
+            if decision.lane is not None:
+                moved=self.planner.request_lane(decision.lane,decision.reason)
+                if moved:
+                    self.get_logger().info(
+                        "TEAM11 STRATEGY %s lane=%d -> %d threat=%d ttc=%.2f" %
+                        (decision.reason,self.planner.lane+1,
+                         self.planner.target+1,decision.target_id,decision.ttc))
+        self.last_strategy_reason=decision.reason
+        speed,steer,status=self.planner.step(
+            self.pose,dt,traffic_speed_cap=decision.speed_cap)
         if status not in ("DRIVE","BAD_DT"):
             self.publish(0.,0.)
             if not self.announced:
@@ -292,7 +331,9 @@ class Team11Control(Node):
                 f"map={self.track} route={self.planner.target+1} "
                 f"speed={speed:.2f} steering_right_deg={math.degrees(steer):.1f} "
                 f"physical_distance={self.planner.travel:.1f} "
-                f"laps={self.planner.laps}")
+                f"laps={self.planner.laps} "
+                f"strategy={self.last_strategy_reason} "
+                f"start={self.start_source} targets={len(self.perception.visible(now))}")
             self.last_report=now
 
 

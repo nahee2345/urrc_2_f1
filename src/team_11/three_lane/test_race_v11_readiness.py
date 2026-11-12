@@ -11,6 +11,8 @@ class RaceV11ReadinessTests(unittest.TestCase):
     def test_control_and_runtime_python_compile(self):
         for path in [PKG/"control.py",PKG/"adapter.py",
                      PKG/"pose_decode.py",PKG/"camera_start.py",
+                     PKG/"start_policy.py",PKG/"perception.py",
+                     PKG/"strategy.py",PKG/"planner.py",
                      ROOT/"launch/race.launch.py"]:
             with self.subTest(path=path.name):
                 ast.parse(path.read_text(encoding="utf-8"),filename=str(path))
@@ -19,8 +21,11 @@ class RaceV11ReadinessTests(unittest.TestCase):
         controller=(PKG/"control.py").read_text()
         self.assertLess(controller.index("result=match_map_from_spawn("),
                         controller.index("name=discover_world()"))
-        self.assertIn('self.mode=="camera" and not self.camera_go',controller)
-        self.assertIn('if not self.allowed',controller)
+        self.assertIn('permission=choose_start(',controller)
+        self.assertIn('self.allowed,self.camera_gate.started',controller)
+        self.assertIn('self.perception.neighbor_motion(',controller)
+        self.assertIn('RaceDirector()',controller)
+        self.assertIn('LaserTracker()',controller)
         self.assertIn('pose_frames=',controller)
         self.assertIn('camera_frames=',controller)
         self.assertNotIn("/model/team_11/urrc_timing",controller)
