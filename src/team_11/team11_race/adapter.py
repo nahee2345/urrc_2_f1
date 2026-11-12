@@ -15,7 +15,7 @@ class Team11Adapter(Node):
     def __init__(self):
         super().__init__("team11_adapter_11")
         for name,default in (
-            ("race_start_topic","/race/start/team11"),
+            ("race_start_topic","/race/start/team_11"),
             ("speed_topic","/team11/speed_11"),
             ("steering_topic","/team11/steering_11")):
             self.declare_parameter(name,default)

@@ -62,7 +62,7 @@ class Team11Control(Node):
         super().__init__("team11_controller_11")
         for k,v in (
             ("race_start_mode","signal"),
-            ("race_start_topic","/race/start/team11"),
+            ("race_start_topic","/race/start/team_11"),
             ("speed_topic","/team11/speed_11"),
             ("steering_topic","/team11/steering_11"),
             ("max_speed_mps",10.0)):
@@ -115,9 +115,9 @@ class Team11Control(Node):
         for tf in msg.transforms:
             child=tf.child_frame_id.lower()
             tail=child.replace("::","/").split("/")[-1]
-            if tail not in ("team11","base_link"):
+            if tail not in ("team_11","base_link"):
                 continue
-            if tail=="base_link" and "team11" not in child:
+            if tail=="base_link" and "team_11" not in child:
                 continue
             t=tf.transform.translation
             yaw=quaternion_yaw(tf.transform.rotation)

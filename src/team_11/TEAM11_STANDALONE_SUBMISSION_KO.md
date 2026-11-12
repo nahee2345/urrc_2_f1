@@ -25,7 +25,7 @@ launch 파일, 제어기, 6개 맵의 중앙선·그리드·3개 주행 경로�
 | 차량 오도메트리 | `/team11/odom_11` |
 | 조향 조인트 상태 | `/team11/joint_states_11` |
 
-운영자가 제공하는 외부 출발 신호 `/race/start/team11` 및
+운영자가 제공하는 외부 출발 신호 `/race/start/team_11` 및
 중앙 `/clock`은 팀의 내부 토픽이 아닙니다.
 대회장 계약에 맞춰 외부 이름을 유지합니다.
 
@@ -40,7 +40,7 @@ TEAM11에 내장된 6개 맵의 출발 그리드와 비교합니다.
 
 ## 구동 구조
 
-대회 운영자는 Gazebo 월드와 `team11` 차량을 스폰합니다.
+대회 운영자는 Gazebo 월드와 `team_11` 차량을 스폰합니다.
 TEAM11 launch는 `ros_gz_bridge`, `team11_control`,
 `team11_adapter`만 기동합니다.
 주행 판단은 내장된 맵별 CSV 좌표와

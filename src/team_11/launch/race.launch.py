@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     declared={
         "race_start_mode":"signal",
-        "race_start_topic":"/race/start/team11",
+        "race_start_topic":"/race/start/team_11",
         "speed_topic":"/team11/speed_11",
         "steering_topic":"/team11/steering_11",
         "lidar_topic":"/team11/front_scan_11",
@@ -16,7 +16,7 @@ def generate_launch_description():
     }
     args=[DeclareLaunchArgument(k,default_value=v) for k,v in declared.items()]
     # All private cross-package bridge topics end with _11. External
-    # /race/start/team11 and /clock are organizer-owned, not renamed.
+    # /race/start/team_11 and /clock are organizer-owned, not renamed.
     bridge=[
         "/team11/pose_11@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
         "/team11/start_image_11@sensor_msgs/msg/Image[gz.msgs.Image",

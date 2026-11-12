@@ -1,5 +1,5 @@
 {
-  "entry_id": "team11",
+  "entry_id": "team_11",
   "display_name": "TEAM 11 Path Following",
   "ros_package": "team11_race",
   "algorithm_launch_file": "race.launch.py",
