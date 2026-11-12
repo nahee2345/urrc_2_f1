@@ -16,6 +16,11 @@
 <sensor name="team11_start_camera" type="camera"><pose>.245 0 .02 0 -0.16 0</pose>
 <topic>/camera_11</topic><update_rate>10</update_rate><always_on>true</always_on><visualize>false</visualize>
 <camera><horizontal_fov>1.8</horizontal_fov><image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>.04</near><far>40</far></clip></camera></sensor>
+<!-- Narrow-field start-only camera shares the existing onboard mount position.
+     No chassis protrusion; no driving decisions may use camera pixels. -->
+<sensor name="team11_start_zoom_camera" type="camera"><pose>.245 0 .02 0 -0.045 0</pose>
+<topic>/camera_zoom_11</topic><update_rate>10</update_rate><always_on>true</always_on><visualize>false</visualize>
+<camera><horizontal_fov>.65</horizontal_fov><image><width>640</width><height>360</height><format>R8G8B8</format></image><clip><near>.04</near><far>40</far></clip></camera></sensor>
 <!-- +X is physical front. Lamps distinguish nose and tail in Gazebo. -->
 <visual name="front_marker_left"><pose>.263 .075 0 0 0 0</pose><geometry><box><size>.004 .025 .018</size></box></geometry><material><emissive>0.95 0.95 0.8 1</emissive><diffuse>0.95 0.95 0.8 1</diffuse></material></visual>
 <visual name="front_marker_right"><pose>.263 -.075 0 0 0 0</pose><geometry><box><size>.004 .025 .018</size></box></geometry><material><emissive>0.95 0.95 0.8 1</emissive><diffuse>0.95 0.95 0.8 1</diffuse></material></visual>
