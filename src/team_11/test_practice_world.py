@@ -12,6 +12,28 @@ def load_generator():
     return mod
 
 class PracticeWorldTests(unittest.TestCase):
+    def test_dynamic_signal_active_without_static_race_red(self):
+        with tempfile.TemporaryDirectory() as temp:
+            src=Path(temp)/"official"/"worlds"
+            src.mkdir(parents=True)
+            (src/"monza_race.sdf").write_text(
+                '<sdf version="1.9"><world name="monza">'
+                '<plugin filename="gz-sim-sensors-system" name="Sensors"/>'
+                '<scene><shadows>true</shadows></scene>'
+                '<model name="track"><link name="visuals">'
+                '<sensor name="spectator" type="camera"/>'
+                '</link></model></world></sdf>')
+            (src/"monza_signal_active.sdf").write_text(
+                '<sdf version="1.9"><model name="urrc_start_signal_active"/></sdf>')
+            (src/"monza_grid.gui.config").write_text(
+                '<window><width>640</width></window>'
+                '<plugin filename="CameraTracking" name="Camera tracking"/>')
+            out=Path(temp)/"practice"
+            load_generator().prepare("monza",src.parent,out)
+            w=ET.parse(out/"monza_practice.sdf").getroot()
+            self.assertEqual(len(w.findall(".//sensor")),0)
+            self.assertEqual(len(w.findall(".//plugin[@name='Sensors']")),1)
+            self.assertTrue((out/"monza_practice.gui.config").is_file())
     def test_remove_spectator_only_keep_signals_and_follow(self):
         with tempfile.TemporaryDirectory() as temp:
             folder=Path(temp)
