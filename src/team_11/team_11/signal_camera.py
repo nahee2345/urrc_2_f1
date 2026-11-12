@@ -21,6 +21,7 @@ class SignalNode(Node):
         super().__init__("team11_signal_camera")
         self.gate=StartGate()
         self.zoom_gate=StartGate()
+        self.wide_only=os.environ.get("TEAM11_SIGNAL_WIDE_ONLY","0")=="1"
         self.last_frame=-1.e10
         self.last_zoom_frame=-1.e10
         self.frames=0
@@ -41,9 +42,10 @@ class SignalNode(Node):
         self.start_source=None
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
         self.create_subscription(Image,"/camera_11",lambda msg:self.on_frame(msg,"wide"),qos_profile_sensor_data)
-        self.create_subscription(Image,"/camera_zoom_11",lambda msg:self.on_frame(msg,"zoom"),qos_profile_sensor_data)
+        if not self.wide_only:
+            self.create_subscription(Image,"/camera_zoom_11",lambda msg:self.on_frame(msg,"zoom"),qos_profile_sensor_data)
         self.create_timer(.1,self.tick)
-        self.get_logger().info("WAIT: require 4+ red lamps THEN all-off; initial dark is NOT start")
+        self.get_logger().info("WAIT: require 4+ red lamps THEN all-off; initial dark is NOT start; mode="+("wide-only" if self.wide_only else "wide+zoom"))
     def on_frame(self,msg,source="wide"):
         now=time.monotonic()
         if source=="zoom":
