@@ -14,9 +14,18 @@ export GZ_PARTITION="${GZ_PARTITION:-urrc_practice_$(id -u)}"
 set +u
 source /opt/ros/jazzy/setup.bash
 set -u
-LOG="$ROOT/log/team11_stage7"
+LOG="${TEAM11_STAGE7_LOG:-$ROOT/log/team11_stage7}"
 mkdir -p "$LOG"
-export TEAM11_CAMERA_DIAG_DIR="$LOG"
+if [[ "${TEAM11_STAGE7_CAPTURE_IMAGES:-1}" == "1" ]]; then
+  export TEAM11_CAMERA_DIAG_DIR="$LOG"
+else
+  unset TEAM11_CAMERA_DIAG_DIR
+fi
+rm -f "$LOG/result.txt"
+# Avoid confusing a previous passing attempt with a new failed run.
+: >"$LOG/camera.log"
+: >"$LOG/drive.log"
+: >"$LOG/lights.log"
 PIDS=()
 cleanup() {
   trap - EXIT INT TERM
@@ -29,7 +38,11 @@ trap cleanup EXIT
 trap "exit 130" INT TERM
 cd "$ROOT"
 echo "[1/8] Build team_11"
-colcon build --packages-select team_11 --symlink-install >"$LOG/build.log" 2>&1 || { tail -80 "$LOG/build.log"; exit 1; }
+if [[ "${TEAM11_STAGE7_SKIP_BUILD:-0}" != "1" ]]; then
+  colcon build --packages-select team_11 --symlink-install >"$LOG/build.log" 2>&1 || { tail -80 "$LOG/build.log"; exit 1; }
+else
+  echo "[TEAM11] Reusing prior team_11 build"
+fi
 set +u
 source "$ROOT/install/setup.bash"
 set -u
@@ -72,14 +85,21 @@ if ! grep -q "DIAG frames=" "$LOG/camera.log"; then
 fi
 echo "[7/8] Trigger OFFICIAL five-light sequence (4+ ON -> ALL OFF)"
 rm -f "$LOG"/signal_*.png
-touch "$LOG/signal_capture.active"
+if [[ "${TEAM11_STAGE7_CAPTURE_IMAGES:-1}" == "1" ]]; then
+  touch "$LOG/signal_capture.active"
+fi
 python3 "$PKG/scripts/traffic_lights_v10.py" --track "$TRACK" --timeout 35 >"$LOG/lights.log" 2>&1 || { echo "Official lights failed" >&2; tail -60 "$LOG/lights.log"; exit 1; }
 rm -f "$LOG/signal_capture.active"
 echo "[8/8] Observe camera-gated one-second motion"
 sleep 3
-if grep -q "FINISHED: One-second pulse complete" "$LOG/drive.log"; then
-  echo "[TEAM11] PASS: camera gate allowed a completed 1-second forward pulse"
+if grep -q "START: 4+ red lamps observed, now ALL OFF" "$LOG/camera.log" &&
+   grep -q "FINISHED: One-second pulse complete" "$LOG/drive.log" &&
+   grep -q "LIGHTS OUT" "$LOG/lights.log" &&
+   ! grep -q "STOP: Camera start permission lost" "$LOG/drive.log"; then
+  echo "PASS" > "$LOG/result.txt"
+  echo "[TEAM11] PASS: camera detected red lights then off, followed by 1-second forward pulse"
 else
+  echo "FAIL" > "$LOG/result.txt"
   echo "[TEAM11] NOT VERIFIED: detector did not confirm start; vehicle should remain stopped"
   tail -30 "$LOG/camera.log" || true
   echo "[TEAM11] Official sequence duration and errors:"
@@ -90,4 +110,8 @@ echo "[TEAM11] Logs: $LOG"
 echo "[TEAM11] Onboard camera: $LOG/camera_before.png"
 echo "[TEAM11] Actual lamp-on sequence: $LOG/signal_00.png .. signal_*.png"
 echo "[TEAM11] Press Ctrl+C when finished viewing the Gazebo window."
+if [[ "${TEAM11_STAGE7_AUTO_EXIT:-0}" == "1" ]]; then
+  [[ "$(cat "$LOG/result.txt")" == "PASS" ]] || exit 7
+  exit 0
+fi
 wait "$WORLD_PID" || true
