@@ -116,7 +116,13 @@ class TacticsReview(unittest.TestCase):
         c=self.planner.step(ego,[],1)
         self.assertEqual((c.mode,c.speed),("STOP",0))
 
-    def test_12_straight_return_after_lane_two_needs_no_unnecessary_recross(self):
+    def test_12_straight_target_reaches_15ms_but_never_exceeds(self):
+        self.track.curvature=[0.0]*self.track.n
+        commands=[self.planner.step(self.car(10,speed=15),[],1.0+i*.2)
+                  for i in range(90)]
+        self.assertAlmostEqual(commands[-1].speed,15,places=5)
+        self.assertTrue(all(0<=cmd.speed<=15 for cmd in commands))
+    def test_13_straight_return_after_lane_two_needs_no_unnecessary_recross(self):
         # A completed lane-2 overtake must not force a return to lane 1/3.
         self.planner.lane=2
         self.planner.target=2
