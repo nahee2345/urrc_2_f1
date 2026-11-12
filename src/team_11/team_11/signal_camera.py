@@ -25,6 +25,7 @@ class SignalNode(Node):
         self.last_zoom_frame=-1.e10
         self.frames=0
         self.ready_sources=set()
+        self.processed_at={"wide":-1.e10,"zoom":-1.e10}
         self.peak_lamps=0
         self.image_encoding="none"
         self.image_size="unknown"
@@ -49,6 +50,11 @@ class SignalNode(Node):
             self.last_zoom_frame=now
         else:
             self.last_frame=now
+        # Bound CPU use of two Python image detectors. Processing every camera
+        # frame can starve rclpy callbacks and Gazebo sensor rendering.
+        if now-self.processed_at[source]<.16:
+            return
+        self.processed_at[source]=now
         self.frames+=1
         self.image_encoding=msg.encoding
         self.image_size=f"{msg.width}x{msg.height}"
