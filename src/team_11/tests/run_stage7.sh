@@ -57,12 +57,6 @@ for i in $(seq 1 90); do
   sleep 1
 done
 if (( READY == 0 )); then echo "Gazebo create service timeout" >&2; exit 1; fi
-echo "[2/8] Prepare ROS bridges before spawning vehicle"
-ros2 run ros_gz_bridge parameter_bridge "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
-  "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$LOG/bridge.log" 2>&1 &
-BRIDGE_PID=$!; PIDS+=("$BRIDGE_PID")
-sleep 3
-if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then echo "Bridge failed" >&2; cat "$LOG/bridge.log"; exit 1; fi
 echo "[2/8] Prepare camera detector, gated adapter and test driver before vehicle spawn"
 ros2 run team_11 team11_signal_camera >"$LOG/camera.log" 2>&1 &
 CAMERA_PID=$!; PIDS+=("$CAMERA_PID")
@@ -76,6 +70,23 @@ for pid in "$CAMERA_PID" "$ADAPTER_PID" "$DRIVE_PID"; do
 done
 echo "[3/8] Spawn car in official grid $GRID AFTER ROS nodes are running"
 python3 "$TEAM/tests/stage5_spawn.py" --track "$TRACK" --grid "$GRID" --official "$OFFICIAL" >"$LOG/spawn.log" 2>&1 || { cat "$LOG/spawn.log"; exit 1; }
+TOPIC_READY=0
+for i in $(seq 1 50); do
+  if gz topic -l 2>/dev/null | grep -Fxq "/camera_11"; then TOPIC_READY=1; break; fi
+  sleep .4
+done
+if [[ "$TOPIC_READY" -ne 1 ]]; then
+  echo "[TEAM11] FAIL: Gazebo camera topic missing after spawn" >&2
+  gz topic -l >"$LOG/gz_topics.log" 2>&1 || true
+  tail -40 "$LOG/spawn.log" "$LOG/world.log" >&2 || true
+  exit 4
+fi
+echo "[4/8] Attach camera bridge after vehicle and Gazebo camera topic exist"
+ros2 run ros_gz_bridge parameter_bridge "/model/team_11/cmd_vel_11@geometry_msgs/msg/Twist]gz.msgs.Twist" "/camera_11@sensor_msgs/msg/Image[gz.msgs.Image" \
+  "/camera_zoom_11@sensor_msgs/msg/Image[gz.msgs.Image" >"$LOG/bridge.log" 2>&1 &
+BRIDGE_PID=$!; PIDS+=("$BRIDGE_PID")
+sleep 3
+if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then echo "Bridge failed" >&2; cat "$LOG/bridge.log"; exit 1; fi
 echo "[4/8] Wait for onboard camera frames after spawning. Controls stay STOP."
 echo "[TEAM11] Waiting for first real camera image after vehicle spawn"
 CAMERA_READY=0
