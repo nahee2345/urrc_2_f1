@@ -11,6 +11,7 @@ OFFICIAL="${URRC_OFFICIAL_WS:-$HOME/urrc_f1_ws}"
 if [[ ! -f "$OFFICIAL/run_track.sh" ]]; then echo "Missing official launcher: $OFFICIAL/run_track.sh" >&2; exit 2; fi
 if [[ ! -f "/opt/ros/jazzy/setup.bash" ]]; then echo "ROS 2 Jazzy not installed" >&2; exit 2; fi
 for cmd in gz ros2 colcon python3; do command -v "$cmd" >/dev/null || { echo "Missing: $cmd" >&2; exit 2; }; done
+export GZ_PARTITION="${GZ_PARTITION:-urrc_practice_$(id -u)}"
 source /opt/ros/jazzy/setup.bash
 LOG="$ROOT/log/team11_stage5"
 mkdir -p "$LOG"
@@ -49,9 +50,9 @@ python3 "$TEAM/tests/stage5_spawn.py" --official "$OFFICIAL" --track "$TRACK" --
 sleep 2
 echo "[5/6] Start manual test safety adapter"
 ros2 run team_11 team11_stage5_adapter --ros-args -p test_bypass_gate:=true >"$LOG/adapter.log" 2>&1 &
-PIDS+=("$!")
+ADAPTER_PID=$!; PIDS+=("$ADAPTER_PID")
 sleep 2
-if ! kill -0 "${PIDS[-1]}" 2>/dev/null; then echo "Adapter failed" >&2; cat "$LOG/adapter.log"; exit 1; fi
+if ! kill -0 "$ADAPTER_PID" 2>/dev/null; then echo "Adapter failed" >&2; cat "$LOG/adapter.log"; exit 1; fi
 echo "[6/6] Test forward movement for 1 second (then STOP)"
 ros2 run team_11 team11_stage5_manual --sequence straight --seconds 1 >"$LOG/drive.log" 2>&1 || { cat "$LOG/drive.log"; exit 1; }
 echo "[TEAM11] Test completed. White lamps should move toward start signal; red lamps mark rear."
