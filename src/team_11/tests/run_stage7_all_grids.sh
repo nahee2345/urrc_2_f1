@@ -11,6 +11,9 @@ OFFICIAL="${URRC_OFFICIAL_WS:-$HOME/urrc_f1_ws}"
 PKG="$OFFICIAL/src/urrc_track_gazebo"
 LOGROOT="$ROOT/log/team11_stage7_all_grids/$TRACK"
 mkdir -p "$LOGROOT"
+if [[ "${TEAM11_PRACTICE_LIGHTWEIGHT:-0}" == "1" ]]; then
+  export TEAM11_PRACTICE_DIR="$LOGROOT/practice"
+fi
 SUMMARY="$LOGROOT/summary.csv"
 printf 'track,grid,result,detail\n' >"$SUMMARY"
 export GZ_PARTITION="${GZ_PARTITION:-urrc_practice_$(id -u)}"
@@ -144,6 +147,13 @@ for GRID in $(seq 1 "$GRID_END"); do
     printf '%s,%d,FAIL,spawn_after_3_attempts\n' "$TRACK" "$GRID" >>"$SUMMARY"
     failed=$((failed+1))
     continue
+  fi
+  if [[ "${TEAM11_PRACTICE_FOLLOW:-0}" == "1" ]]; then
+    echo "[TEAM11] Follow team_11 via Gazebo GUI"
+    # /gui/follow is a GUI camera service, NOT an extra camera sensor.
+    gz service -s /gui/follow --reqtype gz.msgs.StringMsg \
+      --reptype gz.msgs.Boolean --timeout 1000 \
+      --req 'data: "team_11"' >"$DIR/follow.log" 2>&1 || true
   fi
   echo "[TEAM11] Post-spawn camera bridge: waiting for Gazebo sensor topic"
   topic_ready=0
