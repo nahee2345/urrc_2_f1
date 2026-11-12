@@ -14,6 +14,7 @@ from nav_msgs.msg import Odometry
 from team11_race.planner import Planner, RouteMap
 from team11_race.perception import LaserTracker
 from team11_race.strategy import RaceDirector, Decision
+from team11_race.start_policy import choose_start
 from team11_race.camera_start import LightTransition, red_evidence
 from team11_race.pose_decode import (
     extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
@@ -300,37 +301,21 @@ class Team11Control(Node):
             return
         if self.planner is None:
             self.prepare_route(now)
-        if not self.allowed:
+        permission=choose_start(
+            self.mode,self.allowed,self.camera_gate.started,
+            self.perception.neighbor_motion(self.pose,now),
+            self.perception.neighbor_present(self.pose,now),
+            now-self.gate_true_at if self.gate_true_at else 0.)
+        if permission is None:
             self.publish(0.,0.)
             self.last_tick=0.
-            return
-        if self.mode=="camera" and not self.camera_go:
-            # The operator's start gate is authoritative: absolutely never
-            # start while it remains false. Camera is primary evidence.
-            # Once the gate is TRUE, an observed nearby car actually moving
-            # is alternate evidence when the gantry is outside camera view.
-            if self.perception.neighbor_motion(self.pose,now):
-                self.camera_go=True
-                self.start_source="NEIGHBOR_MOVED_AFTER_GATE"
-            elif self.gate_true_at and now-self.gate_true_at>=.75 and (
-                not self.perception.neighbor_present(self.pose,now) or
-                now-self.gate_true_at>=2.0):
-                # Solo qualifying has no adjacent car to observe. The
-                # organizer's TRUE signal is the single authoritative
-                # lights-out command, so it is a safe final fallback.
-                self.camera_go=True
-                self.start_source="OFFICIAL_GATE_CAMERA_FALLBACK"
-            else:
-                self.publish(0.,0.)
-                self.last_tick=0.
+            if self.allowed:
                 self.report_wait(now,"CAMERA_OR_NEIGHBOR_NOT_READY")
-                return
-            self.get_logger().warning("TEAM11 start fallback: %s" %
-                                      self.start_source)
-        elif self.mode=="camera" and not self.start_source:
-            self.start_source="CAMERA_LIGHTS_OUT"
-        elif self.mode=="signal" and not self.start_source:
-            self.start_source="OFFICIAL_SIGNAL"
+            return
+        if not self.start_source:
+            self.start_source=permission
+            self.get_logger().info("TEAM11 START source=%s" % permission)
+        self.camera_go=True
         if self.planner is None:
             self.publish(0.,0.)
             self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
