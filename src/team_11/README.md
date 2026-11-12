@@ -35,3 +35,14 @@ Run portable stdlib tests:
 ```bash
 PYTHONPATH=src/team_11 python3 -m unittest discover -s src/team_11 -p 'test_*.py'
 ```
+
+
+## ROS 2 controller prototype (requires external vehicle interface)
+```bash
+cd ~/urrc_2_f1
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select team_11
+source install/setup.bash
+ros2 run team_11 team11_controller --ros-args -p use_sim_time:=true -p track:=monza -p spawn_grid:=1 -p routes_root:="$HOME/urrc_2_f1/src/team_11/generated_routes"
+```
+Requires fresh odometry `/odom_11`, `/start_allowed_11` from a camera-signal detector, and optionally opponent odometry topics explicitly named through `opponent_topics`. Publishes `/cmd_vel_11` Twist with `linear.x` = speed and **`angular.z` = steering angle radians (NOT angular velocity)**. This command needs a verified actuator adapter for the actual vehicle. The simulator and camera-start detector are not yet provided. `spawn_grid` is manually configured here; automatic slot inference still remains.
