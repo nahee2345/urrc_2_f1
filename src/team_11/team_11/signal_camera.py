@@ -6,6 +6,8 @@ local trial only grants start after its own red-lamps-on then off detection.
 import time
 import os
 from pathlib import Path
+import struct
+import zlib
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -50,10 +52,10 @@ class SignalNode(Node):
         red_pixels=self.sample_red(msg) if valid else 0
         self.red_peak=max(self.red_peak,red_pixels)
         if self.diag_dir and not self.saved_before and valid:
-            self.save_image(msg,'camera_before.ppm')
+            self.save_image(msg,'camera_before.png')
             self.saved_before=True
         if self.diag_dir and not self.saved_candidate and red_pixels>5 and valid:
-            self.save_image(msg,'camera_red_candidate.ppm')
+            self.save_image(msg,'camera_red_candidate.png')
             self.saved_candidate=True
         before=self.gate.started
         if self.gate.observe(lamps,now,valid) and not before:
@@ -89,9 +91,15 @@ class SignalNode(Node):
                     swapped[i:i+3]=bytes((row[i+2],row[i+1],row[i]))
                 row=bytes(swapped)
             rows.append(row)
-        header=("P6"+chr(10)+str(msg.width)+" "+str(msg.height)+chr(10)+"255"+chr(10)).encode()
+        def chunk(kind,payload):
+            return struct.pack("!I",len(payload))+kind+payload+struct.pack(
+                "!I",zlib.crc32(kind+payload)&0xffffffff)
+        image=b"".join(bytes([0])+row for row in rows)
+        png=(b"\\x89PNG\\r\\n\\x1a\\n"+
+             chunk(b"IHDR",struct.pack("!2I5B",msg.width,msg.height,8,2,0,0,0))+
+             chunk(b"IDAT",zlib.compress(image,3))+chunk(b"IEND",b""))
         dest=self.diag_dir/name
-        dest.write_bytes(header+b"".join(rows))
+        dest.write_bytes(png)
         self.get_logger().info("Saved onboard camera: "+str(dest))
 
     def tick(self):
