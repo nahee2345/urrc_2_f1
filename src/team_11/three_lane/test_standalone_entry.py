@@ -7,22 +7,23 @@ import unittest
 import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT/"team11_race"))
+sys.path.insert(0,str(ROOT))
 from team11_race.planner import Planner,RouteMap
 from team11_race.trackdetect import TRACKS,map_assets,matching_grid,detect_from_topic_list
 
 
 class StandaloneSubmissionTests(unittest.TestCase):
     def setUp(self):
-        self.package=ROOT/"team11_race"
+        self.package=ROOT
 
     def test_manifest_is_self_contained(self):
         root=json.loads((ROOT/"race_entry.json").read_text())
-        embedded=json.loads((self.package/"race_entry.json").read_text())
-        self.assertEqual(root,embedded)
+        self.assertTrue((self.package/"package.xml").is_file())
+        self.assertTrue((self.package/"setup.py").is_file())
+        self.assertFalse((self.package/"team11_race"/"package.xml").exists())
         self.assertEqual(root["entry_id"],"team11")
         self.assertEqual(root["ros_package"],"team11_race")
-        self.assertTrue((self.package/root["vehicle_model_file"].removeprefix("src/team11_race/")).is_file())
+        self.assertTrue((self.package/root["vehicle_model_file"].removeprefix("src/team_11/")).is_file())
         for key in ("speed_topic","steering_topic","lidar_topic"):
             self.assertTrue(root[key].endswith("_11"),root[key])
 
