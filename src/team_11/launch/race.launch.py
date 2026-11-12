@@ -19,6 +19,7 @@ def generate_launch_description():
     # /race/start/team_11 and /clock are organizer-owned, not renamed.
     bridge=[
         "/team11/pose_11@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
+        "/team11/odom_11@nav_msgs/msg/Odometry[gz.msgs.Odometry",
         "/team11/start_image_11@sensor_msgs/msg/Image[gz.msgs.Image",
         "/team11/front_scan_11@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
         "/team11/rear_scan_11@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",

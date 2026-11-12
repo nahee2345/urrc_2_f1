@@ -68,9 +68,15 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        node.out.publish(Twist())
+        # Ctrl+C can invalidate the ROS context before finally executes.
+        if rclpy.ok():
+            try:
+                node.out.publish(Twist())
+            except Exception:
+                pass
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__=="__main__":
     main()
