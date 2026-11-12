@@ -29,6 +29,8 @@ class SignalNode(Node):
         self.saved_before=False
         self.saved_candidate=False
         self.red_peak=0
+        self.last_signal_capture=-1.e10
+        self.signal_capture_count=0
         self.last_log=-1.e10
         self.publisher=self.create_publisher(Bool,"/start_allowed_11",10)
         self.create_subscription(Image,"/camera_11",self.on_frame,qos_profile_sensor_data)
@@ -57,7 +59,14 @@ class SignalNode(Node):
         if self.diag_dir and not self.saved_candidate and red_pixels>5 and valid:
             self.save_image(msg,'camera_red_candidate.png')
             self.saved_candidate=True
-        before=self.gate.started
+        # Capture the ACTUAL official light sequence. Previous "red candidate"
+        # frames were triggered by red crash barriers before lamps lit.
+        marker=self.diag_dir/"signal_capture.active" if self.diag_dir else None
+        if marker and marker.is_file() and self.signal_capture_count<32 and now-self.last_signal_capture>=.30 and valid:
+            self.save_image(msg,f"signal_{self.signal_capture_count:02d}.png")
+            self.signal_capture_count+=1
+            self.last_signal_capture=now
+                before=self.gate.started
         if self.gate.observe(lamps,now,valid) and not before:
             self.get_logger().info("START: 4+ red lamps observed, now ALL OFF")
         if now-self.last_log>1.:
