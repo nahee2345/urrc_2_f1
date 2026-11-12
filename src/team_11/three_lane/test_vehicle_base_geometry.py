@@ -88,13 +88,22 @@ class VehicleBaseGeometryTest(unittest.TestCase):
         self.assertEqual(len(self.model.findall("joint")), 6)
 
     def test_private_topics_unchanged(self):
-        topics=[element.text.strip() for element in
-                self.model.findall(".//topic") if element.text]
-        self.assertGreaterEqual(len(topics), 8)
+        topics=[element.text.strip() for tag in ("topic", "odom_topic", "tf_topic")
+                for element in self.model.findall(".//"+tag) if element.text]
+        expected={
+            "/team11/imu_11",
+            "/team11/start_image_11",
+            "/team11/front_scan_11",
+            "/team11/rear_scan_11",
+            "/team11/joint_states_11",
+            "/team11/cmd_vel_11",
+            "/team11/odom_11",
+            "/team11/gz_tf_11",
+            "/team11/pose_11",
+        }
+        self.assertEqual(set(topics), expected)
         for topic in topics:
             self.assertTrue(topic.endswith("_11"), topic)
-        self.assertIn("/team11/cmd_vel_11", topics)
-        self.assertIn("/team11/pose_11", topics)
 
 
 if __name__ == "__main__":
