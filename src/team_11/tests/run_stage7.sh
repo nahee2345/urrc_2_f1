@@ -16,6 +16,7 @@ source /opt/ros/jazzy/setup.bash
 set -u
 LOG="$ROOT/log/team11_stage7"
 mkdir -p "$LOG"
+export TEAM11_CAMERA_DIAG_DIR="$LOG"
 PIDS=()
 cleanup() {
   trap - EXIT INT TERM
@@ -82,5 +83,7 @@ else
   tail -15 "$LOG/drive.log" || true
 fi
 echo "[TEAM11] Logs: $LOG"
+echo "[TEAM11] Onboard camera: $LOG/camera_before.ppm"
+echo "[TEAM11] Red candidate: $LOG/camera_red_candidate.ppm (when observed)"
 echo "[TEAM11] Press Ctrl+C when finished viewing the Gazebo window."
 wait "$WORLD_PID" || true
