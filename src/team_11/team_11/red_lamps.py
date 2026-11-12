@@ -13,18 +13,18 @@ def count_red_lamps(data, width, height, step, encoding):
     blue_index = 2 if red_index == 0 else 0
     view = memoryview(data)
     # Roof/sky region; avoid red sidewalls on the lower field of view.
-    ylo, yhi = int(height * .05), int(height * .65)
-    xs = [0] * width
+    # The gantry is ahead, high in the image. Avoid large red sidewalls.
+    xlo,xhi=int(width*.08),int(width*.72)
+    ylo,yhi=int(height*.12),int(height*.31)
     ys = [0] * height
     for y in range(ylo,yhi,2):
         base = y*step
-        for x in range(0,width,2):
+        for x in range(xlo,xhi,2):
             i = base + 3*x
             red = view[i+red_index]
             green = view[i+1]
             blue = view[i+blue_index]
             if red >= 180 and green <= 90 and blue <= 90 and red >= green*2:
-                xs[x] += 1
                 ys[y] += 1
     if max(ys[ylo:yhi] or [0]) < 2:
         return 0
@@ -35,7 +35,7 @@ def count_red_lamps(data, width, height, step, encoding):
     histogram = [0]*width
     for y in range(max(ylo,center-band),min(yhi,center+band+1),2):
         base=y*step
-        for x in range(0,width,2):
+        for x in range(xlo,xhi,2):
             i=base+3*x
             red,green,blue=view[i+red_index],view[i+1],view[i+blue_index]
             if red>=180 and green<=90 and blue<=90 and red>=2*green:
