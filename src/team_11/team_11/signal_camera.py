@@ -95,7 +95,7 @@ class SignalNode(Node):
             return struct.pack("!I",len(payload))+kind+payload+struct.pack(
                 "!I",zlib.crc32(kind+payload)&0xffffffff)
         image=b"".join(bytes([0])+row for row in rows)
-        png=(b"\\x89PNG\\r\\n\\x1a\\n"+
+        png=(b"\x89PNG\r\n\x1a\n"+
              chunk(b"IHDR",struct.pack("!2I5B",msg.width,msg.height,8,2,0,0,0))+
              chunk(b"IDAT",zlib.compress(image,3))+chunk(b"IEND",b""))
         dest=self.diag_dir/name
