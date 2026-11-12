@@ -6,6 +6,21 @@ class SignalTests(unittest.TestCase):
         g=StartGate()
         for i in range(40):
             self.assertFalse(g.observe(0,i*.1))
+    def test_single_complete_five_red_then_all_off(self):
+        g=StartGate()
+        self.assertFalse(g.observe(5,1.0))
+        self.assertIsNotNone(g.armed_at)
+        self.assertFalse(g.observe(0,1.2))
+        self.assertFalse(g.observe(0,1.3))
+        self.assertTrue(g.observe(0,1.4))
+
+    def test_one_four_red_frame_not_armed(self):
+        g=StartGate()
+        self.assertFalse(g.observe(4,1.0))
+        self.assertIsNone(g.armed_at)
+        for t in (1.1,1.2,1.3):
+            self.assertFalse(g.observe(0,t))
+
     def test_three_lamps_never_arms(self):
         g=StartGate()
         for i in range(10):
