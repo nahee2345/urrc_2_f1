@@ -36,35 +36,6 @@ def quaternion_yaw(q):
                       1.-2.*(q.y*q.y+q.z*q.z))
 
 
-def count_red_lamps(image: Image) -> int:
-    """Conservative five-column red sampling of the upward-facing start camera.
-
-    Counts red lamp columns, not road pixels. Invalid images return -1.
-    Camera geometry may need real Gazebo calibration on the competition PC.
-    """
-    w,h,step=int(image.width),int(image.height),int(image.step)
-    encoding=str(image.encoding).lower()
-    if w<200 or h<100 or encoding not in ("rgb8","bgr8") or step<w*3:
-        return -1
-    buf=image.data
-    if len(buf)<step*h:
-        return -1
-    red_indices=(0,1,2) if encoding=="rgb8" else (2,1,0)
-    counts=[0]*5
-    start=int(w*.22);end=int(w*.78)
-    for y in range(int(h*.18),int(h*.67),5):
-        row=y*step
-        for x in range(start,end,4):
-            i=row+3*x
-            r=int(buf[i+red_indices[0]])
-            g=int(buf[i+red_indices[1]])
-            b=int(buf[i+red_indices[2]])
-            if r>=135 and r>g*1.7 and r>b*1.7 and r-g>65:
-                idx=min(4,int((x-start)*5/max(1,end-start)))
-                counts[idx]+=1
-    return sum(v>=7 for v in counts)
-
-
 class Team11Control(Node):
     def __init__(self):
         super().__init__("team11_controller_11")
