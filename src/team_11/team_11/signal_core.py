@@ -31,7 +31,10 @@ class StartGate:
         if count >= self.required_lamps:
             self.lit_run += 1
             self.dark_run = 0
-            if self.lit_run >= self.lit_frames:
+            # All five red lamps form a distinctive complete pattern; at
+            # distant grids it may only be visible for a single camera frame.
+            # Four lamps still require two frames to reject transient noise.
+            if count == 5 or self.lit_run >= self.lit_frames:
                 if self.armed_at is None:
                     self.armed_at = stamp
                 self.last_lit_at = stamp
