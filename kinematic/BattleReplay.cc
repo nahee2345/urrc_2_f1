@@ -54,6 +54,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   team.lat=cfg->Get<double>("team_start_offset_m");teamStart=team.s;
   preferredLane=cfg->Get<double>("team_preferred_offset_m");
   initialLane=cfg->Get<int>("team_initial_lane");
+  teamGrid=cfg->Get<int>("team_grid");
   lead.name="practice_s_09";lead.s=cfg->Get<double>("lead_start_s");lead.lat=-lateralOffset;
   rear.name="practice_rear_11";rear.s=cfg->Get<double>("rear_start_s");
   rear.lat=cfg->Get<double>("rear_start_offset_m");
@@ -63,7 +64,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY lane="<<initialLane<<" team grid1 10m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 10m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -78,9 +79,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(!started){
     if(!startSignal.load())return;
     started=true;begin=now;last=now;lastCsv=now;
-    // Each batch case begins at grid 1 then smoothly joins its selected lane.
-    if(std::fabs(team.lat-preferredLane)>.05)change(preferredLane,now);
-    std::cout<<"[BATTLE] START (all five lights off)"<<std::endl;
+    // Start at the actual official grid, then request a safe lane join.
+    joinPending=std::fabs(team.lat-preferredLane)>.05;
+    std::cout<<"[BATTLE] START grid="<<teamGrid<<" (all five lights off)"<<std::endl;
   }
   double elapsed=now-begin,dt=std::clamp(now-last,0.,.05);last=now;
   if(dt<=0)return;
@@ -95,24 +96,57 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   double frontTTC=team.v>lead.v+.01?frontGap/(team.v-lead.v):1e6;
   double rearTTC=rear.v>team.v+.01?rearGap/(rear.v-team.v):1e6;
   bool corner=fabs(curve(team.s))>.18;
-  // Defender: rear TTC below 5s and shrinking; avoid a late lane block.
-  if(!team.changing&&!defended&&!corner&&rearGap>1.5&&rearTTC<=5&&rearTTC<previousRearTTC-.002){
-   double target=fabs(team.lat)<lateralOffset*.3?lateralOffset:0.;
-   if(fabs(target-team.lat)>.2 && safe(target,elapsed)){
-     change(target,now);defended=true;
-     std::cout<<"[BATTLE] DEFENSE TTC="<<rearTTC<<"s target_offset="<<target<<std::endl;
-   }
-  }
-  // Overtake only when front TTC <=3s, never dive into a swinging practice car.
-  if(!team.changing&&!passed&&!corner&&frontGap>1.0&&frontGap<20.&&frontTTC<=3.){
-   for(const double dst:{-lateralOffset,0.,lateralOffset}){
-    if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-    if(safe(dst,elapsed)){
-      change(dst,now);attempted=true;
-      std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC<<"s offset="<<dst<<std::endl;
-      break;
+  // During a committed lane change, evaluate the moving path again.
+  // A late hazard triggers a safer alternative, never a blind fixed replay.
+  if(team.changing){
+    const double risk=forecast(team.to,elapsed,now,true);
+    if(risk<0){
+      const double hold=forecast(team.lat,elapsed,now,false);
+      const double back=forecast(team.from,elapsed,now,false);
+      if(back>hold+.15 && back>0)change(team.from,now);
+      else if(hold>0)change(team.lat,now);
+      emergencyBraking=true;
+      std::cout<<"[BATTLE] REPLAN_UNSAFE change target="<<team.to
+               <<" forecast="<<risk<<std::endl;
     }
-   }
+  } else if(joinPending){
+    if(forecast(preferredLane,elapsed,now,false)>0){
+      change(preferredLane,now);
+      joinPending=false;
+      std::cout<<"[BATTLE] JOIN initial lane="<<initialLane<<std::endl;
+    }
+  } else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3.){
+    // Select the safest free candidate, rather than the first one in a list.
+    double bestScore=-1e9,bestTarget=team.lat;
+    for(const double dst:{-lateralOffset,0.,lateralOffset}){
+      if(fabs(dst-team.lat)<.2*lateralOffset)continue;
+      const double score=forecast(dst,elapsed,now,false);
+      const double changeCost=.04*fabs(dst-team.lat);
+      if(score>0 && score-changeCost>bestScore){
+        bestScore=score-changeCost;bestTarget=dst;
+      }
+    }
+    if(fabs(bestTarget-team.lat)>.2*lateralOffset){
+      change(bestTarget,now);attempted=true;
+      std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
+               <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
+    }
+  } else if(!corner && !defended && rearGap>1.5 && rearTTC<=5 &&
+            rearTTC<previousRearTTC-.002 && frontTTC>3.){
+    // Defend by early positioning only. Never swing into a car already alongside.
+    // Keep the current lane when it already blocks a safe overtaking corridor.
+    double bestScore=-1e9,bestTarget=team.lat;
+    const double desired=rear.lat>=0?lateralOffset:-lateralOffset;
+    for(const double dst:{team.lat,0.,desired}){
+      if(fabs(dst-team.lat)<.2*lateralOffset)continue;
+      const double score=forecast(dst,elapsed,now,false);
+      if(score>bestScore && score>0){bestScore=score;bestTarget=dst;}
+    }
+    if(fabs(bestTarget-team.lat)>.2*lateralOffset){
+      change(bestTarget,now);defended=true;
+      std::cout<<"[BATTLE] DEFENSE TTC="<<rearTTC
+               <<"s target_offset="<<bestTarget<<std::endl;
+    }
   }
   if(team.changing){
    const double t=(now-team.changeStart)/team.changeDuration;
@@ -131,6 +165,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    return std::clamp(v,0.,limit);
   };
   double vt=cruise(team,10),vl=cruise(lead,9),vr=cruise(rear,11);
+  // Hold a 1.5m/s reduction throughout every lane change.
+  if(team.changing)vt=std::min(vt,8.5);
+  if(emergencyBraking)vt=std::min(vt,4.0);
+  if(!team.changing && frontGap>2.0 && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<10.9)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
     std::cout<<"[BATTLE] PRACTICE BRAKING lead="<<vl<<" rear="<<vr<<std::endl;
@@ -221,24 +259,51 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   return true;
  }
- bool safe(double destination,double elapsed)const{
-  // Every 0.1s up to 3s: prevent predicted bounding-box overlap.
-  const double l[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
-  for(int i=1;i<=30;i++){
-    double future=i*.1;
-    Car temp=team;temp.s+=future*std::max(team.v,1.0);
-    temp.lat=team.lat+(destination-team.lat)*ease(future/2.5);
-    Pos p=pose(temp);
-    for(const Car*o:{&lead,&rear}){
-      Car sample=*o;sample.s+=future*o->v;
-      if(o==&lead){
-        int k=static_cast<int>((elapsed+future)/2);
-        sample.lat=l[k%4]+(l[(k%4)+1]-l[k%4])*ease(fmod(elapsed+future,2.)/2.);
+ // Predict both opponents' future occupancy and score each lane-change
+ // candidate. Negative means a predicted collision or >30deg equivalent
+ // steering. Positive means minimum centre clearance above collision radius.
+ double forecast(double destination,double elapsed,double now,bool active)const{
+  double minGap=1e6;
+  Pos lastP=pose(team);
+  Pos lastLastP=lastP;
+  double lastHeading=lastP.yaw;
+  for(int i=1;i<=50;i++){
+    const double t=i*.1;
+    Car candidate=team;
+    candidate.s+=std::max(0.5,team.v)*t;
+    const double from=active?team.from:team.lat;
+    const double start=active?team.changeStart:now;
+    const double duration=active?team.changeDuration:2.5;
+    candidate.lat=from+(destination-from)*ease((now+t-start)/duration);
+    Pos p=pose(candidate);
+    const double ds=hypot(p.x-lastP.x,p.y-lastP.y);
+    if(ds>1e-4){
+      p.yaw=atan2(p.y-lastP.y,p.x-lastP.x);
+      if(i>1){
+        const double k=fabs(wrap(p.yaw-lastHeading))/std::max(.001,ds);
+        if(atan(.36*k)>30.*3.141592653589793/180. + .001)return -2.;
       }
-      if(collide(p,pose(sample)))return false;
+      lastHeading=p.yaw;
     }
+    for(const Car*o:{&lead,&rear}){
+      Car sample=*o;
+      sample.s+=t*std::min(o==&lead?9.:11.,std::max(o->v,0.)+6.*t);
+      if(o==&lead){
+        const double seq[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
+        const double absolute=elapsed+t;
+        const int period=static_cast<int>(absolute/2.);
+        const int phase=period%4;
+        sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*ease((absolute-2.*period)/2.);
+      }
+      const Pos op=pose(sample);
+      const double center=hypot(p.x-op.x,p.y-op.y);
+      minGap=std::min(minGap,center);
+      // Inflate both future footprints with 0.15m positional uncertainty.
+      if(center<LEN+.15 && collide(p,op))return -1.;
+    }
+    lastLastP=lastP;lastP=p;
   }
-  return true;
+  return minGap-(LEN+.15);
  }
  void change(double dest,double now){
   team.from=team.lat;team.to=dest;team.changeStart=now;
@@ -256,7 +321,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
- int initialLane=1;
+ bool joinPending=false,emergencyBraking=false;
+ int initialLane=1,teamGrid=1;
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
 };
 }
