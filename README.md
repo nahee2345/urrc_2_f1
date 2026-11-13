@@ -36,3 +36,32 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh monza 1
 플러그인 구동 및 신호등 로그는 `log/kinematic/<track>_lane<번호>/<실행시각>/`에 남습니다. `[FIXED ROUTE] PASS_LAP` 출력은 플러그인이 **사전 경로 1랩의 위치 명령 재생을 완료했다는 의미**이며, 센서 기반 주행 성공이나 물리 차량 조향 성공을 뜻하지 않습니다.
 
 현재 GitHub에 코드는 반영되어 있으나 Ubuntu/Gazebo 실환경 실행 및 표시 위치는 아직 확인되지 않았습니다.
+
+## 1·2·3번 경로별 6개 맵 연속 시험
+
+```bash
+cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run_all.sh
+```
+
+위 명령 하나로 다음 **18개 테스트를 순서대로** 실행합니다.
+
+- 1번(오른쪽): Monza → Spa → Monaco → COTA → Hungaroring → Baku
+- 2번(중앙): Monza → Spa → Monaco → COTA → Hungaroring → Baku
+- 3번(왼쪽): Monza → Spa → Monaco → COTA → Hungaroring → Baku
+
+각 테스트는 **1번 그리드**에서 출발하며, 공식 5등 신호 소등 후 선택한 고정 경로를 1랩 재생합니다. 1랩 완료를 확인하면 해당 Gazebo를 자동 종료하고 다음 트랙으로 넘어갑니다. 실패한 테스트도 로그에 남기고 다음 테스트를 진행합니다.
+
+테스트 결과는 `log/batch/<실행시각>/summary.csv` 및 각 케이스 `.log`에 저장됩니다.
+
+전체 실행 속도는 기본 10m/s이며 `bash run_all.sh 15`처럼 선택할 수 있습니다.
+
+### 트랙 기준 차량 높이
+
+`urrc_2` 연습차량의 **바퀴 최하단과 노면 사이 3mm 간격**을 그대로 적용합니다.
+
+- TEAM 11 바퀴 최하단은 `base_link`보다 90mm 아래입니다.
+- 따라서 TEAM 11은 트랙 기준 `base_link`를 **93mm** 높이로 두어야 바퀴 하단이 노면보다 3mm 위에 있습니다.
+- 연습차량 모델의 원점 높이 `3mm`를 TEAM 11에 직접 적용하면 차체와 바퀴가 노면 안으로 들어가기 때문에 그렇게 하지 않았습니다.
+- 원본 차량 모델과 공식 트랙·벽 모델은 변경하지 않습니다. 실행용 복사 모델의 초기 스폰 및 재생 Z 오프셋만 93mm로 맞춥니다.
+
+**주의:** PASS는 저장된 좌표 1랩 재생 완료를 뜻하며, Gazebo 실주행 및 벽과의 실제 접촉 검증이 끝났다는 뜻은 아닙니다.
