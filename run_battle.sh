@@ -121,7 +121,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE team11 10m/s, lead S 9m/s/2sec, grid10 rear 11m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE team11 max 12m/s (lane change max 10.5m/s), lead S 9m/s/2sec, grid10 rear 11m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
