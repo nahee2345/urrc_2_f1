@@ -40,6 +40,30 @@ class StrategyTests(unittest.TestCase):
         self.track.curvature=[.2]*self.track.n
         reduced=self.planner.step(self.car(5,speed=15),[],19.2)
         self.assertLess(reduced.speed,15.0)
+    def test_speed_profile_corner_8_exit_10_long_straight_15(self):
+        self.track.curvature=[0.0]*self.track.n
+        self.track.curvature[90]=.20
+        p=Planner(self.track,1)
+        # More than 70 m from the next bend permits 15 m/s.
+        self.assertAlmostEqual(p._corner_speed(5,15)[1],15.0)
+        # Speed target smoothly drops towards 8 before corner entry.
+        before=p._corner_speed(82,15)[1]
+        self.assertGreaterEqual(before,8.0)
+        self.assertLess(before,10.0)
+        self.assertAlmostEqual(p._corner_speed(90,15)[1],8.0)
+        self.assertAlmostEqual(p._corner_speed(91,15)[1],10.0)
+        self.assertAlmostEqual(p._corner_speed(110,15)[1],15.0)
+
+    def test_speed_command_acceleration_and_braking_are_bounded(self):
+        self.track.curvature=[0.0]*self.track.n
+        p=Planner(self.track,1)
+        a=p.step(self.car(5,speed=4),[],1.0)
+        b=p.step(self.car(5,speed=4),[],1.05)
+        self.assertLessEqual(b.speed-a.speed,3.5*.05+1e-8)
+        self.track.curvature=[.2]*self.track.n
+        c=p.step(self.car(5,speed=10),[],1.10)
+        self.assertLessEqual(b.speed-c.speed,4.0*.05+1e-8)
+
     def test_wait_gate(self):
         cmd=self.planner.step(self.car(5),[],1,False)
         self.assertEqual(cmd.speed,0)
