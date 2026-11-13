@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(team11_fixed_replay LANGUAGES CXX)
+find_package(gz-sim8 REQUIRED)
+find_package(gz-transport13 REQUIRED)
+find_package(gz-msgs10 REQUIRED)
+add_library(team11_fixed_replay SHARED FixedRouteReplay.cc)
+set_target_properties(team11_fixed_replay PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(team11_fixed_replay PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
