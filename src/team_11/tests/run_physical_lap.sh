@@ -18,6 +18,20 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 cd "$ROOT"
+# ROS 2 Jazzy on Ubuntu 24.04 installs rclpy for the system Python 3.12.
+# Avoid venv/pyenv/conda python that cannot see /opt/ros/jazzy packages.
+ROS_PYTHON=/usr/bin/python3
+if [[ ! -x "$ROS_PYTHON" ]]; then
+  echo "[TEAM11] FAIL: /usr/bin/python3 not installed" >&2
+  exit 2
+fi
+if ! "$ROS_PYTHON" -c 'import rclpy; import nav_msgs.msg; import geometry_msgs.msg' 2>"$LOG/ros_python_check.log"; then
+  echo "[TEAM11] FAIL: ROS Jazzy Python imports unavailable using $ROS_PYTHON" >&2
+  echo "[TEAM11] Check: source /opt/ros/jazzy/setup.bash; /usr/bin/python3 -c 'import rclpy'" >&2
+  cat "$LOG/ros_python_check.log" >&2
+  exit 2
+fi
+echo "[TEAM11] ROS Python OK: $ROS_PYTHON"
 if gz service -l 2>/dev/null | grep -Fxq "/world/$TRACK/create"; then
   echo "Another $TRACK world is running; close it before practice" >&2
   exit 2
@@ -75,7 +89,7 @@ if [[ "${TEAM11_PRACTICE_FOLLOW:-1}" == "1" ]]; then
 fi
 echo "[TEAM11] Physical lap trial started; no start signal required."
 set +e
-PYTHONPATH="$TEAM" python3 "$TEAM/tests/physical_lap_trial.py" \
+PYTHONPATH="$TEAM" "$ROS_PYTHON" "$TEAM/tests/physical_lap_trial.py" \
   --track "$TRACK" --grid "$GRID" --routes "$LOG/routes" \
   --timeout "${TEAM11_LAP_TIMEOUT:-180}" --output "$LOG/result.json" \
   2>&1 | tee "$LOG/trial.log"
