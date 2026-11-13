@@ -31,7 +31,15 @@ if ! "$ROS_PYTHON" -c 'import rclpy; import nav_msgs.msg; import geometry_msgs.m
   cat "$LOG/ros_python_check.log" >&2
   exit 2
 fi
-echo "[TEAM11] ROS Python OK: $ROS_PYTHON"
+# Do not replace PYTHONPATH with the team source directory: ROS2's
+# /opt/ros/jazzy/lib/python3.12/site-packages is supplied via PYTHONPATH.
+export PYTHONPATH="$TEAM${PYTHONPATH:+:$PYTHONPATH}"
+if ! "$ROS_PYTHON" -c 'import rclpy; from strategy import Planner; from team_11.stage5_core import convert' 2>"$LOG/python_import_check.log"; then
+  echo "[TEAM11] FAIL: trial Python imports are unavailable" >&2
+  cat "$LOG/python_import_check.log" >&2
+  exit 2
+fi
+echo "[TEAM11] ROS + TEAM 11 Python imports OK: $ROS_PYTHON"
 if gz service -l 2>/dev/null | grep -Fxq "/world/$TRACK/create"; then
   echo "Another $TRACK world is running; close it before practice" >&2
   exit 2
@@ -89,7 +97,7 @@ if [[ "${TEAM11_PRACTICE_FOLLOW:-1}" == "1" ]]; then
 fi
 echo "[TEAM11] Physical lap trial started; no start signal required."
 set +e
-PYTHONPATH="$TEAM" "$ROS_PYTHON" "$TEAM/tests/physical_lap_trial.py" \
+"$ROS_PYTHON" "$TEAM/tests/physical_lap_trial.py" \
   --track "$TRACK" --grid "$GRID" --routes "$LOG/routes" \
   --timeout "${TEAM11_LAP_TIMEOUT:-180}" --output "$LOG/result.json" \
   2>&1 | tee "$LOG/trial.log"
