@@ -313,8 +313,7 @@ class Planner:
             if self.target == self.lane or self._blocked(self.target, ego, others, index):
                 desired_speed = min(desired_speed, max(0.0, nearest[1].speed +
                                                     .5 * (nearest[0] - 2.0)))
-        if self.mode in ("PASS", "DEFEND") and not sharp:
-            desired_speed = min(15.0, desired_speed + .5)
+        # Tactics never override the 8/10/15 m/s curvature speed profile.
         # Separate braking and acceleration slopes.
         desired_speed = clamp(desired_speed, self.last_speed - 4.0 * dt,
                               self.last_speed + 3.5 * dt)
