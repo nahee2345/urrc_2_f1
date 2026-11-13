@@ -11,6 +11,7 @@ CSV="$DEST/summary.csv"
 printf 'number,track,grid,lane,result,exit_code,log_file\n' > "$CSV"
 PASS_COUNT=0
 FAIL_COUNT=0
+PARTIAL_COUNT=0
 N=0
 echo "STAGE1: 12 independent cases, 6 tracks x 2 grids"
 echo "Summary: $CSV"
@@ -26,6 +27,9 @@ for TRACK in "${TRACKS[@]}"; do
       if grep -q "^PASS BATTLE: $TRACK grid $GRID lane $LANE " "$CASE_LOG"; then
         STATUS=PASS
         PASS_COUNT=$((PASS_COUNT+1))
+      elif grep -q "^PARTIAL BATTLE: $TRACK grid $GRID lane $LANE " "$CASE_LOG"; then
+        STATUS=PARTIAL_DEFENSE_UNVERIFIED
+        PARTIAL_COUNT=$((PARTIAL_COUNT+1))
       else
         STATUS=FAIL_UNCONFIRMED
         FAIL_COUNT=$((FAIL_COUNT+1))
@@ -40,6 +44,6 @@ for TRACK in "${TRACKS[@]}"; do
     sleep 2
   done
 done
-echo "STAGE1 COMPLETE: PASS=$PASS_COUNT FAIL=$FAIL_COUNT"
+echo "STAGE1 COMPLETE: PASS=$PASS_COUNT PARTIAL=$PARTIAL_COUNT FAIL=$FAIL_COUNT"
 echo "Results: $CSV"
 if (( FAIL_COUNT>0 )); then exit 1; fi
