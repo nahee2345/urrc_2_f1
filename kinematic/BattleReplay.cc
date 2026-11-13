@@ -64,7 +64,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 10m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 12m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -126,7 +126,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }else if(now-changeFinishedAt<2.0){
     // Hysteresis prevents immediate re-selection of the opposite lane.
-  }else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3.){
+  }else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3. &&
+            (fabs(team.lat-lead.lat)<WID+.18 ||
+             forecast(team.lat,elapsed,now,false,team.v,2.5)<=-0.5)){
+    // Never turn into another lane merely to "overtake" a vehicle already
+    // travelling safely in the adjacent lane; accelerate past it instead.
     double bestScore=-1e9,bestTarget=team.lat;
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
