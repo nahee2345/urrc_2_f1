@@ -253,7 +253,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" minimum_rear_ttc="<<minRearTTC<<" attempts="<<attemptCount
              <<" replans="<<replanCount<<" practice_braking="<<braked
              <<" minimum_center_m="<<minimumCenter<<std::endl;
-    finish(passed?"PASS_BATTLE":"FAIL_NO_OVERTAKE");return;
+    finish(!passed?"FAIL_NO_OVERTAKE":(defended?"PASS_BATTLE":"PARTIAL_DEFENSE_UNVERIFIED"));return;
   }
   if(elapsed>300)finish("FAIL_TIMEOUT");
   previousRearTTC=rearTTC;
