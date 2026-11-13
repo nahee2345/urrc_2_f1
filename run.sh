@@ -4,7 +4,11 @@ set -Eeuo pipefail
 # Optional 3-car S-curve/overtake/defense trial. Existing fixed-lane runs unchanged.
 if [[ "${1:-}" == "battle" ]]; then
   shift
-  exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_battle.sh" "${1:-monza}"
+  ROOT_BATTLE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ "${1:-}" == "all" ]]; then
+    exec bash "$ROOT_BATTLE/run_all_battle.sh"
+  fi
+  exec bash "$ROOT_BATTLE/run_battle.sh" "${1:-monza}" "${2:-1}"
 fi
 # 1=right 2=centre 3=left; all cars spawn at official grid-1 centre.
 TRACK="${1:-monza}"
