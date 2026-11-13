@@ -15,8 +15,8 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(narrow, 0)
         self.assertLess(paths[1][0]["y_m"], paths[2][0]["y_m"])
         self.assertLess(paths[2][0]["y_m"], paths[3][0]["y_m"])
-        self.assertAlmostEqual(paths[1][0]["y_m"], -0.575)
-        self.assertAlmostEqual(paths[3][0]["y_m"], 0.575)
+        self.assertAlmostEqual(paths[1][0]["y_m"], -0.965)
+        self.assertAlmostEqual(paths[3][0]["y_m"], 0.965)
 
     def test_wall_clearance(self):
         paths, _ = generate(self.track)
@@ -24,7 +24,17 @@ class RouteTests(unittest.TestCase):
             for p in paths[lane]:
                 self.assertGreaterEqual(
                     p["road_width_m"]/2 - abs(p["lane_offset_m"]) - 0.125,
-                    0.5 - 1e-9)
+                    0.11 - 1e-9)
+
+    def test_legacy_constant_route_spacing_when_road_width_changes(self):
+        changing=[dict(p,road_width_m=w) for p,w in
+                  zip(self.track,(2.4,3.0,4.0,2.8,2.6))]
+        paths,_=generate(changing)
+        for lane in (1,3):
+            values=[p["lane_offset_m"] for p in paths[lane]]
+            self.assertTrue(all(abs(v-values[0])<1e-10 for v in values))
+        self.assertAlmostEqual(paths[1][0]["lane_offset_m"],-.965)
+        self.assertAlmostEqual(paths[3][0]["lane_offset_m"],.965)
 
     def test_narrow_road_forbids_changes(self):
         data = [dict(p, road_width_m=1.2) for p in self.track]
