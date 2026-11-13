@@ -12,6 +12,7 @@
 #include <gz/math/Pose3.hh>
 #include <sdf/Element.hh>
 #include <atomic>
+#include <chrono>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -40,6 +41,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const std::string topic=cfg->Get<std::string>("start_topic");
   node.Subscribe(topic,&BattleReplay::Start,this);
   ready=node.Advertise<gz::msgs::Boolean>(topic+"/ready");
+  gz::msgs::Boolean readyMsg;readyMsg.set_data(true);ready.Publish(readyMsg);
   std::ifstream src(cfg->Get<std::string>("centerline_file"));
   std::string row;std::getline(src,row);
   while(std::getline(src,row)){
@@ -50,6 +52,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   lateralOffset=cfg->Get<double>("lane_offset_m");
   team.name="team_11";team.s=cfg->Get<double>("team_start_s");
   team.lat=cfg->Get<double>("team_start_offset_m");teamStart=team.s;
+  preferredLane=cfg->Get<double>("team_preferred_offset_m");
+  initialLane=cfg->Get<int>("team_initial_lane");
   lead.name="practice_s_09";lead.s=cfg->Get<double>("lead_start_s");lead.lat=-lateralOffset;
   rear.name="practice_rear_11";rear.s=cfg->Get<double>("rear_start_s");
   rear.lat=cfg->Get<double>("rear_start_offset_m");
@@ -59,7 +63,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY team grid1 10m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY lane="<<initialLane<<" team grid1 10m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -74,6 +78,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(!started){
     if(!startSignal.load())return;
     started=true;begin=now;last=now;lastCsv=now;
+    // Each batch case begins at grid 1 then smoothly joins its selected lane.
+    if(std::fabs(team.lat-preferredLane)>.05)change(preferredLane,now);
     std::cout<<"[BATTLE] START (all five lights off)"<<std::endl;
   }
   double elapsed=now-begin,dt=std::clamp(now-last,0.,.05);last=now;
@@ -249,7 +255,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
- double previousRearTTC=1e6,minimumCenter=1e9;
+ double previousRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
+ int initialLane=1;
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
 };
 }
