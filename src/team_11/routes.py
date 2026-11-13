@@ -13,7 +13,7 @@ from pathlib import Path
 
 TRACKS = ("monza", "spa", "monaco", "cota", "hungaroring", "baku")
 CAR_WIDTH_M = 0.25
-WALL_CLEARANCE_M = 0.50
+WALL_CLEARANCE_M = 0.11
 MIN_LANE_SEPARATION_M = 0.15
 
 def track_package(path: str | None = None) -> Path:
@@ -56,13 +56,17 @@ def read_centerline(path: Path):
 
 def generate(centerline, car_width=CAR_WIDTH_M, clearance=WALL_CLEARANCE_M):
     lanes = {1: [], 2: [], 3: []}
-    narrow_points = 0
+    # Restore the pre-reset route spacing: one constant offset across the
+    # complete circuit, selected from the narrowest road segment.
+    # No lateral wandering when the map's width estimate changes.
+    minimum_width=min(p["road_width_m"] for p in centerline)
+    maximum=max(0.0, minimum_width/2-car_width/2-clearance)
+    narrow_points=0
     for p in centerline:
         # Positive offset is driver's left; right-hand lane gets a negative offset.
-        maximum = max(0.0, p["road_width_m"] / 2 - car_width / 2 - clearance)
         narrow = maximum < MIN_LANE_SEPARATION_M
         if narrow:
-            narrow_points += 1
+            narrow_points+=1
         yaw = p["yaw_rad"]
         left_x, left_y = -math.sin(yaw), math.cos(yaw)
         for number, offset in ((1, -maximum), (2, 0.0), (3, maximum)):
@@ -98,7 +102,8 @@ def export_tracks(package: Path, output: Path):
                 "car_width_m": CAR_WIDTH_M, "wall_clearance_m": WALL_CLEARANCE_M,
                 "offset_sign": "positive is left",
                 "lane_order": "1=right,2=center,3=left",
-                "loop": True, "source_width_quality": "estimated; verify collision geometry"}
+                "loop": True, "source_width_quality": "estimated; verify collision geometry",
+                "constant_route_spacing_m": abs(lanes[3][0]["lane_offset_m"])}
         (dst / "metadata.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         summary[track] = meta
     return summary
