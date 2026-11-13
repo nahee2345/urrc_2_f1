@@ -23,8 +23,9 @@ def grid_lateral(point,grid):
     return ((float(grid["x"])-point["x"])*(-math.sin(yaw))+
             (float(grid["y"])-point["y"])*math.cos(yaw))
 
-def build(track,lib,output):
-    result=build_single(track,1,lib,output,10.0)
+def build(track,lib,output,lane=1):
+    if lane not in (1,2,3):raise ValueError('Lane must be 1..3')
+    result=build_single(track,lane,lib,output,10.0)
     meta=json.loads((PACKAGE/"tracks"/"processed"/f"{track}.json").read_text())
     grids={int(g["position"]):g for g in meta["grid"]}
     if 1 not in grids or 10 not in grids:raise ValueError("Required grid 1 and grid 10 missing")
@@ -64,6 +65,8 @@ def build(track,lib,output):
       "log_file":str((output/"battle_state.csv").resolve()),
       "lap_length_m":loop,
       "lane_offset_m":offset,
+      "team_initial_lane":lane,
+      "team_preferred_offset_m":{1:-offset,2:0.0,3:offset}[lane],
       "team_start_s":g1s,
       "team_start_offset_m":grid_lateral(pts[g1i],grids[1]),
       "lead_start_s":ahead,
@@ -88,6 +91,7 @@ def build(track,lib,output):
     colour(result["vehicle_file"],rear_model,"0.10 0.30 0.98 1")
     result.update({
       "mode":"battle",
+      "team_initial_lane":lane,
       "lead_model":str(lead_model),
       "rear_model":str(rear_model),
       "start_topic":values["start_topic"],
@@ -112,7 +116,8 @@ def build(track,lib,output):
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--track",choices=("monza","spa","monaco","cota","hungaroring","baku"),required=True)
+    p.add_argument("--lane",type=int,choices=(1,2,3),default=1)
     p.add_argument("--plugin",type=Path,required=True)
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
-    build(a.track,a.plugin,a.output)
+    build(a.track,a.plugin,a.output,a.lane)
