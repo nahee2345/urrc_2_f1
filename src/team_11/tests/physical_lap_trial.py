@@ -20,6 +20,7 @@ from nav_msgs.msg import Odometry
 from strategy import Planner, Track, Vehicle
 from team_11.stage5_core import convert
 from team_11.practice_frame import local_to_world, wrap_angle, read_spawn
+from team_11.restored_follower import RestoredFollower
 
 class LapTrial(Node):
     def __init__(self, args):
@@ -29,6 +30,7 @@ class LapTrial(Node):
         self.spawn=read_spawn(Path(args.official),args.track,args.grid)
         self.get_logger().info("FRAME odometry=model_local; spawn=(%.3f,%.3f,%.3f)" % self.spawn)
         self.planner=Planner(self.track,spawn_lane=1 if args.grid%2 else 3,wheelbase=.36)
+        self.follower=RestoredFollower(self.track,initial_lane=1 if args.grid%2 else 3)
         self.pub=self.create_publisher(Twist,"/model/team_11/cmd_vel_11",10)
         self.sub=self.create_subscription(
             Odometry,"/model/team_11/odometry_11",self.on_odom,10)
@@ -124,8 +126,15 @@ class LapTrial(Node):
         if command.mode=="STOP":
             self.stop("FAIL_CONTROLLER_"+command.reason.replace(" ","_"))
             return
-        # Planner steer is left-positive. stage5_core expects right-positive.
-        linear,angular=convert(command.speed,-command.steer,True,True,True)
+        # Restore prior 18m quintic lane interpolation + bounded preview steering.
+        # The strategy planner selects ONLY the lane and 8/10/15 speed target.
+        # +steer is left-positive, so the Gazebo adapter takes its negative.
+        try:
+            follow=self.follower.guidance(x,y,yaw,speed,wall,command.lane)
+        except ValueError as exc:
+            self.stop("FAIL_GUIDANCE_"+str(exc).replace(" ","_"))
+            return
+        linear,angular=convert(command.speed,-follow.steer,True,True,True)
         output=Twist()
         output.linear.x=linear
         output.angular.z=angular
@@ -133,8 +142,8 @@ class LapTrial(Node):
         curvature=self.track.curvature[idx]
         self.records.append((round(wall-self.started_wall,3),
             round(self.distance,3),round(x,4),round(y,4),
-            round(speed,3),round(command.speed,3),round(math.degrees(command.steer),3),
-            self.planner.target,command.mode,round(curvature,5),round(offset,3)))
+            round(speed,3),round(command.speed,3),round(math.degrees(follow.steer),3),
+            follow.target_lane,command.mode,round(curvature,5),round(offset,3)))
         if wall-self.last_info>5:
             self.get_logger().info(
                 "PROGRESS %.1fm/%.1fm speed %.2f/%.2f cmd target lane %d" %
@@ -169,7 +178,7 @@ class LapTrial(Node):
             "corner_actual_speed_max_ms":round(max(corner),2) if corner else None,
             "straight_actual_speed_max_ms":round(max(long_straight),2) if long_straight else None,
             "samples":len(self.records),"measurements_csv":str(csvpath),
-            "note":"Physical Gazebo odometry; signal lights disabled for practice only"}
+            "note":"Prior quintic route follower restored; actual Ackermann physics used. Signal lights disabled for practice only"}
         self.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",
                                encoding="utf-8")
         print(json.dumps(result,ensure_ascii=False,indent=2),flush=True)
