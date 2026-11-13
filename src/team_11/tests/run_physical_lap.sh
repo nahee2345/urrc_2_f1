@@ -98,7 +98,7 @@ fi
 echo "[TEAM11] Physical lap trial started; no start signal required."
 set +e
 "$ROS_PYTHON" "$TEAM/tests/physical_lap_trial.py" \
-  --track "$TRACK" --grid "$GRID" --routes "$LOG/routes" \
+  --track "$TRACK" --grid "$GRID" --routes "$LOG/routes" --official "$OFFICIAL" \
   --timeout "${TEAM11_LAP_TIMEOUT:-180}" --output "$LOG/result.json" \
   2>&1 | tee "$LOG/trial.log"
 result="${PIPESTATUS[0]}"
