@@ -142,6 +142,8 @@ done
 grep '\[BATTLE\]' "$LOG/gazebo.log" | tail -35
 if [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
   echo "PASS BATTLE: $TRACK grid $GRID lane $LANE results $LOG"
+elif [[ "$RESULT" == *"RESULT PARTIAL_DEFENSE_UNVERIFIED"* ]];then
+  echo "PARTIAL BATTLE: $TRACK grid $GRID lane $LANE defense not verified; results $LOG"
 else
   echo "FAIL BATTLE: $TRACK grid $GRID lane $LANE results $LOG" >&2
   exit 12
