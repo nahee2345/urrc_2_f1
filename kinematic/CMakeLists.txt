@@ -6,3 +6,7 @@ find_package(gz-msgs10 REQUIRED)
 add_library(team11_fixed_replay SHARED FixedRouteReplay.cc)
 set_target_properties(team11_fixed_replay PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 target_link_libraries(team11_fixed_replay PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
+
+add_library(team11_battle_replay SHARED BattleReplay.cc)
+set_target_properties(team11_battle_replay PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(team11_battle_replay PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
