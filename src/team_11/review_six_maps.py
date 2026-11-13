@@ -92,6 +92,8 @@ def verify_case(name, grid, lane, track, grid_pose):
     corner_planner=Planner(track,spawn_lane=2)
     _,limit=corner_planner._corner_speed(corner_idx,15.0)
     row["corner_limit_ms"]=f"{limit:.3f}"
+    if not math.isclose(limit,8.0,abs_tol=1e-6):
+        failures.append("corner-target-not-8")
     # Start from cruising speed; output must slow rather than retain 15 m/s.
     corner_planner.last_speed=15.0
     corner_cmd=corner_planner.step(corner_vehicle,[],2.0)
