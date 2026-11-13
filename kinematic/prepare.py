@@ -8,6 +8,8 @@ import argparse
 import csv
 import json
 import math
+import shutil
+import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -92,9 +94,23 @@ def build(track,lane,library,output,speed=SPEED):
             car.remove(plugin)
     model_path=output/"replay_vehicle.sdf"
     model.write(model_path,encoding="utf-8",xml_declaration=True)
+    runtime=output/"resources"/"urrc_track_gazebo"
+    (runtime/"worlds").mkdir(parents=True,exist_ok=True)
+    (runtime/"scripts").mkdir(parents=True,exist_ok=True)
+    shutil.copy2(PACKAGE/"scripts"/"traffic_lights_v10.py",
+                 runtime/"scripts"/"traffic_lights_v10.py")
     race=ET.parse(PACKAGE/"worlds"/f"{track}_race.sdf")
     world=race.getroot().find("world")
     if world is None:raise ValueError("race world missing")
+    # Restore the original spectator cameras in the isolated race world.
+    # The unmodified official 5-lamp script waits for these camera topics.
+    sys.path.insert(0,str(PACKAGE))
+    from urrc_tracks.v10_assets import _add_cameras
+    with (PACKAGE/"tracks"/"processed"/f"{track}_centerline.csv").open(newline="") as f:
+        samples=[(float(r["x_m"]),float(r["y_m"]),float(r["z_m"]))
+                 for r in csv.DictReader(f)]
+    official=json.loads((PACKAGE/"tracks"/"processed"/f"{track}.json").read_text())
+    _add_cameras(world,track,official,samples)
     for p in list(world.findall("plugin")):
         if p.attrib.get("name")=="urrc::FixedRouteReplay":
             world.remove(p)
@@ -107,14 +123,17 @@ def build(track,lane,library,output,speed=SPEED):
     ET.SubElement(entry,"speed_mps").text=str(speed)
     ET.SubElement(entry,"z_offset_m").text=".09"
     ET.SubElement(entry,"route_file").text=str(route)
-    world_path=output/f"{track}_fixed.sdf"
+    world_path=runtime/"worlds"/f"{track}_fixed.sdf"
     race.write(world_path,encoding="utf-8",xml_declaration=True)
+    from import_6_tracks import active_signal_from_race
+    active_signal_from_race(world_path,runtime/"worlds"/f"{track}_signal_active.sdf")
     manifest={"track":track,"lane":lane,"lane_side":{1:"right",2:"centre",3:"left"}[lane],
               "grid":1,"grid_xyz_yaw":[float(grid["x"]),float(grid["y"]),
                     float(grid["road_z"])+.09,float(grid["yaw"])],
               "speed_mps":speed,"length_m":distance,"source_offset_m":offset,
               "target_offset_m":shift,"route_file":str(route),"world_file":str(world_path.resolve()),
               "vehicle_file":str(model_path.resolve()),"start_topic":topic,
+              "lights_script":str((runtime/"scripts"/"traffic_lights_v10.py").resolve()),
               "method":"Gazebo SetWorldPoseCmd directly; no wheel dynamics"}
     (output/"manifest.json").write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+"\n")
     return manifest
