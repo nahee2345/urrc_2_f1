@@ -68,6 +68,7 @@ data=json.load(open(sys.argv[1]))
 print(*data["grid_xyz_yaw"])
 PY
 )
+export GZ_SIM_RESOURCE_PATH="$OUT/resources/urrc_track_gazebo/models:$GZ_SIM_RESOURCE_PATH"
 WORLD="$OUT/resources/urrc_track_gazebo/worlds/${TRACK}_fixed.sdf"
 LIGHTS="$OUT/resources/urrc_track_gazebo/scripts/traffic_lights_v10.py"
 MODEL="$OUT/replay_vehicle.sdf"
@@ -139,7 +140,7 @@ SEEN=0
 MAX_REPLAY_WALL_S=${URRC_REPLAY_TIMEOUT_S:-300}
 STARTED_AT=$(date +%s)
 while kill -0 "$WORLD_PID" 2>/dev/null; do
-  if grep -q '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log"; then
+  if [[ "$SEEN" == 0 ]] && grep -q '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log"; then
     grep '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log" | tail -1
     SEEN=1
     if [[ "${URRC_BATCH:-0}" == 1 ]]; then
