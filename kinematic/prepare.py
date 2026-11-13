@@ -18,6 +18,12 @@ PACKAGE=BASE/"src"/"urrc_track_gazebo"
 CHASSIS=BASE/"src"/"team_11"/"models"/"team11_yellow_car"/"model.sdf"
 SPEED=10.0
 JOIN_METERS=8.0
+# The TEAM11 wheel bottoms are 0.090m below base_link; urrc_2 pace-car
+# wheel bottoms sit 0.003m over the road. Match that ground clearance,
+# not the different vehicle model's link-origin height.
+WHEEL_BOTTOM_BELOW_BASE_M=0.090
+TARGET_GROUND_CLEARANCE_M=0.003
+REPLAY_BASE_Z_OFFSET_M=WHEEL_BOTTOM_BELOW_BASE_M+TARGET_GROUND_CLEARANCE_M
 WHEELBASE_M=.36
 MAX_STEERING_DEG=30.0
 MAX_CURVATURE=math.tan(math.radians(MAX_STEERING_DEG))/WHEELBASE_M
@@ -149,7 +155,7 @@ def build(track,lane,library,output,speed=SPEED):
     entry=ET.SubElement(plugin,"car")
     ET.SubElement(entry,"name").text="team_11"
     ET.SubElement(entry,"speed_mps").text=str(speed)
-    ET.SubElement(entry,"z_offset_m").text=".09"
+    ET.SubElement(entry,"z_offset_m").text=f"{REPLAY_BASE_Z_OFFSET_M:.6f}"
     ET.SubElement(entry,"route_file").text=str(route)
     world_path=runtime/"worlds"/f"{track}_fixed.sdf"
     race.write(world_path,encoding="utf-8",xml_declaration=True)
@@ -158,8 +164,10 @@ def build(track,lane,library,output,speed=SPEED):
     active_signal_from_race(world_path,runtime/"worlds"/f"{track}_signal_active.sdf")
     manifest={"track":track,"lane":lane,"lane_side":{1:"right",2:"centre",3:"left"}[lane],
               "grid":1,"grid_xyz_yaw":[float(grid["x"]),float(grid["y"]),
-                    float(grid["road_z"])+.09,float(grid["yaw"])],
+                    float(grid["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grid["yaw"])],
               "speed_mps":speed,"length_m":distance,"source_offset_m":offset,
+              "wheel_ground_clearance_m":TARGET_GROUND_CLEARANCE_M,
+              "vehicle_base_link_z_above_road_m":REPLAY_BASE_Z_OFFSET_M,
               "max_equivalent_steering_deg":round(equivalent_steering,3),
               "steering_limit_deg":MAX_STEERING_DEG,
               "target_offset_m":shift,"route_file":str(route),"world_file":str(world_path.resolve()),
