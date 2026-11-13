@@ -2,7 +2,12 @@
 set -Eeuo pipefail
 # Run through one public command: bash run.sh battle monza
 TRACK="${1:-monza}"
-LANE="${2:-1}"
+GRID="${2:-1}"
+LANE="${3:-}"
+case "$GRID" in 1|2) ;; *) echo "Grid must be 1 or 2" >&2;exit 2;; esac
+if [[ -z "$LANE" ]];then
+  if [[ "$GRID" == 1 ]];then LANE=3;else LANE=1;fi
+fi
 case "$LANE" in 1|2|3) ;; *) echo "Lane must be 1, 2 or 3" >&2;exit 2;; esac
 case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *)
   echo "Valid tracks: monza spa monaco cota hungaroring baku" >&2;exit 2 ;;
@@ -10,7 +15,7 @@ esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PKG="$ROOT/src/urrc_track_gazebo"
-LOG="$ROOT/log/battle/${TRACK}_lane${LANE}/$(date +%Y%m%d_%H%M%S)"
+LOG="$ROOT/log/battle/${TRACK}_grid${GRID}_lane${LANE}/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"
 export GZ_PARTITION="urrc_battle_$(id -u)_$(date +%s)"
 export PYTHONUNBUFFERED=1
@@ -47,10 +52,10 @@ cmake --build "$ROOT/kinematic/build" --parallel 2 >>"$LOG/build.log" 2>&1 || {
 PLUGIN="$ROOT/kinematic/build/libteam11_battle_replay.so"
 [[ -f "$PLUGIN" ]] || { echo "Missing battle plugin library" >&2;exit 5; }
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}"
-echo "[4/6] Prepare 0.30m walls and grid 1 / grid 10 models"
+echo "[4/6] Prepare 0.30m walls and grid $GRID / grid 10 models"
 OUT="$LOG/prepared"
 /usr/bin/python3 "$ROOT/kinematic/prepare_battle.py" \
-  --track "$TRACK" --lane "$LANE" --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
+  --track "$TRACK" --grid "$GRID" --lane "$LANE" --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
     tail -80 "$LOG/prepare.log";exit 6;
 }
 export GZ_SIM_RESOURCE_PATH="$OUT/resources/urrc_track_gazebo/models:$GZ_SIM_RESOURCE_PATH"
@@ -116,7 +121,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK lane $LANE team11 10m/s, lead S 9m/s/2sec, grid10 rear 11m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE team11 10m/s, lead S 9m/s/2sec, grid10 rear 11m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
@@ -136,8 +141,8 @@ done
 [[ -n "$RESULT" ]] || { echo "FAIL: Gazebo closed before battle result" >&2;exit 11; }
 grep '\[BATTLE\]' "$LOG/gazebo.log" | tail -35
 if [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
-  echo "PASS BATTLE: $TRACK lane $LANE results $LOG"
+  echo "PASS BATTLE: $TRACK grid $GRID lane $LANE results $LOG"
 else
-  echo "FAIL BATTLE: $TRACK lane $LANE results $LOG" >&2
+  echo "FAIL BATTLE: $TRACK grid $GRID lane $LANE results $LOG" >&2
   exit 12
 fi
