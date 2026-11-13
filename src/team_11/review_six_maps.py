@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from routes import TRACKS, generate, read_centerline, track_package
+from routes import TRACKS, WALL_CLEARANCE_M, generate, read_centerline, track_package
 from strategy import Planner, Track, Vehicle
 from team_11.race_context import configure
 
@@ -79,7 +79,7 @@ def verify_case(name, grid, lane, track, grid_pose):
     if not 0<=cmd.speed<=15 or abs(cmd.steer)>math.radians(30)+1e-6:
         failures.append("control-limit")
     # A three-path test must respect actual permissible corridor geometry.
-    if abs(point["lane_offset_m"])+.125+.50>point["road_width_m"]/2+1e-5:
+    if abs(point["lane_offset_m"])+.125+WALL_CLEARANCE_M>point["road_width_m"]/2+1e-5:
         failures.append("lane-outside-estimated-road")
     # The centreline's tightest bend provides an actual map-specific brake test.
     corner_idx,peak=find_corner(track)
