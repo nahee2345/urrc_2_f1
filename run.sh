@@ -131,16 +131,30 @@ for _ in 1 2 3; do
 done
 echo "START: $TRACK, fixed lane $LANE, grid 1, $SPEED m/s"
 echo "Direct Gazebo SetWorldPoseCmd coordinate replay; no steering, lane changes, or physics control"
-echo "Gazebo running. One-lap completion will be reported; Ctrl+C closes."
+echo "Gazebo running. One-lap completion will be reported."
 SEEN=0
+# For batch mode, completion automatically closes this run and advances
+# to the next track. Interactive mode keeps the Gazebo window visible.
+# Safety timeout prevents a stuck Gazebo from blocking all 18 runs.
+MAX_REPLAY_WALL_S=${URRC_REPLAY_TIMEOUT_S:-300}
+STARTED_AT=$(date +%s)
 while kill -0 "$WORLD_PID" 2>/dev/null; do
-  if [[ "$SEEN" == 0 ]] && grep -q '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log"; then
+  if grep -q '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log"; then
     grep '\[FIXED ROUTE\] PASS_LAP' "$LOG/gazebo.log" | tail -1
     SEEN=1
+    if [[ "${URRC_BATCH:-0}" == 1 ]]; then
+      echo "BATCH PASS $TRACK lane $LANE; closing world for next test"
+      break
+    fi
+  fi
+  if [[ "${URRC_BATCH:-0}" == 1 ]] && (( $(date +%s) - STARTED_AT > MAX_REPLAY_WALL_S )); then
+    echo "BATCH FAIL: no confirmed lap within ${MAX_REPLAY_WALL_S}s; $LOG/gazebo.log" >&2
+    exit 12
   fi
   sleep 1
 done
 if [[ "$SEEN" == 0 ]]; then
-  echo "Gazebo ended before a confirmed lap; inspect $LOG/gazebo.log" >&2
+  echo "FAIL: Gazebo stopped without a confirmed lap; inspect $LOG/gazebo.log" >&2
   exit 11
 fi
+echo "PASS: $TRACK lane $LANE at $SPEED m/s; logs: $LOG"
