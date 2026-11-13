@@ -38,6 +38,46 @@ def points_for(track):
             raise ValueError(f"{track}: road too narrow for car")
     return rows,source
 
+def maximum_curvature(points,offset):
+    """Conservative geometric 3-point curvature over both outer lanes."""
+    n=len(points)
+    worst=0.0
+    for signed in (-offset,offset):
+        xyz=[(p["x_m"]-signed*math.sin(p["yaw_rad"]),
+              p["y_m"]+signed*math.cos(p["yaw_rad"])) for p in points]
+        for i in range(n):
+            a=xyz[i-1]
+            b=xyz[i]
+            c=xyz[(i+1)%n]
+            abx,aby=b[0]-a[0],b[1]-a[1]
+            bcx,bcy=c[0]-b[0],c[1]-b[1]
+            da=math.hypot(abx,aby)
+            db=math.hypot(bcx,bcy)
+            if min(da,db)<1e-8:
+                raise ValueError("degenerate lane point near a tight curve")
+            turn=abs(math.atan2(abx*bcy-aby*bcx,abx*bcx+aby*bcy))
+            curvature=2*math.sin(turn/2)/((da+db)/2)
+            worst=max(worst,curvature)
+    return worst
+
+def constrained_offset(points,requested):
+    # Tighten toward the wall only while the path still corresponds to
+    # <= 30 degrees of Ackermann-equivalent steering. The direct-pose
+    # simulator does not actuate these joints; this is route geometry.
+    margin=math.tan(math.radians(MAX_STEERING_DEG-.2))/WHEELBASE_M
+    if maximum_curvature(points,requested)<=margin:
+        return requested
+    lo,hi=0.0,requested
+    if maximum_curvature(points,lo)>margin:
+        raise ValueError("central track itself exceeds 30-degree steering constraint")
+    for _ in range(23):
+        mid=(lo+hi)/2
+        if maximum_curvature(points,mid)<=margin:
+            lo=mid
+        else:
+            hi=mid
+    return lo
+
 def build(track):
     points,source=points_for(track)
     n=len(points)
@@ -47,7 +87,8 @@ def build(track):
     if old_wall_gap<=0:
         raise ValueError(f"{track}: original offset already outside road")
     requested_gap=old_wall_gap/2
-    offset=available-max(SAFETY_MARGIN,requested_gap)
+    requested_offset=available-max(SAFETY_MARGIN,requested_gap)
+    offset=constrained_offset(points,requested_offset)
     if offset<.15:
         raise ValueError(f"{track}: lane offset below safe 0.15m")
     step=[]
@@ -93,6 +134,7 @@ def build(track):
               "previous_wall_gap_m":round(old_wall_gap,4),
               "requested_wall_gap_m":round(requested_gap,4),
               "effective_wall_gap_m":round(available-offset,4),
+              "geometry_limit_reduced_offset":offset<requested_offset-1e-5,
               "minimum_safety_margin_m":SAFETY_MARGIN,
               "wheelbase_m":WHEELBASE_M,
               "max_steering_deg":MAX_STEERING_DEG,
