@@ -78,6 +78,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   double elapsed=now-begin,dt=std::clamp(now-last,0.,.05);last=now;
   if(dt<=0)return;
+  // Preserve previous poses BEFORE lateral and longitudinal motion.
+  // Needed to orient each car along its actual diagonal travel tangent.
+  const Pos previousTeam=pose(team), previousLead=pose(lead), previousRear=pose(rear);
   const double lateral[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
   int period=static_cast<int>(elapsed/2.0);
   int phase=period%4;
@@ -134,6 +137,13 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     passed=true;std::cout<<"[BATTLE] OVERTAKE COMPLETED"<<std::endl;
   }
   Pos a=pose(team),b=pose(lead),c=pose(rear);
+  auto alignToMotion=[](Pos &next,const Pos &previous){
+    const double dx=next.x-previous.x,dy=next.y-previous.y;
+    if(std::hypot(dx,dy)>1e-5)next.yaw=std::atan2(dy,dx);
+  };
+  alignToMotion(a,previousTeam);
+  alignToMotion(b,previousLead);
+  alignToMotion(c,previousRear);
   for(auto pair:std::array<std::pair<Pos,Pos>,3>{{{a,b},{a,c},{b,c}}}){
     double dist=hypot(pair.first.x-pair.second.x,pair.first.y-pair.second.y);
     minimumCenter=std::min(minimumCenter,dist);
