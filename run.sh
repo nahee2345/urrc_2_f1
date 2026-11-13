@@ -5,6 +5,9 @@ set -Eeuo pipefail
 if [[ "${1:-}" == "battle" ]]; then
   shift
   ROOT_BATTLE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ "${1:-}" == "stage1" ]]; then
+    exec bash "$ROOT_BATTLE/run_stage1.sh"
+  fi
   if [[ "${1:-}" == "all" ]]; then
     exec bash "$ROOT_BATTLE/run_all_battle.sh"
   fi
