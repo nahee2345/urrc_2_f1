@@ -17,8 +17,11 @@ REPO=Path(__file__).resolve().parent
 SOURCE=REPO/"src"/"urrc_track_gazebo"/"tracks"/"processed"
 OUTPUT=REPO/"routes"
 CAR_HALF_WIDTH=.125
-SAFETY_MARGIN=.15
-DESIRED_OFFSET=.55
+SAFETY_MARGIN=.075  # Minimum permitted margin after requested tightening.
+OLD_OFFSET=.55
+WHEELBASE_M=.36
+MAX_STEERING_DEG=30.0
+MAX_CURVATURE_1PM=math.tan(math.radians(MAX_STEERING_DEG))/WHEELBASE_M
 
 def points_for(track):
     source=SOURCE/f"{track}_centerline.csv"
@@ -39,7 +42,12 @@ def build(track):
     points,source=points_for(track)
     n=len(points)
     min_width=min(p["road_width_m"] for p in points)
-    offset=min(DESIRED_OFFSET,min_width/2-CAR_HALF_WIDTH-SAFETY_MARGIN)
+    available=min_width/2-CAR_HALF_WIDTH
+    old_wall_gap=available-OLD_OFFSET
+    if old_wall_gap<=0:
+        raise ValueError(f"{track}: original offset already outside road")
+    requested_gap=old_wall_gap/2
+    offset=available-max(SAFETY_MARGIN,requested_gap)
     if offset<.15:
         raise ValueError(f"{track}: lane offset below safe 0.15m")
     step=[]
@@ -54,6 +62,8 @@ def build(track):
     output=OUTPUT/track
     output.mkdir(parents=True,exist_ok=True)
     counts={}
+    maximum_curvatures={}
+    maximum_equivalent_steers={}
     for lane,shift in ((1,-offset),(2,0.0),(3,offset)):
         xyz=[(p["x_m"]-shift*math.sin(p["yaw_rad"]),
               p["y_m"]+shift*math.cos(p["yaw_rad"]),
@@ -73,9 +83,24 @@ def build(track):
             writer.writerow(FIELDS)
             writer.writerows(data)
         counts[lane]=len(data)
+        maximum_curvatures[lane]=max(abs(row[6]) for row in data)
+        maximum_equivalent_steers[lane]=math.degrees(
+            math.atan(WHEELBASE_M*maximum_curvatures[lane]))
     metadata={"track":track,"route_order":{"1":"right","2":"center","3":"left"},
               "fixed_lane_only":True,"points_per_lane":counts,
               "offset_m":round(offset,4),"length_m":round(length,4),
+              "minimum_road_width_m":round(min_width,4),
+              "previous_wall_gap_m":round(old_wall_gap,4),
+              "requested_wall_gap_m":round(requested_gap,4),
+              "effective_wall_gap_m":round(available-offset,4),
+              "minimum_safety_margin_m":SAFETY_MARGIN,
+              "wheelbase_m":WHEELBASE_M,
+              "max_steering_deg":MAX_STEERING_DEG,
+              "max_equivalent_curvature_1pm":round(MAX_CURVATURE_1PM,6),
+              "max_actual_route_curvature_1pm":maximum_curvatures,
+              "max_route_equivalent_steering_deg":maximum_equivalent_steers,
+              "steering_30deg_compatible":all(
+                v<=MAX_CURVATURE_1PM+1e-6 for v in maximum_curvatures.values()),
               "official_centerline_sha256":hashlib.sha256(source.read_bytes()).hexdigest()}
     (output/"manifest.json").write_text(
         json.dumps(metadata,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
