@@ -23,24 +23,26 @@ def grid_lateral(point,grid):
     return ((float(grid["x"])-point["x"])*(-math.sin(yaw))+
             (float(grid["y"])-point["y"])*math.cos(yaw))
 
-def build(track,lib,output,lane=1):
-    if lane not in (1,2,3):raise ValueError('Lane must be 1..3')
+def build(track,lib,output,grid_position=1,lane=None):
+    if grid_position not in (1,2):raise ValueError("Grid must be 1 or 2")
+    if lane is None:lane=3 if grid_position==1 else 1
+    if lane not in (1,2,3):raise ValueError("Lane must be 1..3")
     result=build_single(track,lane,lib,output,10.0)
     meta=json.loads((PACKAGE/"tracks"/"processed"/f"{track}.json").read_text())
     grids={int(g["position"]):g for g in meta["grid"]}
-    if 1 not in grids or 10 not in grids:raise ValueError("Required grid 1 and grid 10 missing")
+    if grid_position not in grids or 10 not in grids:raise ValueError("Selected grid or grid 10 missing")
     with (ROOT/"routes"/track/"lane_2.csv").open(newline="") as f:
         rows=list(csv.DictReader(f))
     pts=[dict(s=float(r["s_m"]),x=float(r["x_m"]),y=float(r["y_m"]),
               z=float(r["z_m"]),yaw=float(r["yaw_rad"])) for r in rows]
     n=len(pts)
     if n<100:raise ValueError("Insufficient centreline samples")
-    g1i=nearest(pts,grids[1])
+    g1i=nearest(pts,grids[grid_position])
     g10i=nearest(pts,grids[10])
     g1s=pts[g1i]["s"]
     g10s=pts[g10i]["s"]
     loop=float(json.loads((ROOT/"routes"/track/"manifest.json").read_text())["length_m"])
-    # Unwrapped positions: GRID10 is physically behind GRID1.
+    # Unwrapped positions: grid 10 must remain behind the selected start.
     if g10s>=g1s:g10s-=loop
     ahead=g1s+12.0
     offset=float(json.loads((ROOT/"routes"/track/"manifest.json").read_text())["offset_m"])
@@ -66,9 +68,11 @@ def build(track,lib,output,lane=1):
       "lap_length_m":loop,
       "lane_offset_m":offset,
       "team_initial_lane":lane,
+      "team_grid":grid_position,
+      "team_start_yaw":float(grids[grid_position]["yaw"]),
       "team_preferred_offset_m":{1:-offset,2:0.0,3:offset}[lane],
       "team_start_s":g1s,
-      "team_start_offset_m":grid_lateral(pts[g1i],grids[1]),
+      "team_start_offset_m":grid_lateral(pts[g1i],grids[grid_position]),
       "lead_start_s":ahead,
       "rear_start_s":g10s,
       "rear_start_offset_m":grid_lateral(pts[g10i],grids[10])
@@ -92,12 +96,13 @@ def build(track,lib,output,lane=1):
     result.update({
       "mode":"battle",
       "team_initial_lane":lane,
+      "team_grid":grid_position,
       "lead_model":str(lead_model),
       "rear_model":str(rear_model),
       "start_topic":values["start_topic"],
       "start_positions":{
-        "team_11":[float(grids[1]["x"]),float(grids[1]["y"]),
-                   float(grids[1]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[1]["yaw"])],
+        "team_11":[float(grids[grid_position]["x"]),float(grids[grid_position]["y"]),
+                   float(grids[grid_position]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[grid_position]["yaw"])],
         "practice_s_09":[lx,ly,lead["z"]+REPLAY_BASE_Z_OFFSET_M,lead["yaw"]],
         "practice_rear_11":[float(grids[10]["x"]),float(grids[10]["y"]),
                            float(grids[10]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[10]["yaw"])]
@@ -116,8 +121,9 @@ def build(track,lib,output,lane=1):
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--track",choices=("monza","spa","monaco","cota","hungaroring","baku"),required=True)
-    p.add_argument("--lane",type=int,choices=(1,2,3),default=1)
+    p.add_argument("--grid",type=int,choices=(1,2),required=True)
+    p.add_argument("--lane",type=int,choices=(1,2,3),default=None)
     p.add_argument("--plugin",type=Path,required=True)
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
-    build(a.track,a.plugin,a.output,a.lane)
+    build(a.track,a.plugin,a.output,a.grid,a.lane)
