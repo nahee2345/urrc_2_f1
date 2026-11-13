@@ -18,6 +18,33 @@ PACKAGE=BASE/"src"/"urrc_track_gazebo"
 CHASSIS=BASE/"src"/"team_11"/"models"/"team11_yellow_car"/"model.sdf"
 SPEED=10.0
 JOIN_METERS=8.0
+WHEELBASE_M=.36
+MAX_STEERING_DEG=30.0
+MAX_CURVATURE=math.tan(math.radians(MAX_STEERING_DEG))/WHEELBASE_M
+
+def heading(a,b):
+    return math.atan2(b[1]-a[1],b[0]-a[0])
+
+def turn_angle(a,b):
+    return math.atan2(math.sin(a-b),math.cos(a-b))
+
+def limit_check(path):
+    """Validate geometric steering equivalent; pose replay has no wheel steering actuator."""
+    maximum=0.0
+    for a,b,c in zip(path,path[1:],path[2:]):
+        d1=math.hypot(b[0]-a[0],b[1]-a[1])
+        d2=math.hypot(c[0]-b[0],c[1]-b[1])
+        if min(d1,d2)<1e-7:
+            continue
+        delta=abs(turn_angle(heading(b,c),heading(a,b)))
+        k=2*math.sin(delta/2)/max(1e-7,(d1+d2)/2)
+        maximum=max(maximum,k)
+    angle=math.degrees(math.atan(WHEELBASE_M*maximum))
+    if angle>MAX_STEERING_DEG+1e-3:
+        raise ValueError(
+            f"Selected replay route would need {angle:.2f}deg equivalent steering, "
+            f"exceeding {MAX_STEERING_DEG:.0f}deg: smooth route or extend join")
+    return angle
 
 def smooth(t):
     t=max(0.0,min(1.0,t))
@@ -62,6 +89,7 @@ def make_route(track,lane,out):
         y=cy+shift*math.cos(yaw)
         path.append((x,y,float(c["z_m"]),yaw))
     if len(path)<100:raise ValueError("missing points")
+    equivalent_steering=limit_check(path)
     out.mkdir(parents=True,exist_ok=True)
     distance=0.0
     filename=out/"route.csv"
@@ -75,13 +103,13 @@ def make_route(track,lane,out):
             distance+=ds
             writer.writerow((round(distance,8),*[round(v,8) for v in b]))
     if distance<100:raise ValueError("invalid track lap length")
-    return grid,filename.resolve(),distance,grid_offset,wanted_shift
+    return grid,filename.resolve(),distance,grid_offset,wanted_shift,equivalent_steering
 
 def build(track,lane,library,output,speed=SPEED):
     if track not in ("monza","spa","monaco","cota","hungaroring","baku"):
         raise ValueError(track)
     if lane not in (1,2,3):raise ValueError(lane)
-    grid,route,distance,offset,shift=make_route(track,lane,output)
+    grid,route,distance,offset,shift,equivalent_steering=make_route(track,lane,output)
     # A runtime model for kinematic replay. Keep the complete original
     # vehicle visual geometry, but disable the Ackermann dynamics plugin.
     # The original model.sdf is never modified.
@@ -132,6 +160,8 @@ def build(track,lane,library,output,speed=SPEED):
               "grid":1,"grid_xyz_yaw":[float(grid["x"]),float(grid["y"]),
                     float(grid["road_z"])+.09,float(grid["yaw"])],
               "speed_mps":speed,"length_m":distance,"source_offset_m":offset,
+              "max_equivalent_steering_deg":round(equivalent_steering,3),
+              "steering_limit_deg":MAX_STEERING_DEG,
               "target_offset_m":shift,"route_file":str(route),"world_file":str(world_path.resolve()),
               "vehicle_file":str(model_path.resolve()),"start_topic":topic,
               "lights_script":str((runtime/"scripts"/"traffic_lights_v10.py").resolve()),
