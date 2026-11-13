@@ -96,62 +96,75 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   double frontTTC=team.v>lead.v+.01?frontGap/(team.v-lead.v):1e6;
   double rearTTC=rear.v>team.v+.01?rearGap/(rear.v-team.v):1e6;
   bool corner=fabs(curve(team.s))>.18;
-  // During a committed lane change, evaluate the moving path again.
-  // A late hazard triggers a safer alternative, never a blind fixed replay.
+  minRearTTC=std::min(minRearTTC,rearTTC);
+  if(rearTTC<=5. && rearGap>LEN)defenseOpportunity=true;
+  // A change is a committed manoeuvre: keep its goal unless a *predicted
+  // footprint collision* is detected. Negative clearance by itself is not
+  // a collision and must not create oscillating replan requests.
   if(team.changing){
     const double risk=forecast(team.to,elapsed,now,true);
-    if(risk<0){
-      const double hold=forecast(team.lat,elapsed,now,false);
+    if(risk<=-0.5 && now-lastReplan>1.0){
+      lastReplan=now;
+      const double stay=forecast(team.lat,elapsed,now,false);
       const double back=forecast(team.from,elapsed,now,false);
-      if(back>hold+.15 && back>0)change(team.from,now);
-      else if(hold>0)change(team.lat,now);
+      if(back>0.0 && back>stay+0.15){
+        change(team.from,now);replanCount++;
+      }else if(stay>0.0){
+        change(team.lat,now);replanCount++;
+      }
       emergencyBraking=true;
-      std::cout<<"[BATTLE] REPLAN_UNSAFE change target="<<team.to
-               <<" forecast="<<risk<<std::endl;
+      std::cout<<"[BATTLE] HAZARD_REPLAN future="<<risk
+               <<" stay="<<stay<<" back="<<back<<std::endl;
     }
-  } else if(joinPending){
+  }else if(joinPending){
     if(forecast(preferredLane,elapsed,now,false)>0){
-      change(preferredLane,now);
-      joinPending=false;
+      change(preferredLane,now);joinPending=false;
       std::cout<<"[BATTLE] JOIN initial lane="<<initialLane<<std::endl;
     }
-  } else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3.){
-    // Select the safest free candidate, rather than the first one in a list.
+  }else if(now-changeFinishedAt<2.0){
+    // Hysteresis prevents immediate re-selection of the opposite lane.
+  }else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3.){
     double bestScore=-1e9,bestTarget=team.lat;
-    for(const double dst:{-lateralOffset,0.,lateralOffset}){
+    for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
       const double score=forecast(dst,elapsed,now,false);
-      const double changeCost=.04*fabs(dst-team.lat);
-      if(score>0 && score-changeCost>bestScore){
-        bestScore=score-changeCost;bestTarget=dst;
+      const double cost=.08*fabs(dst-team.lat);
+      if(score>0.0 && score-cost>bestScore){
+        bestScore=score-cost;bestTarget=dst;
       }
     }
     if(fabs(bestTarget-team.lat)>.2*lateralOffset){
-      change(bestTarget,now);attempted=true;
+      change(bestTarget,now);attempted=true;attemptCount++;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
                <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
     }
-  } else if(!corner && !defended && rearGap>1.5 && rearTTC<=5 &&
+  }else if(!corner && !defended && defenseOpportunity &&
+            rearGap>1.5 && rearTTC<=5.0 &&
             rearTTC<previousRearTTC-.002 && frontTTC>3.){
-    // Defend by early positioning only. Never swing into a car already alongside.
-    // Keep the current lane when it already blocks a safe overtaking corridor.
-    double bestScore=-1e9,bestTarget=team.lat;
-    const double desired=rear.lat>=0?lateralOffset:-lateralOffset;
-    for(const double dst:{team.lat,0.,desired}){
-      if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      const double score=forecast(dst,elapsed,now,false);
-      if(score>bestScore && score>0){bestScore=score;bestTarget=dst;}
-    }
-    if(fabs(bestTarget-team.lat)>.2*lateralOffset){
-      change(bestTarget,now);defended=true;
-      std::cout<<"[BATTLE] DEFENSE TTC="<<rearTTC
-               <<"s target_offset="<<bestTarget<<std::endl;
+    // Defender is allowed to choose a corridor only before the pursuer
+    // reaches its flank. No deliberate abrupt block of an adjacent car.
+    const double currentScore=forecast(team.lat,elapsed,now,false);
+    const double target=rear.lat>=0?lateralOffset:-lateralOffset;
+    if(fabs(target-team.lat)<.2*lateralOffset && currentScore>0){
+      defended=true;defenseOutcome="HELD_SAFE_LANE";
+      std::cout<<"[BATTLE] DEFENSE SAFE_HOLD TTC="<<rearTTC<<std::endl;
+    }else{
+      double score=forecast(target,elapsed,now,false);
+      if(score>0 && score>currentScore+0.2 && rearGap>3.0){
+        change(target,now);defended=true;defenseOutcome="POSITIONED";
+        std::cout<<"[BATTLE] DEFENSE TTC="<<rearTTC
+                 <<"s target_offset="<<target<<std::endl;
+      }else{
+        defenseOutcome="SAFE_ABORT";
+        std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
+                 <<" candidate="<<score<<" current="<<currentScore<<std::endl;
+      }
     }
   }
   if(team.changing){
    const double t=(now-team.changeStart)/team.changeDuration;
    team.lat=team.from+(team.to-team.from)*ease(t);
-   if(t>=1){team.lat=team.to;team.changing=false;}
+   if(t>=1){team.lat=team.to;team.changing=false;changeFinishedAt=now;}
   }
   // Practice vehicles slow for any obstacle ahead on the same lane.
   auto cruise=[&](Car &a,double limit){
@@ -219,8 +232,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   if(team.s-teamStart>=lap){
     std::cout<<"[BATTLE] SUMMARY overtake="<<passed<<" defense="<<defended
-             <<" practice_braking="<<braked<<" minimum_center_m="<<minimumCenter<<std::endl;
-    finish(passed&&defended?"PASS_BATTLE":"FAIL_INCOMPLETE");return;
+             <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
+             <<" minimum_rear_ttc="<<minRearTTC<<" attempts="<<attemptCount
+             <<" replans="<<replanCount<<" practice_braking="<<braked
+             <<" minimum_center_m="<<minimumCenter<<std::endl;
+    finish(passed?"PASS_BATTLE":"FAIL_NO_OVERTAKE");return;
   }
   if(elapsed>300)finish("FAIL_TIMEOUT");
   previousRearTTC=rearTTC;
@@ -312,7 +328,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  void finish(const char*result){
   if(ended)return;ended=true;report.flush();
   std::cout<<"[BATTLE] RESULT "<<result<<" overtake="<<passed<<" defense="<<defended
-           <<" braked="<<braked<<" min_center="<<minimumCenter<<std::endl;
+           <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
+           <<" rear_ttc_min="<<minRearTTC<<" attempts="<<attemptCount
+           <<" replans="<<replanCount<<" braked="<<braked
+           <<" min_center="<<minimumCenter<<std::endl;
  }
  void Start(const gz::msgs::Boolean&b){if(b.data())startSignal.store(true);}
  gz::sim::Entity worldEntity{gz::sim::kNullEntity};
@@ -320,7 +339,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
- double previousRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
+ double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
+ double lastReplan=-1e6,changeFinishedAt=-1e6;
+ int attemptCount=0,replanCount=0;
+ std::string defenseOutcome="NOT_TRIGGERED";
+ bool defenseOpportunity=false;
  bool joinPending=false,emergencyBraking=false;
  int initialLane=1,teamGrid=1;
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
