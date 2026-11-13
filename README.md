@@ -90,3 +90,15 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monza
 검증 결과: `log/battle/<track>/<시각>/gazebo.log`의 `[BATTLE] RESULT` 및 `prepared/battle_state.csv`에서 추월 여부, 방어 시도, 연습차량 감속, 충돌을 확인합니다.
 
 **주의:** 이는 저장 좌표를 직접 이동하는 가상 테스트입니다. 실제 Ackermann 물리 주행 성능과 동일하지 않습니다. `PASS_BATTLE` 판정은 충돌 없는 1랩 재생 중 추월·방어 시도가 충족된 경우에만 출력됩니다. Ubuntu/Gazebo 실환경의 최종 테스트는 아직 진행되지 않았습니다.
+
+## 추월·방어 18개 자동 검증
+
+```bash
+cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle all
+```
+
+실행 순서는 1번 경로×6트랙 → 2번 경로×6트랙 → 3번 경로×6트랙입니다.
+
+각 케이스에 TEAM 11(1번 그리드 10m/s), 앞차(9m/s, 2초마다 1↔2↔3번 S자 이동), 후방 추격차(10번 그리드 11m/s)를 동일하게 배치합니다. TEAM 11은 선택된 1·2·3번 경로로 부드럽게 진입한 후 추월과 방어를 시도합니다. 카메라 인식 없이 공식 신호등 소등 서비스로 출발합니다.
+
+각 1랩 테스트의 충돌/추월/방어 성공·실패와 종료 코드를 `log/battle_batch/<실행시각>/summary.csv`에 기록합니다. 케이스별 자세한 실행 로그는 같은 폴더의 `<경로번호>_<트랙>.log`이며, 차량 좌표·속도·TTC CSV는 로그에 표시된 `log/battle/<track>_lane<경로>/<시각>/prepared/battle_state.csv`에서 확인합니다. 실패 시에도 다음 케이스를 진행합니다. 개별 실행: `bash run.sh battle monza 2`.
