@@ -131,3 +131,11 @@ bash run.sh battle monza 2
 - 로그: `log/battle/<map>_grid<1|2>_lane<lane>/<실행시각>/`; `gazebo.log`의 `[BATTLE]` 기록 및 `prepared/battle_state.csv`
 
 **판정 참고:** 출력되는 PASS는 직접 좌표 이동 기반 연습 알고리즘의 결과일 뿐이며, 벽 접촉 방지·실제 물리 조향 검증과 동일하지 않습니다. 코드 반영 후 실제 Gazebo 환경에서의 실행 성공은 아직 확인되지 않았습니다.
+
+## 1차 테스트 12회 연속 실행 (6개 맵 × 1·2번 그리드)
+
+```bash
+cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1
+```
+
+Monza(1·2번) → Spa(1·2번) → Monaco(1·2번) → COTA(1·2번) → Hungaroring(1·2번) → Baku(1·2번) 순서입니다. 각 케이스는 1랩이 끝나거나 충돌/실패 판정을 받으면 종료하며 다음 케이스를 실행합니다. 1번 그리드는 기본 3번 경로(왼쪽), 2번 그리드는 기본 1번 경로(오른쪽)입니다. 기존 개별 실행 및 18회 경로 테스트 명령은 그대로 유지합니다. 요약: `log/battle_stage1/<실행시각>/summary.csv`, 상세: 같은 폴더 내 `<맵>_grid<번호>.log`. 케이스별 실행 제한시간은 기본 480초이고 실패 시에도 다음 케이스를 진행합니다.
