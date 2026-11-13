@@ -42,7 +42,7 @@ class LapTrial(Node):
         self.last_progress=self.started_wall
         self.last_info=self.started_wall
         self.seen_odom=False
-        self.lap_min=self.track.length*.85
+        self.lap_min=self.track.length*.90
         self.output=Path(args.output)
         self.output.parent.mkdir(parents=True,exist_ok=True)
 
@@ -136,8 +136,9 @@ class LapTrial(Node):
                 "PROGRESS %.1fm/%.1fm speed %.2f/%.2f cmd target lane %d" %
                 (self.distance,self.track.length,speed,command.speed,self.planner.target))
             self.last_info=wall
-        if self.distance>=self.lap_min and idx<=self.first_index+6 and (
-            idx>=self.first_index-6 or self.first_index<6):
+        index_gap=min((idx-self.first_index)%self.track.n,
+                      (self.first_index-idx)%self.track.n)
+        if self.distance>=self.lap_min and index_gap<=6:
             self.stop("PASS_LAP")
         elif self.distance>=self.track.length*1.1:
             self.stop("FAIL_LAP_CROSS_NOT_DETECTED")
@@ -159,6 +160,7 @@ class LapTrial(Node):
             "progress_m":round(self.distance,2),
             "max_actual_speed_ms":round(self.max_speed,2),
             "corner_actual_speed_min_ms":round(min(corner),2) if corner else None,
+            "corner_actual_speed_max_ms":round(max(corner),2) if corner else None,
             "straight_actual_speed_max_ms":round(max(long_straight),2) if long_straight else None,
             "samples":len(self.records),"measurements_csv":str(csvpath),
             "note":"Physical Gazebo odometry; signal lights disabled for practice only"}
