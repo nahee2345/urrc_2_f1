@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# ONE COMMAND: bash run.sh monza 1 [speed_mps]
+# ONE COMMAND: bash run.sh monza 1 [speed_mps] or bash run.sh battle monza
+# Optional 3-car S-curve/overtake/defense trial. Existing fixed-lane runs unchanged.
+if [[ "${1:-}" == "battle" ]]; then
+  shift
+  exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_battle.sh" "${1:-monza}"
+fi
 # 1=right 2=centre 3=left; all cars spawn at official grid-1 centre.
 TRACK="${1:-monza}"
 LANE="${2:-1}"
