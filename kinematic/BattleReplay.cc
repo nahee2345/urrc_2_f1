@@ -156,8 +156,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                  <<"s target_offset="<<target<<std::endl;
       }else{
         defenseOutcome="SAFE_ABORT";
-        std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
-                 <<" candidate="<<score<<" current="<<currentScore<<std::endl;
+        if(now-lastDefenseLog>=1.0){
+          lastDefenseLog=now;
+          std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
+                   <<" candidate="<<score<<" current="<<currentScore<<std::endl;
+        }
       }
     }
   }
@@ -364,7 +367,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,speedCeiling=10.;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=10.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false;
