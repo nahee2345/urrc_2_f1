@@ -2,13 +2,15 @@
 set -Eeuo pipefail
 # Run through one public command: bash run.sh battle monza
 TRACK="${1:-monza}"
+LANE="${2:-1}"
+case "$LANE" in 1|2|3) ;; *) echo "Lane must be 1, 2 or 3" >&2;exit 2;; esac
 case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *)
   echo "Valid tracks: monza spa monaco cota hungaroring baku" >&2;exit 2 ;;
 esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PKG="$ROOT/src/urrc_track_gazebo"
-LOG="$ROOT/log/battle/${TRACK}/$(date +%Y%m%d_%H%M%S)"
+LOG="$ROOT/log/battle/${TRACK}_lane${LANE}/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"
 export GZ_PARTITION="urrc_battle_$(id -u)_$(date +%s)"
 export PYTHONUNBUFFERED=1
@@ -48,7 +50,7 @@ export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PAT
 echo "[4/6] Prepare 0.30m walls and grid 1 / grid 10 models"
 OUT="$LOG/prepared"
 /usr/bin/python3 "$ROOT/kinematic/prepare_battle.py" \
-  --track "$TRACK" --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
+  --track "$TRACK" --lane "$LANE" --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
     tail -80 "$LOG/prepare.log";exit 6;
 }
 export GZ_SIM_RESOURCE_PATH="$OUT/resources/urrc_track_gazebo/models:$GZ_SIM_RESOURCE_PATH"
@@ -114,7 +116,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK team11 10m/s, lead S 9m/s/2sec, grid10 rear 11m/s"
+echo "BATTLE START: $TRACK lane $LANE team11 10m/s, lead S 9m/s/2sec, grid10 rear 11m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
@@ -134,8 +136,8 @@ done
 [[ -n "$RESULT" ]] || { echo "FAIL: Gazebo closed before battle result" >&2;exit 11; }
 grep '\[BATTLE\]' "$LOG/gazebo.log" | tail -35
 if [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
-  echo "PASS BATTLE: results $LOG"
+  echo "PASS BATTLE: $TRACK lane $LANE results $LOG"
 else
-  echo "FAIL BATTLE: results $LOG" >&2
+  echo "FAIL BATTLE: $TRACK lane $LANE results $LOG" >&2
   exit 12
 fi
