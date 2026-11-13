@@ -144,12 +144,24 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   alignToMotion(a,previousTeam);
   alignToMotion(b,previousLead);
   alignToMotion(c,previousRear);
-  for(auto pair:std::array<std::pair<Pos,Pos>,3>{{{a,b},{a,c},{b,c}}}){
-    double dist=hypot(pair.first.x-pair.second.x,pair.first.y-pair.second.y);
-    minimumCenter=std::min(minimumCenter,dist);
-    if(collide(pair.first,pair.second)){
-      std::cout<<"[BATTLE] COLLISION at t="<<elapsed<<"s"<<std::endl;
-      finish("FAIL_COLLISION");return;
+  // Swept SAT: sample previous-to-next movement to prevent tunneling.
+  auto blend=[](const Pos&old,const Pos&next,double t){
+    return Pos{old.x+(next.x-old.x)*t,old.y+(next.y-old.y)*t,
+               old.z+(next.z-old.z)*t,
+               old.yaw+wrap(next.yaw-old.yaw)*t};
+  };
+  for(int sweep=0;sweep<=10;sweep++){
+    double t=static_cast<double>(sweep)/10.;
+    Pos ap=blend(previousTeam,a,t);
+    Pos bp=blend(previousLead,b,t);
+    Pos cp=blend(previousRear,c,t);
+    for(auto pair:std::array<std::pair<Pos,Pos>,3>{{{ap,bp},{ap,cp},{bp,cp}}}){
+      double dist=hypot(pair.first.x-pair.second.x,pair.first.y-pair.second.y);
+      minimumCenter=std::min(minimumCenter,dist);
+      if(collide(pair.first,pair.second)){
+        std::cout<<"[BATTLE] COLLISION at t="<<elapsed<<"s"<<std::endl;
+        finish("FAIL_COLLISION");return;
+      }
     }
   }
   for(auto pr:std::array<std::pair<Car*,Pos>,3>{{{&team,a},{&lead,b},{&rear,c}}})
