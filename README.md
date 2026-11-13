@@ -153,3 +153,17 @@ Monza(1·2번) → Spa(1·2번) → Monaco(1·2번) → COTA(1·2번) → Hungar
 - 1차 12회 재검증 명령: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1`
 - 원래 6개 맵×3개 경로 고정 주행 검증 `bash run_all.sh`과 1차 주행 테스트는 별개
 - **Gazebo 실제 실행·컴파일은 로컬 사용자 환경에서 재검증이 필요합니다.** 이 변경은 공식 벽 충돌 검사나 실제 Ackermann 조향 제어를 구현하지 않습니다.
+
+## 1차 경주 주행감 및 직선 추월 개선 (2026-11-13)
+
+사용자가 제공한 12회 재시험 요약: PASS 0 / PARTIAL 8 / FAIL 4 (COTA grid1·2, Baku grid1·2). PARTIAL은 추월 완료·무충돌 1랩이지만 방어 검증 부족을 뜻합니다.
+
+- TEAM 11 빈 경로 목표속도 **12m/s**. 앞 차량이 *옆* 경로에 있고 경로가 겹치지 않으면 **경로를 바꾸지 않고 가속해 통과**하는 것도 추월로 인식
+- 전방 차량과 동일한 실효 경로에 있는 경우에만 거리 기반 추종 감속. 다른 경로에 있는 9m/s 차량에 일률적으로 속도를 맞추지 않음
+- 충돌 예측: 경로 선택은 5초 예측을 유지하되, 실시간 속도 제한은 **가까운 교차 경로의 1.8초 예측** 중심으로 적용하여 먼 미래 위험 때문에 지속적으로 제동하지 않음
+- 차선 변경 중에는 12→10.5m/s(1.5m/s 감속). 변경 완료 후 점진적으로 목표 속도 복귀
+- Gazebo 실제 `simTime` 변화 반영(기존 최대 0.05초 잘림 완화), 가감속 제한 3.0/5.0m/s², 위치 사다리꼴 적분, 진행 방향 노이즈 완화
+- 추월 기록 `OVERTAKE COMPLETED mode=LANE_CHANGE` 또는 `mode=CLEAR_LANE_ACCELERATION`으로 구분
+- 기존 12회 1차 테스트: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1`
+
+**검증 제한:** 수정 코드의 ROS2 Jazzy/Gazebo Harmonic 현장 실행은 미검증입니다. 현재는 저장 좌표 직접 이동으로 실제 Ackermann 차체 동역학이나 벽 충돌까지 검증하지는 않습니다.
