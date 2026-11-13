@@ -34,3 +34,24 @@ PASS_LAP는 *Gazebo 오도메트리 기준* 랩 통과입니다. 오도메트리
 
 Monza 1랩이 실제 PASS일 때만 나머지 다섯 맵으로 확장하고,
 이후 추월·방어 다차량 검증을 진행합니다. 신호등 검증은 가장 마지막에 진행합니다.
+
+## 이전 경로 추종 방식 복원 (현재 번호 유지)
+
+- 현재 라벨: **1번 오른쪽 / 2번 중앙 / 3번 왼쪽**
+- 초기 경로: **홀수 그리드 1번 / 짝수 그리드 3번**
+- 기존 `three_lane/core.py`의 트랙 전체 최소 폭 기준 고정 경로 간격 복원
+- 기존 `team11_race/planner.py`의 약 18m 5차 다항식 경로 합류, 전방 목표점 추종, ±30° 및 조향 변화율 제한 복원
+- 이전과 달리 실제 1랩 시험은 계속 **Ackermann 물리 차량**을 사용합니다. `SetWorldPoseCmd`로 차량을 좌표에 강제 이동시키는 방식은 사용하지 않습니다.
+- 이전 파일을 그대로 복사한 것이 아니라 현재 `strategy.py`의 추월·방어 및 8/10/15m/s 속도 계획과 결합한 추종기입니다.
+- 관련 파일: `team_11/restored_follower.py`, `routes.py`, `tests/physical_lap_trial.py`
+
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+PYTHONPATH=src/team_11 python3 -m unittest discover -s src/team_11 -p 'test_*.py' -v
+PYTHONPATH=src/team_11 python3 src/team_11/review_tactics.py
+PYTHONPATH=src/team_11 python3 src/team_11/review_six_maps.py --official ~/urrc_f1_ws
+bash src/team_11/tests/run_physical_lap.sh monza 1
+```
+
+오프라인 검증 PASS가 실제 Gazebo 완주를 의미하지 않으며, 과거 키네마틱 시연 성공도 물리주행 성공을 증명하지 않습니다.
