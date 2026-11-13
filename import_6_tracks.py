@@ -13,7 +13,7 @@ from pathlib import Path
 
 TRACKS=("monza","spa","monaco","cota","hungaroring","baku")
 HERE=Path(__file__).resolve()
-REPO=HERE.parents[3]
+REPO=HERE.parent
 TARGET=REPO/"src"/"urrc_track_gazebo"
 
 def sha(path):
