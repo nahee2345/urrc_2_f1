@@ -1,57 +1,40 @@
-# URRC 공식 6개 트랙 + 5등 신호등 (주행 로직 없음)
+# TEAM 11 — 6개 트랙 고정 좌표 경로 검증
 
-현재 차량 파일: `src/team_11/models/team11_yellow_car/model.sdf`.
-
-공식 원본: `~/urrc_f1_ws/src/urrc_track_gazebo`. **원본은 읽기 전용으로 사용**합니다.
-
-복사 대상은 `monza`, `spa`, `monaco`, `cota`, `hungaroring`, `baku` 6개만입니다.
-각 트랙의 모델·메시·충돌·도로 시각자료, 레이스 월드, 그리드/관전 GUI 설정,
-중앙선·그리드 메타데이터가 `src/urrc_track_gazebo/` 아래로 복사됩니다.
-
-공식 `traffic_lights_v10.py`를 원본과 동일하게 유지합니다. 별도 생성 파일인
-`<track>_signal_active.sdf`는 복사된 월드의 기존 5개 신호등 렌즈로부터 생성합니다.
-출발 신호는 5개 빨간등을 순차적으로 점등하고 **한 번의 모델 삭제 요청으로 일괄 소등**합니다.
-신호 스크립트는 Gazebo visual_config 서비스와 출발선·오버뷰 관전 카메라 토픽이
-준비될 때까지 기다립니다.
-
-## 한 번만 복사
+**한 개 명령어만 실행합니다.**
 
 ```bash
-cd ~/urrc_2_f1
-git pull --ff-only origin main
-python3 import_6_tracks.py --official ~/urrc_f1_ws
-python3 import_6_tracks.py --official ~/urrc_f1_ws --verify-only
+cd ~/urrc_2_f1 && bash run.sh monza 1
 ```
 
-`status: PASS`를 확인한 다음, 복사한 트랙 자료를 GitHub에 올리려면:
+- 첫 인자: `monza`, `spa`, `monaco`, `cota`, `hungaroring`, `baku`
+- 두 번째 인자: **1번 오른쪽 / 2번 중앙 / 3번 왼쪽**
+- 별도 차선 변경 기능 없음. 선택한 경로 **하나만** 따라 주행
+- 6개 트랙의 공식 중앙선에서 **트랙별 3개, 총 18개 CSV 경로** 자동 생성·저장
+- 모델 스폰은 항상 해당 트랙의 **공식 1번 그리드 X·Y 정중앙 및 Yaw**
+- 출발 신호: 공식 5등 순차 점등 → 일괄 소등 확인 → 고정 경로 주행 시작
+- 시작 검증 속도 **최대 2m/s**; 실제 물리식 Ackermann 스티어링
+- 주행 및 경로 이탈 확인 CSV: `log/fixed_routes/<track>_lane<no>.csv`
+- 최종 PASS/FAIL JSON: `log/fixed_routes/<track>_lane<no>.json`
+
+경로는 `routes/<track>/lane_1.csv`, `lane_2.csv`, `lane_3.csv`로 저장됩니다.
+모든 실행에서 경로 18개를 다시 생성해 공식 중심선과의 일치성을 유지합니다.
+`src/team_11/models/team11_yellow_car/model.sdf` 차량 모델은 수정하지 않았습니다.
+
+## 각 경로 단독 주행 예시
 
 ```bash
-cd ~/urrc_2_f1
-git add src/urrc_track_gazebo track_import_report.json
-git commit -m "Import six official track assets and signal templates"
-git push origin main
+bash run.sh monza 1
+bash run.sh monza 2
+bash run.sh monza 3
+bash run.sh spa 1
 ```
 
-트랙 메시가 크므로 업로드에는 시간이 걸릴 수 있습니다. 가져오기 전에는
-GitHub에 모델 메시가 존재하지 않습니다.
+각 명령어는 독립적인 한 번의 실행입니다. 다음 실행 전 이전 Gazebo가 종료되어야 합니다.
+`run.sh`가 최초 한 번 `~/urrc_f1_ws`의 6개 원본 트랙 메시와 신호 자료를
+`src/urrc_track_gazebo`에 복사합니다. **원본은 변경하지 않습니다.**
 
-## 월드 실행
+이번 단계에는 추월, 방어, 차선 이동, SLAM, 신호등 영상 인식 등의 알고리즘은 없습니다.
+신호등 소등 후 출발 허용은 공식 신호 제어 스크립트가 성공한 시점을 기준으로 합니다.
+카메라/월드가 준비되지 않으면 출발하지 않습니다.
 
-첫 터미널:
-
-```bash
-cd ~/urrc_2_f1
-bash run_track.sh monza
-```
-
-월드 로딩과 카메라 준비가 완료된 뒤 두 번째 터미널:
-
-```bash
-cd ~/urrc_2_f1
-bash run_lights.sh monza
-```
-
-다른 트랙에서도 `monza` 이름만 교체합니다.
-
-**주의:** 출발 신호등의 실제 이미지 인식·차량 자동 출발·경로 추종·레이스 운영 로직은
-포함하지 않습니다. 이는 트랙 및 신호등 작동 구성만 가져오는 단계입니다.
+실제 Gazebo 1랩 완주와 물리적 경로 추종 성능은 아직 검증되지 않았습니다.
