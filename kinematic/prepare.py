@@ -125,6 +125,7 @@ def build(track,lane,library,output,speed=SPEED):
     ET.SubElement(entry,"route_file").text=str(route)
     world_path=runtime/"worlds"/f"{track}_fixed.sdf"
     race.write(world_path,encoding="utf-8",xml_declaration=True)
+    sys.path.insert(0,str(BASE))
     from import_6_tracks import active_signal_from_race
     active_signal_from_race(world_path,runtime/"worlds"/f"{track}_signal_active.sdf")
     manifest={"track":track,"lane":lane,"lane_side":{1:"right",2:"centre",3:"left"}[lane],
