@@ -195,7 +195,7 @@ class Planner:
         nearest = forward[0] if forward else None
         front_ttc = (nearest[0] - 1.0) / nearest[2] if nearest and nearest[2] > .05 else math.inf
         threat = next(((gap, car, closing, lane) for gap, car, closing, lane in rear
-                       if closing > .05 and (gap - 1.0) / closing <= 3.0), None)
+                       if closing > .05 and (gap - 1.0) / closing <= 5.0), None)
         can_change = self.track.safe_change(index, ego.speed) and not sharp
         reason = "follow lane"
         # Two-stage maneuver holds lane 2 for a *minimum* of two seconds.
@@ -220,6 +220,14 @@ class Planner:
             self.passed_in_corner = any(gap < 3.0 for gap, _, _, _ in rear)
             if self.mode == "DEFEND":
                 self.mode = "CRUISE"
+        # In corners the centre line has priority over tactical manoeuvres.
+        # Do not force a return through an occupied centre lane.
+        if sharp and self.target != 2 and not self._blocked(2, ego, others, index, 5.0, 4.0):
+            self.target = 2
+            self.lane_start = now
+            self.mode = "CRUISE"
+            self.pass_name = None
+            reason = "corner: merge to centre lane"
         if can_change and self.target == self.lane:
             if self.mode == "PASS" and self.lane == 2 and self.pass_name is not None and (
                     self.lane_start is not None and now - self.lane_start >= 2.0):
@@ -228,7 +236,7 @@ class Planner:
                     self.target = dest
                     self.lane_start = now
                     reason = "complete staged passing move"
-            elif front_ttc <= 5.0 and nearest is not None:
+            elif front_ttc <= 3.0 and nearest is not None:
                 dest = self._candidate(ego, others, index)
                 # Never cross an occupied middle lane to reach the far lane.
                 if dest is not None and abs(dest - self.lane) == 2:
@@ -241,7 +249,7 @@ class Planner:
                     self.pass_name = nearest[1].name
                     self.mode = "PASS"
                     self.lane_start = now
-                    reason = "front TTC <= 5s"
+                    reason = "front TTC <= 3s"
             elif threat and not forward:
                 # Defensive positioning is optional: the same safety guard as passing applies.
                 _, _, _, predicted_lane = threat
@@ -250,10 +258,10 @@ class Planner:
                         self.target = predicted_lane
                         self.mode = "DEFEND"
                         self.lane_start = now
-                        reason = "rear TTC <= 3s"
+                        reason = "rear TTC <= 5s"
         if self.mode == "JOIN":
             self.mode = "CRUISE"
-        if sharp:
+        if sharp and reason != "corner: merge to centre lane":
             reason = "corner safety restriction"
         # Pure pursuit on target lane; gradually growing lookahead damps oscillations.
         lookahead = clamp(1.5 + 0.6 * max(ego.speed, 0.0), 1.5, 7.0)
@@ -268,7 +276,7 @@ class Planner:
                       self.last_steer + math.radians(90) * dt)
         self.last_steer = steer
         desired_speed = corner_limit
-        if nearest and (front_ttc <= 5.0 or self.mode == "PASS"):
+        if nearest and (front_ttc <= 3.0 or self.mode == "PASS"):
             # Cap by stopping headway when path is not yet physically clear.
             if self.target == self.lane or self._blocked(self.target, ego, others, index):
                 desired_speed = min(desired_speed, max(0.0, nearest[1].speed +
