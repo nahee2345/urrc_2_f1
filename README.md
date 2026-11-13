@@ -13,6 +13,9 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh monza 1
 - 트랙: `monza`, `spa`, `monaco`, `cota`, `hungaroring`, `baku`
 - 경로: `1` 오른쪽, `2` 중앙, `3` 왼쪽
 - 선택적 속도: 세 번째 인자 m/s. 기본값 **10 m/s**. 예: `bash run.sh monza 2 15`
+- 기존 차량 조향 관절 한도는 **±30°**이며, 직접 위치 재생 시에는 실제 바퀴 조향이 아닌 **휠베이스 0.36m 기준 환산 조향각 30° 이하인 경로만 허용**합니다.
+- 1·3번 경로는 기존 벽 여유를 약 절반으로 줄입니다. 단, **최소 0.075m의 여유**와 경로 환산 조향각 제한을 우선하여 Monaco·COTA 등 급커브에서는 벽과 더 멀어질 수 있습니다.
+- 구간별 조향 제약은 `routes/<track>/manifest.json`의 `max_route_equivalent_steering_deg` 및 `geometry_limit_reduced_offset`으로 확인할 수 있습니다.
 
 ## 실제 동작
 
