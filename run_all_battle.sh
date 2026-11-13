@@ -16,10 +16,12 @@ for LANE in 1 2 3; do
     N=$((PASSED+FAILED+1))
     CASE_LOG="$OUT/${LANE}_${TRACK}.log"
     echo "[$N/18] BATTLE lane=$LANE track=$TRACK"
+    GRID=1
+    if [[ "$LANE" == 1 ]];then GRID=2;fi
     if timeout -s TERM -k 15 "${URRC_BATTLE_CASE_TIMEOUT_S:-480}" \
-      bash "$ROOT/run_battle.sh" "$TRACK" "$LANE" >"$CASE_LOG" 2>&1; then
+      bash "$ROOT/run_battle.sh" "$TRACK" "$GRID" "$LANE" >"$CASE_LOG" 2>&1; then
       CODE=0
-      if grep -q "^PASS BATTLE: $TRACK lane $LANE " "$CASE_LOG"; then
+      if grep -q "^PASS BATTLE: $TRACK grid $GRID lane $LANE " "$CASE_LOG"; then
         RESULT=PASS
         PASSED=$((PASSED+1))
       else
