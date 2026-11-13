@@ -102,3 +102,32 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle all
 각 케이스에 TEAM 11(1번 그리드 10m/s), 앞차(9m/s, 2초마다 1↔2↔3번 S자 이동), 후방 추격차(10번 그리드 11m/s)를 동일하게 배치합니다. TEAM 11은 선택된 1·2·3번 경로로 부드럽게 진입한 후 추월과 방어를 시도합니다. 카메라 인식 없이 공식 신호등 소등 서비스로 출발합니다.
 
 각 1랩 테스트의 충돌/추월/방어 성공·실패와 종료 코드를 `log/battle_batch/<실행시각>/summary.csv`에 기록합니다. 케이스별 자세한 실행 로그는 같은 폴더의 `<경로번호>_<트랙>.log`이며, 차량 좌표·속도·TTC CSV는 로그에 표시된 `log/battle/<track>_lane<경로>/<시각>/prepared/battle_state.csv`에서 확인합니다. 실패 시에도 다음 케이스를 진행합니다. 개별 실행: `bash run.sh battle monza 2`.
+
+## 1차 시험: 맵별·출발 그리드별 개별 실행
+
+부분 구현된 **추월·방어 판단, 후보 경로 선택, 차선 변경 중 안전 재평가, 5초 차량 충돌 예측**을 시험합니다. 카메라 인식과 실제 Ackermann 물리 제어를 사용하지 않는 직접 좌표 재생입니다.
+
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+
+# Monza의 1번 그리드 시험
+bash run.sh battle monza 1
+
+# Monza의 2번 그리드 시험
+bash run.sh battle monza 2
+```
+
+다른 맵도 `monza` 대신 `spa`, `monaco`, `cota`, `hungaroring`, `baku`를 넣어 **맵별로 별도 실행**합니다. 총 **6맵 × 2그리드 = 12개 개별 시험**이며 자동 연속 실행하지 않습니다.
+
+- `bash run.sh battle <map> 1`: TEAM 11을 **공식 1번 그리드**에 스폰하며 기본적으로 **3번(왼쪽)** 경로에 합류
+- `bash run.sh battle <map> 2`: TEAM 11을 **공식 2번 그리드**에 스폰하며 기본적으로 **1번(오른쪽)** 경로에 합류
+- 선택적으로 `bash run.sh battle <map> <grid> <lane>`에서 경로 1·2·3을 지정할 수 있습니다.
+- 전방 연습차량 9m/s: TEAM 11보다 12m 전방, **2초마다 1→2→3→2→1번 S자 경로** 변경
+- 후방 연습차량 11m/s: **공식 10번 그리드**에서 출발, 앞차 접근 시 감속
+- TEAM 11: 기본 10m/s, 경로 이동 중 8.5m/s 상한(1.5m/s 감속), 전방 TTC 3초 이하에서 추월, 후방 TTC 5초 이하 감소 시 방어
+- 미래 차량 충돌 예측: **5초, 0.1초 간격**, 경로별 최소 간격 평가, 차선 변경 중 위험하면 재계획
+- 곡률 제한: 환산 조향각 30° 초과 후보 거절, 코너에서는 새 추월·방어 금지
+- 로그: `log/battle/<map>_grid<1|2>_lane<lane>/<실행시각>/`; `gazebo.log`의 `[BATTLE]` 기록 및 `prepared/battle_state.csv`
+
+**판정 참고:** 출력되는 PASS는 직접 좌표 이동 기반 연습 알고리즘의 결과일 뿐이며, 벽 접촉 방지·실제 물리 조향 검증과 동일하지 않습니다. 코드 반영 후 실제 Gazebo 환경에서의 실행 성공은 아직 확인되지 않았습니다.
