@@ -83,7 +83,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     joinPending=std::fabs(team.lat-preferredLane)>.05;
     std::cout<<"[BATTLE] START grid="<<teamGrid<<" (all five lights off)"<<std::endl;
   }
-  double elapsed=now-begin,dt=std::clamp(now-last,0.,.05);last=now;
+  const double elapsed=now-begin;
+  // Use actual simulation-time delta. Limiting dt to 50ms dropped distance
+  // whenever Gazebo advances in larger steps and caused visible stutter.
+  const double dt=std::clamp(now-last,0.,.2);last=now;
   if(dt<=0)return;
   // Preserve previous poses BEFORE lateral and longitudinal motion.
   // Needed to orient each car along its actual diagonal travel tangent.
@@ -169,35 +172,50 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    team.lat=team.from+(team.to-team.from)*ease(t);
    if(t>=1){team.lat=team.to;team.changing=false;changeFinishedAt=now;}
   }
-  // Practice vehicles slow for any obstacle ahead on the same lane.
-  auto cruise=[&](Car &a,double limit){
-   double v=limit;
-   for(Car*b:{&team,&lead,&rear}){
-    if(b==&a)continue;
-    double d=gap(a.s,b->s);
-    if(d<15.&&fabs(a.lat-b->lat)<WID+.16)
-     v=std::min(v,std::max(0.,b->v+1.3*(d-1.3)));
-   }
-   return std::clamp(v,0.,limit);
+  // Only cars on overlapping physical corridors restrict speed.
+  // A neighbouring car cannot force TEAM11 to match its 9m/s speed.
+  auto cruise=[&](const Car &a,double limit){
+    double wanted=limit;
+    for(const Car*b:{&team,&lead,&rear}){
+      if(b==&a)continue;
+      const double forward=gap(a.s,b->s);
+      if(forward>=16.)continue;
+      const double lateralGap=fabs(a.lat-b->lat);
+      const bool overlapping=lateralGap<(WID+.09);
+      if(!overlapping)continue;
+      // Keep 1m+speed-dependent following buffer, but do not instantly
+      // match the slower car when a clear pass is already under way.
+      const double buffer=1.0+0.10*a.v;
+      const double permitted=std::max(0.0,b->v+
+        std::max(0.0,forward-buffer)*1.7);
+      wanted=std::min(wanted,permitted);
+    }
+    return std::clamp(wanted,0.,limit);
   };
-  double vt=cruise(team,10),vl=cruise(lead,9),vr=cruise(rear,11);
-  // Hold a 1.5m/s reduction throughout every lane change.
-  if(team.changing)vt=std::min(vt,8.5);
-  if(emergencyBraking)vt=std::min(vt,4.0);
-  // Predict a side-cut collision even when the front vehicle is currently
-  // on another lane. The lookahead speed envelope is updated at 10 Hz.
+  const double teamCruise=12.0;
+  double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,11);
+  if(team.changing)vt=std::min(vt,teamCruise-1.5);
+  if(emergencyBraking)vt=std::min(vt,5.0);
+  // Short-horizon emergency forecast, not continuous 5s speed matching.
+  // Long-horizon forecast remains for candidate lane *selection*.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
-    speedCeiling=0.;
-    for(double trial:{10.,8.5,7.,5.,3.,1.,0.}){
-      if(trial>vt+.01)continue;
-      const double safety=forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial);
-      if(safety>=-0.5){speedCeiling=trial;break;}
+    speedCeiling=teamCruise;
+    const double selected=team.changing?team.to:team.lat;
+    const bool crossing=fabs(selected-lead.lat)<(WID+.15) ||
+                        fabs(selected-rear.lat)<(WID+.15);
+    if(crossing){
+      for(double trial:{12.,10.5,9.,7.,5.,3.,0.}){
+        if(trial>vt+.01)continue;
+        const double safety=forecast(selected,elapsed,now,team.changing,trial,1.8);
+        if(safety>=-0.5){speedCeiling=trial;break;}
+        speedCeiling=0.;
+      }
     }
-    if(speedCeiling<vt-.1 && now-lastSpeedLog>=2.){
+    if(speedCeiling<vt-1. && now-lastSpeedLog>=2.){
       lastSpeedLog=now;
-      std::cout<<"[BATTLE] PREDICTIVE_BRAKE from="<<vt
-               <<" to="<<speedCeiling<<" front_ttc="<<frontTTC<<std::endl;
+      std::cout<<"[BATTLE] CLOSE_HAZARD_BRAKE desired="<<vt
+               <<" limit="<<speedCeiling<<" front_ttc="<<frontTTC<<std::endl;
     }
   }
   vt=std::min(vt,speedCeiling);
@@ -207,16 +225,27 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     std::cout<<"[BATTLE] PRACTICE BRAKING lead="<<vl<<" rear="<<vr<<std::endl;
   }
   auto update=[dt](Car &a,double desired){
-    a.v+=std::clamp(desired-a.v,-12*dt,6*dt);a.s+=a.v*dt;
+    // Smoothed speed transitions: integrate trapezoidally over real dt.
+    const double before=a.v;
+    a.v+=std::clamp(desired-a.v,-5.0*dt,3.0*dt);
+    a.s+=(before+a.v)*.5*dt;
   };
   update(team,vt);update(lead,vl);update(rear,vr);
-  if(team.s>lead.s+.8&&!passed){
-    passed=true;std::cout<<"[BATTLE] OVERTAKE COMPLETED"<<std::endl;
+  if(team.s>lead.s+LEN+0.4&&!passed &&
+     fabs(team.lat-lead.lat)>WID+.12){
+    passed=true;
+    std::cout<<"[BATTLE] OVERTAKE COMPLETED mode="
+             <<(attempted?"LANE_CHANGE":"CLEAR_LANE_ACCELERATION")<<std::endl;
   }
   Pos a=pose(team),b=pose(lead),c=pose(rear);
+  // Look-ahead tangent is less sensitive to microscopic position noise
+  // than a one-frame heading; retain straight-road orientation at low speed.
   auto alignToMotion=[](Pos &next,const Pos &previous){
     const double dx=next.x-previous.x,dy=next.y-previous.y;
-    if(std::hypot(dx,dy)>1e-5)next.yaw=std::atan2(dy,dx);
+    if(std::hypot(dx,dy)>0.015){
+      const double measured=std::atan2(dy,dx);
+      next.yaw=previous.yaw+wrap(measured-previous.yaw)*0.35;
+    }else next.yaw=previous.yaw;
   };
   alignToMotion(a,previousTeam);
   alignToMotion(b,previousLead);
@@ -298,12 +327,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
  // steering. Positive means minimum centre clearance above collision radius.
- double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.)const{
   double minGap=1e6;
   Pos lastP=pose(team);
   Pos lastLastP=lastP;
   double lastHeading=lastP.yaw;
-  for(int i=1;i<=50;i++){
+  for(int i=1;i<=static_cast<int>(horizon*10+.5);i++){
     const double t=i*.1;
     Car candidate=team;
     const double vmax=desiredSpeed<0?std::max(0.,team.v):desiredSpeed;
