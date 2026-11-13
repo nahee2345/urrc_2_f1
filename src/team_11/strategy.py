@@ -100,6 +100,19 @@ class Track:
             i = (i + 1) % self.n
         return worst
 
+    def distance_to_corner(self, index, search_m=100.0, threshold=.08):
+        """Forward track distance to next corner; 0 while inside a corner."""
+        distance=0.0
+        i=index
+        for _ in range(self.n):
+            if self.curvature[i]>=threshold:
+                return distance
+            if distance>search_m:
+                break
+            distance+=self.ds[i]
+            i=(i+1)%self.n
+        return math.inf
+
     def safe_change(self, index, speed):
         # Do not change lanes near a sharp bend, or where width is insufficient.
         end = self.advance(index, max(2.0, speed * 2.0))
@@ -126,6 +139,8 @@ class Planner:
         self.lane_start = None
         self.pass_name = None
         self.passed_in_corner = False
+        self.was_in_corner = False
+        self.corner_exit_index = None
 
     def _relative(self, ego, other, ego_index):
         other_index = self.track.nearest(other.x, other.y)
@@ -153,10 +168,27 @@ class Planner:
         return None
 
     def _corner_speed(self, index, ego_speed):
+        """8m/s at a bend, 10m/s after it, 15m/s on long straights.
+
+        Braking begins before the bend using a 4m/s² approach envelope;
+        speed ramps in step() still constrain the actual command change.
+        """
         curvature = self.track.corner(index, ego_speed)
-        # Geometric limit from 2m/s^2 lateral acceleration; max 15m/s on straights.
-        speed_limit = min(15.0, math.sqrt(2.0 / max(curvature, 1e-6)))
-        return curvature, speed_limit
+        distance = self.track.distance_to_corner(index)
+        at_corner = self.track.curvature[index] >= .08
+        if at_corner:
+            self.was_in_corner = True
+            self.corner_exit_index = None
+        elif self.was_in_corner:
+            self.was_in_corner = False
+            self.corner_exit_index = index
+        distance_since_exit = (self.track.along(self.corner_exit_index,index)
+                               if self.corner_exit_index is not None else math.inf)
+        long_straight = distance > 70.0 and distance_since_exit >= 12.0
+        cruise = 15.0 if long_straight else 10.0
+        # Five-metre buffer for speed convergence before the bend.
+        approach = math.sqrt(8.0**2 + 2.0*4.0*max(0.0,distance-5.0))
+        return curvature, min(cruise,approach)
 
     def step(self, ego, others, now, enabled=True):
         if not enabled:
@@ -285,6 +317,6 @@ class Planner:
             desired_speed = min(15.0, desired_speed + .5)
         # Separate braking and acceleration slopes.
         desired_speed = clamp(desired_speed, self.last_speed - 4.0 * dt,
-                              self.last_speed + 2.0 * dt)
+                              self.last_speed + 3.5 * dt)
         self.last_speed = desired_speed
         return Command(desired_speed, steer, self.target, self.mode, reason)
