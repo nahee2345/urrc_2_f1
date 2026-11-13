@@ -37,7 +37,7 @@ class RouteTests(unittest.TestCase):
         self.assertAlmostEqual(paths[3][0]["lane_offset_m"],.965)
 
     def test_narrow_road_forbids_changes(self):
-        data = [dict(p, road_width_m=1.2) for p in self.track]
+        data = [dict(p, road_width_m=0.7) for p in self.track]
         paths, narrow = generate(data)
         self.assertEqual(narrow, len(data))
         self.assertTrue(all(not p["safe_to_change_lane"] for p in paths[1]))
