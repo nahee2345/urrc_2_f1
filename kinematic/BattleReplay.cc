@@ -181,6 +181,23 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // Hold a 1.5m/s reduction throughout every lane change.
   if(team.changing)vt=std::min(vt,8.5);
   if(emergencyBraking)vt=std::min(vt,4.0);
+  // Predict a side-cut collision even when the front vehicle is currently
+  // on another lane. The lookahead speed envelope is updated at 10 Hz.
+  if(now-lastSpeedForecast>=.1){
+    lastSpeedForecast=now;
+    speedCeiling=0.;
+    for(double trial:{10.,8.5,7.,5.,3.,1.,0.}){
+      if(trial>vt+.01)continue;
+      const double safety=forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial);
+      if(safety>=-0.5){speedCeiling=trial;break;}
+    }
+    if(speedCeiling<vt-.1 && now-lastSpeedLog>=2.){
+      lastSpeedLog=now;
+      std::cout<<"[BATTLE] PREDICTIVE_BRAKE from="<<vt
+               <<" to="<<speedCeiling<<" front_ttc="<<frontTTC<<std::endl;
+    }
+  }
+  vt=std::min(vt,speedCeiling);
   if(!team.changing && frontGap>2.0 && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<10.9)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -278,7 +295,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
  // steering. Positive means minimum centre clearance above collision radius.
- double forecast(double destination,double elapsed,double now,bool active)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.)const{
   double minGap=1e6;
   Pos lastP=pose(team);
   Pos lastLastP=lastP;
@@ -286,7 +303,13 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   for(int i=1;i<=50;i++){
     const double t=i*.1;
     Car candidate=team;
-    candidate.s+=std::max(0.5,team.v)*t;
+    const double vmax=desiredSpeed<0?std::max(0.,team.v):desiredSpeed;
+    const double acc=vmax<team.v?-12.:6.;
+    const double reach=fabs(vmax-team.v)/fabs(acc);
+    const double until=std::min(t,reach);
+    const double distance=team.v*until+.5*acc*until*until+
+                          vmax*std::max(0.,t-until);
+    candidate.s+=std::max(0.,distance);
     const double from=active?team.from:team.lat;
     const double start=active?team.changeStart:now;
     const double duration=active?team.changeDuration:2.5;
@@ -341,6 +364,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,speedCeiling=10.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false;
