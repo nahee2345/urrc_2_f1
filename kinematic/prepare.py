@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-BASE=Path(__file__).resolve().parent
+BASE=Path(__file__).resolve().parent.parent
 PACKAGE=BASE/"src"/"urrc_track_gazebo"
 CHASSIS=BASE/"src"/"team_11"/"models"/"team11_yellow_car"/"model.sdf"
 SPEED=10.0
