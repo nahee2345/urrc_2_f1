@@ -18,12 +18,10 @@ PACKAGE=BASE/"src"/"urrc_track_gazebo"
 CHASSIS=BASE/"src"/"team_11"/"models"/"team11_yellow_car"/"model.sdf"
 SPEED=10.0
 JOIN_METERS=8.0
-# The TEAM11 wheel bottoms are 0.090m below base_link; urrc_2 pace-car
-# wheel bottoms sit 0.003m over the road. Match that ground clearance,
-# not the different vehicle model's link-origin height.
+# Preserve the original TEAM11 wheel-ground contact geometry.
+# The wall height is a separate track-mesh change.
 WHEEL_BOTTOM_BELOW_BASE_M=0.090
-TARGET_GROUND_CLEARANCE_M=0.003
-REPLAY_BASE_Z_OFFSET_M=WHEEL_BOTTOM_BELOW_BASE_M+TARGET_GROUND_CLEARANCE_M
+REPLAY_BASE_Z_OFFSET_M=WHEEL_BOTTOM_BELOW_BASE_M
 WHEELBASE_M=.36
 MAX_STEERING_DEG=30.0
 MAX_CURVATURE=math.tan(math.radians(MAX_STEERING_DEG))/WHEELBASE_M
@@ -129,6 +127,8 @@ def build(track,lane,library,output,speed=SPEED):
     model_path=output/"replay_vehicle.sdf"
     model.write(model_path,encoding="utf-8",xml_declaration=True)
     runtime=output/"resources"/"urrc_track_gazebo"
+    from wall_height import prepare_wall_resources
+    prepare_wall_resources(PACKAGE, runtime, track)
     (runtime/"worlds").mkdir(parents=True,exist_ok=True)
     (runtime/"scripts").mkdir(parents=True,exist_ok=True)
     shutil.copy2(PACKAGE/"scripts"/"traffic_lights_v10.py",
@@ -166,7 +166,7 @@ def build(track,lane,library,output,speed=SPEED):
               "grid":1,"grid_xyz_yaw":[float(grid["x"]),float(grid["y"]),
                     float(grid["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grid["yaw"])],
               "speed_mps":speed,"length_m":distance,"source_offset_m":offset,
-              "wheel_ground_clearance_m":TARGET_GROUND_CLEARANCE_M,
+              "wheel_ground_clearance_m":0.0,
               "vehicle_base_link_z_above_road_m":REPLAY_BASE_Z_OFFSET_M,
               "max_equivalent_steering_deg":round(equivalent_steering,3),
               "steering_limit_deg":MAX_STEERING_DEG,
