@@ -58,13 +58,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   lead.name="practice_s_09";lead.s=cfg->Get<double>("lead_start_s");lead.lat=-lateralOffset;
   rear.name="practice_rear_11";rear.s=cfg->Get<double>("rear_start_s");
   rear.lat=cfg->Get<double>("rear_start_offset_m");
+  rearCruise=cfg->Get<double>("rear_cruise_mps");
   report.open(cfg->Get<std::string>("log_file"));
   if(route.size()<100||lap<100||lateralOffset<=0||!report){
    std::cerr<<"[BATTLE] INVALID SETUP"<<std::endl;return;
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 12m/s, S-car 9m/s, rear grid10 11m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 12m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -199,7 +200,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     return std::clamp(desired,0.,limit);
   };
   const double teamCruise=12.0;
-  double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,11);
+  double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
   if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
   // Restrict strong braking to hazards predicted inside one second.
@@ -223,7 +224,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   vt=std::min(vt,speedCeiling);
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
-  if((vl<8.9||vr<10.9)&&elapsed-lastBrake>1.5){
+  if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
     std::cout<<"[BATTLE] PRACTICE BRAKING lead="<<vl<<" rear="<<vr<<std::endl;
   }
@@ -380,7 +381,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
     for(const Car*o:{&lead,&rear}){
       Car sample=*o;
-      sample.s+=t*std::min(o==&lead?9.:11.,std::max(o->v,0.)+6.*t);
+      sample.s+=t*std::min(o==&lead?9.:rearCruise,std::max(o->v,0.)+6.*t);
       if(o==&lead){
         const double seq[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
         const double absolute=elapsed+t;
@@ -419,7 +420,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=10.;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false;
