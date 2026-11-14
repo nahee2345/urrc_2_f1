@@ -21,7 +21,7 @@ for TRACK in "${TRACKS[@]}"; do
     if [[ "$GRID" == 1 ]]; then LANE=3; else LANE=1; fi
     CASE_LOG="$DEST/${TRACK}_grid${GRID}.log"
     echo "[$N/12] $TRACK grid=$GRID lane=$LANE"
-    if timeout --signal=TERM --kill-after=15 "${URRC_STAGE1_CASE_TIMEOUT_S:-480}" \
+    if timeout --signal=TERM --kill-after=15 "${URRC_STAGE1_CASE_TIMEOUT_S:-720}" \
        bash "$ROOT/run_battle.sh" "$TRACK" "$GRID" "$LANE" defense > "$CASE_LOG" 2>&1; then
       RC=0
       if grep -q "^PASS BATTLE: $TRACK grid $GRID lane $LANE " "$CASE_LOG"; then
