@@ -24,6 +24,8 @@
 #include <vector>
 namespace urrc {
 constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
+constexpr double STRAIGHT_TARGET=.60, CORNER_TARGET=.80;
+constexpr double CLEARANCE_EPS=1e-4;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
 struct Pt {double s,x,y,z,yaw;};
@@ -98,11 +100,19 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   lead.lat=lateral[phase]+(lateral[phase+1]-lateral[phase])*ease((elapsed-2.0*period)/2.0);
   double frontGap=gap(team.s,lead.s),rearGap=gap(rear.s,team.s);
   double frontTTC=team.v>lead.v+.01?std::max(0.,frontGap-LEN)/(team.v-lead.v):1e6;
-  double rearTTC=rear.v>team.v+.01?rearGap/(rear.v-team.v):1e6;
+  // Count only an actual approaching car still behind us; a car that has
+  // passed must not wrap around the lap and appear to have TTC near zero.
+  const bool rearBehind=rearGap>LEN && rearGap<25.;
+  double rearTTC=rearBehind && rear.v>team.v+.01?
+    std::max(0.,rearGap-LEN)/(rear.v-team.v):1e6;
   bool corner=fabs(curve(team.s))>.18;
-  const double targetGap=corner?CORNER_GAP:STRAIGHT_GAP;
+  const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
   minRearTTC=std::min(minRearTTC,rearTTC);
-  if(rearTTC<=5. && rearGap>LEN)defenseOpportunity=true;
+  if(rearBehind && rearTTC<=5.){
+    if(!defenseOpportunity)std::cout<<"[BATTLE] REAR_PRESSURE TTC="<<rearTTC
+      <<" gap="<<rearGap<<" team_speed="<<team.v<<" rear_speed="<<rear.v<<std::endl;
+    defenseOpportunity=true;
+  }
   // A change is a committed manoeuvre: keep its goal unless a *predicted
   // footprint collision* is detected. Negative clearance by itself is not
   // a collision and must not create oscillating replan requests.
@@ -128,11 +138,29 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }else if(now-changeFinishedAt<2.0){
     // Hysteresis prevents immediate re-selection of the opposite lane.
+  }else if(!corner && rearBehind && rearTTC<=5.0 && !defended &&
+            frontTTC>1.0){
+    // Handle rear pressure before an optional front overtake. Safest
+    // defense is maintaining a corridor or speeding away, not cutting off
+    // a vehicle already alongside.
+    const double backClearance=clearance(pose(team),pose(rear));
+    if(rearGap>LEN+STRAIGHT_TARGET && backClearance>STRAIGHT_TARGET){
+      defended=true;
+      defenseOutcome="MAINTAINED_SAFE_CORRIDOR";
+      std::cout<<"[BATTLE] DEFENSE HOLD TTC="<<rearTTC
+               <<"s gap="<<rearGap<<"m clearance="<<backClearance<<std::endl;
+    }else{
+      defenseOutcome="SAFE_ABORT";
+      if(now-lastDefenseLog>1.0){
+        lastDefenseLog=now;
+        std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
+                 <<" gap="<<rearGap<<" clearance="<<backClearance<<std::endl;
+      }
+    }
   }else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3. &&
             (fabs(team.lat-lead.lat)<WID+.18 ||
              forecast(team.lat,elapsed,now,false,team.v,2.5)<=-0.5)){
-    // Never turn into another lane merely to "overtake" a vehicle already
-    // travelling safely in the adjacent lane; accelerate past it instead.
+    // On a separate free corridor, overtake by accelerating straight ahead.
     double bestScore=-1e9,bestTarget=team.lat;
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
@@ -146,31 +174,6 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       change(bestTarget,now);attempted=true;attemptCount++;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
                <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
-    }
-  }else if(!corner && !defended && defenseOpportunity &&
-            rearGap>1.5 && rearTTC<=5.0 &&
-            rearTTC<previousRearTTC-.002 && frontTTC>3.){
-    // Defender is allowed to choose a corridor only before the pursuer
-    // reaches its flank. No deliberate abrupt block of an adjacent car.
-    const double currentScore=forecast(team.lat,elapsed,now,false);
-    const double target=rear.lat>=0?lateralOffset:-lateralOffset;
-    if(fabs(target-team.lat)<.2*lateralOffset && currentScore>0){
-      defended=true;defenseOutcome="HELD_SAFE_LANE";
-      std::cout<<"[BATTLE] DEFENSE SAFE_HOLD TTC="<<rearTTC<<std::endl;
-    }else{
-      double score=forecast(target,elapsed,now,false);
-      if(score>0 && score>currentScore+0.2 && rearGap>3.0){
-        change(target,now);defended=true;defenseOutcome="POSITIONED";
-        std::cout<<"[BATTLE] DEFENSE TTC="<<rearTTC
-                 <<"s target_offset="<<target<<std::endl;
-      }else{
-        defenseOutcome="SAFE_ABORT";
-        if(now-lastDefenseLog>=1.0){
-          lastDefenseLog=now;
-          std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
-                   <<" candidate="<<score<<" current="<<currentScore<<std::endl;
-        }
-      }
     }
   }
   if(team.changing){
@@ -187,9 +190,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       if(d>20. || fabs(a.lat-b->lat)>WID+.09)continue;
       const double bumper=std::max(0.,d-LEN);
       const bool inCorner=fabs(curve(a.s))>.18;
-      const double minimum=inCorner?CORNER_GAP:STRAIGHT_GAP;
+      const double minimum=inCorner?CORNER_TARGET:STRAIGHT_TARGET;
       const double ttc=a.v>b->v+.05?(bumper-minimum)/(a.v-b->v):1e6;
-      if(ttc<=1. || bumper<=minimum+.12){
+      if(ttc<=1. || bumper<=minimum){
         desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*1.2);
       }else if(inCorner && bumper<4.){
         desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*.45);
@@ -270,7 +273,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     minimumClearance=std::min(minimumClearance,
                               std::min(clearanceLead,clearanceRear));
     const double required=fabs(curve(team.s))>.18?CORNER_GAP:STRAIGHT_GAP;
-    if(std::min(clearanceLead,clearanceRear)+1e-6<required){
+    if(std::min(clearanceLead,clearanceRear)+CLEARANCE_EPS<required){
       std::cout<<"[BATTLE] CLEARANCE_BREACH t="<<elapsed
                <<" actual="<<std::min(clearanceLead,clearanceRear)
                <<" required="<<required<<std::endl;
