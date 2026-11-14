@@ -63,7 +63,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(route.size()<100||lap<100||lateralOffset<=0||!report){
    std::cerr<<"[BATTLE] INVALID SETUP"<<std::endl;return;
   }
-  report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,clearance_m\n";
+  report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,min_center_m,min_body_clearance_m\n";
   ok=true;
   std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 12m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
  }
@@ -265,6 +265,17 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     Pos ap=blend(previousTeam,a,t);
     Pos bp=blend(previousLead,b,t);
     Pos cp=blend(previousRear,c,t);
+    const double clearanceLead=clearance(ap,bp);
+    const double clearanceRear=clearance(ap,cp);
+    minimumClearance=std::min(minimumClearance,
+                              std::min(clearanceLead,clearanceRear));
+    const double required=fabs(curve(team.s))>.18?CORNER_GAP:STRAIGHT_GAP;
+    if(std::min(clearanceLead,clearanceRear)+1e-6<required){
+      std::cout<<"[BATTLE] CLEARANCE_BREACH t="<<elapsed
+               <<" actual="<<std::min(clearanceLead,clearanceRear)
+               <<" required="<<required<<std::endl;
+      finish("FAIL_CLEARANCE");return;
+    }
     for(auto pair:std::array<std::pair<Pos,Pos>,3>{{{ap,bp},{ap,cp},{bp,cp}}}){
       double dist=hypot(pair.first.x-pair.second.x,pair.first.y-pair.second.y);
       minimumCenter=std::min(minimumCenter,dist);
@@ -282,7 +293,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(now-lastCsv>=.1){
     report<<std::fixed<<std::setprecision(4)<<elapsed<<','<<team.s<<','<<team.lat<<','<<team.v<<','
           <<lead.s<<','<<lead.lat<<','<<lead.v<<','<<rear.s<<','<<rear.lat<<','<<rear.v<<','
-          <<frontTTC<<','<<rearTTC<<','<<minimumCenter<<'\n';
+          <<frontTTC<<','<<rearTTC<<','<<minimumCenter<<','<<minimumClearance<<'\n';
     report.flush();lastCsv=now;
   }
   if(team.s-teamStart>=lap){
