@@ -228,16 +228,17 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(now-lastComfortForecast>=.1){
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
+    bool foundComfort=false;
     for(double trial:{12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
       if(trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
         corner?CORNER_TARGET:STRAIGHT_TARGET);
       if(safe>=0.){
-        comfortSpeed=trial;break;
+        comfortSpeed=trial;foundComfort=true;break;
       }
-      comfortSpeed=std::min(comfortSpeed,teamCruise);
     }
+    if(!foundComfort)comfortSpeed=9.;
   }
   // Only a gentle approach for hazards 1-2.5s out, never an instant stop.
   vt=std::min(vt,std::max(team.v-1.5,comfortSpeed));
