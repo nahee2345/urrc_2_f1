@@ -79,7 +79,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False):
       "lead_start_s":ahead,
       "rear_start_s":g10s,
       "rear_cruise_mps":14.0 if defense else 11.0,
-      "rear_start_offset_m":({1:-offset,2:0.0,3:offset}[lane] if defense else grid_lateral(pts[g10i],grids[10]))
+      "rear_start_offset_m":(grid_lateral(pts[g1i],grids[grid_position]) if defense else grid_lateral(pts[g10i],grids[10]))
     }
     for k,v in values.items():ET.SubElement(plug,k).text=str(v)
     world.write(result["world_file"],encoding="utf-8",xml_declaration=True)
