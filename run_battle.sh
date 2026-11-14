@@ -56,8 +56,10 @@ PLUGIN="$ROOT/kinematic/build/libteam11_battle_replay.so"
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}"
 echo "[4/6] Prepare 0.30m walls and grid $GRID / grid 10 models"
 OUT="$LOG/prepared"
+DEFENSE_ARGS=()
+if [[ "$MODE" == defense ]]; then DEFENSE_ARGS=(--defense); fi
 /usr/bin/python3 "$ROOT/kinematic/prepare_battle.py" \
-  --track "$TRACK" --grid "$GRID" --lane "$LANE" ${MODE:+$( [[ "$MODE" == defense ]] && printf '%s' '--defense' )} \
+  --track "$TRACK" --grid "$GRID" --lane "$LANE" "${DEFENSE_ARGS[@]}" \
   --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
     tail -80 "$LOG/prepare.log";exit 6;
 }
