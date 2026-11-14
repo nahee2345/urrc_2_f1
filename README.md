@@ -196,3 +196,16 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 주행: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1`
 - 방어: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense`
 - **실제 ROS2 Jazzy / Gazebo Harmonic 컴파일 및 시뮬레이션 완주 검증은 사용자 환경에서 수행해야 합니다.**
+
+## 2026-11-15 S자 차량 예측·방어 성공 검증 수정
+
+직전 24회 상세 로그 확인: 일반 주행 Monaco/COTA 네 번의 `FAIL_CLEARANCE`는 모두 `team_11/practice_s_09`이며, 0.4998m 전후에서 발생. 방어 시험 Baku/COTA/Hungaroring 그리드 1 세 번의 충돌은 **연습차량 S와 연습 후방차** 사이에서 발생하여 TEAM11 직접 충돌과 구별이 필요했음.
+
+- TEAM11 속도 제어에 **2.5초 S자 횡방향 경로 예측을 반영**해 위험 경로 접근을 약하게 사전 감속. 실제 TTC 1초 이내 강한 제동 원칙은 그대로 유지. 직선 최저 허용 0.5m, 코너 0.7m, 제어 목표 0.6m·0.8m 유지
+- 예측 주행거리 `(미래 속도 × 전체 미래시간)` 과대평가를 상수 가속도 적분으로 변경하여 충돌 예측의 거리 편차 감소
+- `FAIL_SCENARIO_COLLISION`: practice_s_09 ↔ practice_rear_11 간 충돌은 팀 차량 직접 충돌(`FAIL_COLLISION`)과 **구별하여 실패 처리**. 연습 차량 충돌 시 해당 시험을 유효한 팀 방어 성공으로 처리하지 않음
+- 방어 단계: `REAR_PRESSURE`(감지) → `HOLD_START`(안전 경로 유지 시작) → `DEFENSE VERIFIED`(2초 이상 유지 및 추격차 후방 잔류) / `OVERTAKEN`(추격차 통과). 단순 순간 안전 유지 선언은 이제 방어 성공으로 인정하지 않음
+- 12회 주행: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1`
+- 12회 후방방어: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense`
+
+한계: 전방 S자 차량은 시나리오에서 지정한 주기적 움직임을 미리 알고 예측하는 **리플레이 검증**이며 실차 센서 인식/조향의 검증은 아님. 실제 ROS2 Jazzy + Gazebo Harmonic 빌드 및 24회 주행은 로컬 환경에서 미검증.
