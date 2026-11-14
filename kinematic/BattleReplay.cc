@@ -210,11 +210,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
     speedCeiling=teamCruise;
-    if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.)<0.){
+    if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
       for(double trial:{12.,10.5,9.,7.,5.,3.,1.,0.}){
         if(trial>vt+.01)continue;
-        if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.)>=0.){
+        if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
         }
       }
@@ -226,6 +226,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }
   vt=std::min(vt,speedCeiling);
+  // Braking for a pursuer behind would make a rear-end collision worse.
+  if(rearBehind && rearTTC<2. && frontTTC>1. && !team.changing)
+    vt=std::max(vt,std::min(teamCruise,team.v+1.0));
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -268,24 +271,36 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     Pos ap=blend(previousTeam,a,t);
     Pos bp=blend(previousLead,b,t);
     Pos cp=blend(previousRear,c,t);
+    // Detect physical collision first and name the two vehicles involved.
+    const std::array<Pos,3> snapshot{{ap,bp,cp}};
+    const std::array<const char*,3> names{{"team_11","practice_s_09","practice_rear_11"}};
+    for(int i=0;i<3;++i){
+      for(int j=i+1;j<3;++j){
+        const double dist=hypot(snapshot[i].x-snapshot[j].x,
+                                snapshot[i].y-snapshot[j].y);
+        minimumCenter=std::min(minimumCenter,dist);
+        if(collide(snapshot[i],snapshot[j])){
+          std::cout<<"[BATTLE] COLLISION t="<<elapsed<<" pair="<<names[i]
+                   <<"/"<<names[j]<<" positions=("<<snapshot[i].x<<","
+                   <<snapshot[i].y<<")/("<<snapshot[j].x<<","
+                   <<snapshot[j].y<<")"<<std::endl;
+          finish("FAIL_COLLISION");return;
+        }
+      }
+    }
     const double clearanceLead=clearance(ap,bp);
     const double clearanceRear=clearance(ap,cp);
     minimumClearance=std::min(minimumClearance,
                               std::min(clearanceLead,clearanceRear));
     const double required=fabs(curve(team.s))>.18?CORNER_GAP:STRAIGHT_GAP;
     if(std::min(clearanceLead,clearanceRear)+CLEARANCE_EPS<required){
+      const bool withLead=clearanceLead<=clearanceRear;
       std::cout<<"[BATTLE] CLEARANCE_BREACH t="<<elapsed
+               <<" pair=team_11/"<<(withLead?"practice_s_09":"practice_rear_11")
                <<" actual="<<std::min(clearanceLead,clearanceRear)
-               <<" required="<<required<<std::endl;
+               <<" required="<<required<<" team_s="<<team.s
+               <<" team_lat="<<team.lat<<" rear_ttc="<<rearTTC<<std::endl;
       finish("FAIL_CLEARANCE");return;
-    }
-    for(auto pair:std::array<std::pair<Pos,Pos>,3>{{{ap,bp},{ap,cp},{bp,cp}}}){
-      double dist=hypot(pair.first.x-pair.second.x,pair.first.y-pair.second.y);
-      minimumCenter=std::min(minimumCenter,dist);
-      if(collide(pair.first,pair.second)){
-        std::cout<<"[BATTLE] COLLISION at t="<<elapsed<<"s"<<std::endl;
-        finish("FAIL_COLLISION");return;
-      }
     }
   }
   minimumClearance=std::min(minimumClearance,
@@ -364,7 +379,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
  // steering. Positive means minimum centre clearance above collision radius.
- double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true)const{
   double minGap=1e6;
   Pos lastP=pose(team);
   Pos lastLastP=lastP;
@@ -394,6 +409,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       lastHeading=p.yaw;
     }
     for(const Car*o:{&lead,&rear}){
+      if(o==&rear && !includeRear)continue;
       Car sample=*o;
       sample.s+=t*std::min(o==&lead?9.:rearCruise,std::max(o->v,0.)+6.*t);
       if(o==&lead){
