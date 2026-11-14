@@ -184,3 +184,15 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 로그는 `log/battle_defense/<실행시각>/summary.csv`에 저장됩니다. 개별 실행은 `bash run_battle.sh monza 1 3 defense` 형태입니다. 방어 전용 시험은 연습용 상황 재현이며 공식 10번 그리드에서 출발하는 일반 시험을 변경하지 않습니다.
 
 **검증 제한:** 현재 GitHub 코드 변경 내용은 점검했지만 Ubuntu 24.04 / ROS2 Jazzy / Gazebo Harmonic 환경에서의 빌드 및 12회 실주행 PASS는 아직 확인되지 않았습니다. **차체 간격 0.5/0.7m 요구는 좁은 인접 경로에서 동시에 주행하기 어렵거나 불가능할 수 있으므로, 우선 경로를 보수적으로 선택하며 FAIL_CLEARANCE가 발생하면 실제 경계·차량 이동 로그를 통해 원인을 분석해야 합니다.**
+
+## 2026-11-15 1차/방어 로그 기반 수정
+
+- 오류: 0.499949m처럼 직선 기준 0.5m에서 수십 마이크로미터만 부족해도 즉시 실패 처리하던 문제. **허용 최소 직선 0.50m·코너 0.70m는 유지**, 실제 속도 제어 목표를 각각 **0.60m·0.80m**로 조정. 판정 시 계산 허용오차 0.0001m를 두어 부동소수점 경계 오차만 구분
+- 후방 추격 판단: 후방 실제 거리 25m 이내일 때만 TTC 계산, **차체 길이**를 차감하여 실제 접근 시간을 평가, 5초 이내 접근 상황 기록. 후방 대처를 전방 추월보다 우선 검토하되, 측면의 차를 급히 가로막지 않고 안전 경로 유지 또는 가속을 우선
+- 후방 차량 위험을 이유로 **TEAM11이 오히려 급제동하던 문제** 개선: 긴급 감속 예측에서는 전방 차량만 평가. 후방 TTC 2초 이내이고 전방이 안전하면 속도 유지/가속
+- 충돌 발생 시 `COLLISION pair=<차량1>/<차량2> positions=...` 출력. 차체 간격 위반은 `CLEARANCE_BREACH pair=... actual=... required=...`로 구별하여 원인 추적
+- 방어 시험의 후방 차량은 GRID 1/2 **TEAM11 실제 출발 횡좌표를 기준으로** 약 7m 뒤에 스폰(14m/s)
+- Baku 등 느린 GUI 환경을 고려해 실행 제한 시간은 Gazebo 실시간 기준 최대 600초, 개별 배치 케이스는 720초로 연장. 시뮬레이션 내부 완주 판정 기준은 변경하지 않음
+- 주행: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle stage1`
+- 방어: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense`
+- **실제 ROS2 Jazzy / Gazebo Harmonic 컴파일 및 시뮬레이션 완주 검증은 사용자 환경에서 수행해야 합니다.**
