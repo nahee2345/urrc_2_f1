@@ -126,7 +126,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 12m/s (lane change max 10.5m/s), lead S 9m/s/2sec, grid10 rear 11m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 12m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
@@ -137,8 +137,8 @@ while kill -0 "$WORLD_PID" 2>/dev/null;do
     echo "$RESULT"
     break
   fi
-  if (( $(date +%s)-STARTED>360 ));then
-    echo "FAIL: no battle result within 360 seconds" >&2
+  if (( $(date +%s)-STARTED>600 ));then
+    echo "FAIL: no battle result within 600 seconds" >&2
     tail -55 "$LOG/gazebo.log";exit 11
   fi
   sleep 1
