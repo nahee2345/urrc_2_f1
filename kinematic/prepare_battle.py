@@ -23,7 +23,7 @@ def grid_lateral(point,grid):
     return ((float(grid["x"])-point["x"])*(-math.sin(yaw))+
             (float(grid["y"])-point["y"])*math.cos(yaw))
 
-def build(track,lib,output,grid_position=1,lane=None):
+def build(track,lib,output,grid_position=1,lane=None,defense=False):
     if grid_position not in (1,2):raise ValueError("Grid must be 1 or 2")
     if lane is None:lane=3 if grid_position==1 else 1
     if lane not in (1,2,3):raise ValueError("Lane must be 1..3")
@@ -45,6 +45,9 @@ def build(track,lib,output,grid_position=1,lane=None):
     # Unwrapped positions: grid 10 must remain behind the selected start.
     if g10s>=g1s:g10s-=loop
     ahead=g1s+12.0
+    if defense:
+        # Dedicated rear-pressure check; preserve grid10 practice model in ordinary battles.
+        g10s=g1s-7.0
     offset=float(json.loads((ROOT/"routes"/track/"manifest.json").read_text())["offset_m"])
     lead_mod=ahead%loop
     j=min(range(n),key=lambda i:abs(pts[i]["s"]-lead_mod))
@@ -75,6 +78,7 @@ def build(track,lib,output,grid_position=1,lane=None):
       "team_start_offset_m":grid_lateral(pts[g1i],grids[grid_position]),
       "lead_start_s":ahead,
       "rear_start_s":g10s,
+      "rear_cruise_mps":14.0 if defense else 11.0,
       "rear_start_offset_m":grid_lateral(pts[g10i],grids[10])
     }
     for k,v in values.items():ET.SubElement(plug,k).text=str(v)
@@ -93,8 +97,17 @@ def build(track,lib,output,grid_position=1,lane=None):
     rear_model=output/"practice_rear_11.sdf"
     colour(result["vehicle_file"],lead_model,"0.90 0.12 0.14 1")
     colour(result["vehicle_file"],rear_model,"0.10 0.30 0.98 1")
+    if defense:
+        from math import sin,cos
+        rear_mod=g10s%loop
+        ri=min(range(n),key=lambda i:abs(pts[i]["s"]-rear_mod))
+        rp=pts[ri]
+        rear_lat=values["rear_start_offset_m"]
+        rear_spawn=[rp["x"]-rear_lat*sin(rp["yaw"]),
+                    rp["y"]+rear_lat*cos(rp["yaw"]),
+                    rp["z"]+REPLAY_BASE_Z_OFFSET_M,rp["yaw"]]
     result.update({
-      "mode":"battle",
+      "mode":"battle_defense" if defense else "battle",
       "team_initial_lane":lane,
       "team_grid":grid_position,
       "lead_model":str(lead_model),
@@ -104,11 +117,11 @@ def build(track,lib,output,grid_position=1,lane=None):
         "team_11":[float(grids[grid_position]["x"]),float(grids[grid_position]["y"]),
                    float(grids[grid_position]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[grid_position]["yaw"])],
         "practice_s_09":[lx,ly,lead["z"]+REPLAY_BASE_Z_OFFSET_M,lead["yaw"]],
-        "practice_rear_11":[float(grids[10]["x"]),float(grids[10]["y"]),
+        "practice_rear_11":rear_spawn if defense else [float(grids[10]["x"]),float(grids[10]["y"]),
                            float(grids[10]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[10]["yaw"])]
       },
       "scenario":{"team_mps":10,"s_vehicle_mps":9,
-                  "rear_grid10_mps":11,"s_lane_sequence":[1,2,3,2,1],
+                  "rear_grid10_mps":14 if defense else 11,"s_lane_sequence":[1,2,3,2,1],
                   "s_segment_seconds":2,
                   "start_signal":"5 lamps off via Gazebo service, not camera",
                   "collision_detector":"oriented 0.53m x 0.25m rectangle SAT",
@@ -122,8 +135,9 @@ if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--track",choices=("monza","spa","monaco","cota","hungaroring","baku"),required=True)
     p.add_argument("--grid",type=int,choices=(1,2),required=True)
+    p.add_argument("--defense",action="store_true")
     p.add_argument("--lane",type=int,choices=(1,2,3),default=None)
     p.add_argument("--plugin",type=Path,required=True)
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
-    build(a.track,a.plugin,a.output,a.grid,a.lane)
+    build(a.track,a.plugin,a.output,a.grid,a.lane,a.defense)
