@@ -25,6 +25,7 @@
 namespace urrc {
 constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
 constexpr double STRAIGHT_TARGET=.60, CORNER_TARGET=.80;
+constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
@@ -109,6 +110,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
   minRearTTC=std::min(minRearTTC,rearTTC);
   if(rearBehind && rearTTC<=5.){
+    if(!defenseOpportunity){defenseStart=now;defenseOutcome="DETECTED";}
     if(!defenseOpportunity)std::cout<<"[BATTLE] REAR_PRESSURE TTC="<<rearTTC
       <<" gap="<<rearGap<<" team_speed="<<team.v<<" rear_speed="<<rear.v<<std::endl;
     defenseOpportunity=true;
@@ -145,10 +147,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // a vehicle already alongside.
     const double backClearance=clearance(pose(team),pose(rear));
     if(rearGap>LEN+STRAIGHT_TARGET && backClearance>STRAIGHT_TARGET){
-      defended=true;
-      defenseOutcome="MAINTAINED_SAFE_CORRIDOR";
-      std::cout<<"[BATTLE] DEFENSE HOLD TTC="<<rearTTC
-               <<"s gap="<<rearGap<<"m clearance="<<backClearance<<std::endl;
+      if(defenseOutcome!="HOLDING"){
+        defenseOutcome="HOLDING";
+        std::cout<<"[BATTLE] DEFENSE HOLD_START TTC="<<rearTTC
+                 <<"s gap="<<rearGap<<"m clearance="<<backClearance<<std::endl;
+      }
     }else{
       defenseOutcome="SAFE_ABORT";
       if(now-lastDefenseLog>1.0){
@@ -174,6 +177,21 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       change(bestTarget,now);attempted=true;attemptCount++;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
                <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
+    }
+  }
+  // A reaction is not a defense success. Verify the pursuer stays behind
+  // during a sustained interval; cancel the claim if it overtakes.
+  if(defenseOpportunity){
+    const double unwrapped=team.s-rear.s;
+    if(unwrapped<-LEN){
+      defenseOutcome="OVERTAKEN";
+      defended=false;
+    }else if(defenseOutcome=="HOLDING" && now-defenseStart>=2.0 &&
+             rearBehind && rearGap>LEN+(corner?CORNER_GAP:STRAIGHT_GAP)){
+      if(!defended)std::cout<<"[BATTLE] DEFENSE VERIFIED gap="<<rearGap
+        <<" t="<<elapsed<<std::endl;
+      defended=true;
+      defenseOutcome="HELD_BEHIND_2S";
     }
   }
   if(team.changing){
@@ -204,6 +222,25 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
+  // Lead crosses three lanes on a known 2-second S-curve. A comfortable
+  // speed change should begin before the hard 0.5m/0.7m boundary.
+  // Calculate an early target from predicted occupied footprints.
+  if(now-lastComfortForecast>=.1){
+    lastComfortForecast=now;
+    comfortSpeed=teamCruise;
+    for(double trial:{12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
+      if(trial>vt+.25)continue;
+      const double safe=forecast(team.changing?team.to:team.lat,
+        elapsed,now,team.changing,trial,EARLY_HORIZON,false,
+        corner?CORNER_TARGET:STRAIGHT_TARGET);
+      if(safe>=0.){
+        comfortSpeed=trial;break;
+      }
+      comfortSpeed=std::min(comfortSpeed,teamCruise);
+    }
+  }
+  // Only a gentle approach for hazards 1-2.5s out, never an instant stop.
+  vt=std::min(vt,std::max(team.v-1.5,comfortSpeed));
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
   if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
   // Restrict strong braking to hazards predicted inside one second.
@@ -227,8 +264,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   vt=std::min(vt,speedCeiling);
   // Braking for a pursuer behind would make a rear-end collision worse.
-  if(rearBehind && rearTTC<2. && frontTTC>1. && !team.changing)
-    vt=std::max(vt,std::min(teamCruise,team.v+1.0));
+  if(rearBehind && rearTTC<2. && frontTTC>2. &&
+     !team.changing && speedCeiling>=team.v)
+    vt=std::max(vt,std::min(teamCruise,team.v+0.5));
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -280,11 +318,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                                 snapshot[i].y-snapshot[j].y);
         minimumCenter=std::min(minimumCenter,dist);
         if(collide(snapshot[i],snapshot[j])){
+          const bool scenarioOnly=i==1 && j==2;
           std::cout<<"[BATTLE] COLLISION t="<<elapsed<<" pair="<<names[i]
                    <<"/"<<names[j]<<" positions=("<<snapshot[i].x<<","
                    <<snapshot[i].y<<")/("<<snapshot[j].x<<","
                    <<snapshot[j].y<<")"<<std::endl;
-          finish("FAIL_COLLISION");return;
+          finish(scenarioOnly?"FAIL_SCENARIO_COLLISION":"FAIL_COLLISION");return;
         }
       }
     }
@@ -315,6 +354,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     report.flush();lastCsv=now;
   }
   if(team.s-teamStart>=lap){
+    if(defenseOutcome=="OVERTAKEN")defended=false;
     std::cout<<"[BATTLE] SUMMARY overtake="<<passed<<" defense="<<defended
              <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
              <<" minimum_rear_ttc="<<minRearTTC<<" attempts="<<attemptCount
@@ -379,7 +419,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
  // steering. Positive means minimum centre clearance above collision radius.
- double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.)const{
   double minGap=1e6;
   Pos lastP=pose(team);
   Pos lastLastP=lastP;
@@ -411,7 +451,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     for(const Car*o:{&lead,&rear}){
       if(o==&rear && !includeRear)continue;
       Car sample=*o;
-      sample.s+=t*std::min(o==&lead?9.:rearCruise,std::max(o->v,0.)+6.*t);
+      const double cap=o==&lead?9.:rearCruise;
+      const double tacc=std::min(t,std::max(0.,cap-o->v)/3.);
+      sample.s+=o->v*tacc+1.5*tacc*tacc+cap*std::max(0.,t-tacc);
       if(o==&lead){
         const double seq[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
         const double absolute=elapsed+t;
@@ -423,7 +465,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       const double center=hypot(p.x-op.x,p.y-op.y);
       minGap=std::min(minGap,center);
       const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
-      if(clearance(p,op)<need)return -1.;
+      const double threshold=requiredGap>=0?std::max(need,requiredGap):need;
+      if(clearance(p,op)<threshold)return -1.;
     }
     lastLastP=lastP;lastP=p;
   }
@@ -449,7 +492,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
- double lastReplan=-1e6,changeFinishedAt=-1e6;
+ double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
+ double lastComfortForecast=-1e6,comfortSpeed=12.;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
