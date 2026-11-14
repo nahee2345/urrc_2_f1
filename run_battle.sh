@@ -4,6 +4,8 @@ set -Eeuo pipefail
 TRACK="${1:-monza}"
 GRID="${2:-1}"
 LANE="${3:-}"
+MODE="${4:-normal}"
+case "$MODE" in normal|defense) ;; *) echo "Mode must be normal or defense" >&2;exit 2;; esac
 case "$GRID" in 1|2) ;; *) echo "Grid must be 1 or 2" >&2;exit 2;; esac
 if [[ -z "$LANE" ]];then
   if [[ "$GRID" == 1 ]];then LANE=3;else LANE=1;fi
@@ -15,7 +17,7 @@ esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PKG="$ROOT/src/urrc_track_gazebo"
-LOG="$ROOT/log/battle/${TRACK}_grid${GRID}_lane${LANE}/$(date +%Y%m%d_%H%M%S)"
+LOG="$ROOT/log/battle/${TRACK}_grid${GRID}_lane${LANE}_${MODE}/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"
 export GZ_PARTITION="urrc_battle_$(id -u)_$(date +%s)"
 export PYTHONUNBUFFERED=1
@@ -55,7 +57,8 @@ export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PAT
 echo "[4/6] Prepare 0.30m walls and grid $GRID / grid 10 models"
 OUT="$LOG/prepared"
 /usr/bin/python3 "$ROOT/kinematic/prepare_battle.py" \
-  --track "$TRACK" --grid "$GRID" --lane "$LANE" --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
+  --track "$TRACK" --grid "$GRID" --lane "$LANE" ${MODE:+$( [[ "$MODE" == defense ]] && printf '%s' '--defense' )} \
+  --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
     tail -80 "$LOG/prepare.log";exit 6;
 }
 export GZ_SIM_RESOURCE_PATH="$OUT/resources/urrc_track_gazebo/models:$GZ_SIM_RESOURCE_PATH"
@@ -121,7 +124,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE team11 max 12m/s (lane change max 10.5m/s), lead S 9m/s/2sec, grid10 rear 11m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 12m/s (lane change max 10.5m/s), lead S 9m/s/2sec, grid10 rear 11m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
