@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 namespace urrc {
-constexpr double LEN=.53, WID=.25;
+constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
 struct Pt {double s,x,y,z,yaw;};
@@ -96,9 +96,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   int phase=period%4;
   lead.lat=lateral[phase]+(lateral[phase+1]-lateral[phase])*ease((elapsed-2.0*period)/2.0);
   double frontGap=gap(team.s,lead.s),rearGap=gap(rear.s,team.s);
-  double frontTTC=team.v>lead.v+.01?frontGap/(team.v-lead.v):1e6;
+  double frontTTC=team.v>lead.v+.01?std::max(0.,frontGap-LEN)/(team.v-lead.v):1e6;
   double rearTTC=rear.v>team.v+.01?rearGap/(rear.v-team.v):1e6;
   bool corner=fabs(curve(team.s))>.18;
+  const double targetGap=corner?CORNER_GAP:STRAIGHT_GAP;
   minRearTTC=std::min(minRearTTC,rearTTC);
   if(rearTTC<=5. && rearGap>LEN)defenseOpportunity=true;
   // A change is a committed manoeuvre: keep its goal unless a *predicted
@@ -106,7 +107,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // a collision and must not create oscillating replan requests.
   if(team.changing){
     const double risk=forecast(team.to,elapsed,now,true);
-    if(risk<=-0.5 && now-lastReplan>1.0){
+    if(risk<0.0 && now-lastReplan>1.0){
       lastReplan=now;
       const double stay=forecast(team.lat,elapsed,now,false);
       const double back=forecast(team.from,elapsed,now,false);
@@ -176,54 +177,52 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    team.lat=team.from+(team.to-team.from)*ease(t);
    if(t>=1){team.lat=team.to;team.changing=false;changeFinishedAt=now;}
   }
-  // Only cars on overlapping physical corridors restrict speed.
-  // A neighbouring car cannot force TEAM11 to match its 9m/s speed.
+  // Front-to-rear car-body gaps; cars in other lanes do not force matching.
   auto cruise=[&](const Car &a,double limit){
-    double wanted=limit;
+    double desired=limit;
     for(const Car*b:{&team,&lead,&rear}){
       if(b==&a)continue;
-      const double forward=gap(a.s,b->s);
-      if(forward>=16.)continue;
-      const double lateralGap=fabs(a.lat-b->lat);
-      const bool overlapping=lateralGap<(WID+.09);
-      if(!overlapping)continue;
-      // Keep 1m+speed-dependent following buffer, but do not instantly
-      // match the slower car when a clear pass is already under way.
-      const double buffer=1.0+0.10*a.v;
-      const double permitted=std::max(0.0,b->v+
-        std::max(0.0,forward-buffer)*1.7);
-      wanted=std::min(wanted,permitted);
+      const double d=gap(a.s,b->s);
+      if(d>20. || fabs(a.lat-b->lat)>WID+.09)continue;
+      const double bumper=std::max(0.,d-LEN);
+      const bool inCorner=fabs(curve(a.s))>.18;
+      const double minimum=inCorner?CORNER_GAP:STRAIGHT_GAP;
+      const double ttc=a.v>b->v+.05?(bumper-minimum)/(a.v-b->v):1e6;
+      if(ttc<=1. || bumper<=minimum+.12){
+        desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*1.2);
+      }else if(inCorner && bumper<4.){
+        desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*.45);
+      }else if(ttc<3.){
+        desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*.9);
+      }
     }
-    return std::clamp(wanted,0.,limit);
+    return std::clamp(desired,0.,limit);
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,11);
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
-  if(emergencyBraking)vt=std::min(vt,5.0);
-  // Short-horizon emergency forecast, not continuous 5s speed matching.
-  // Long-horizon forecast remains for candidate lane *selection*.
+  if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
+  // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
     speedCeiling=teamCruise;
-    const double selected=team.changing?team.to:team.lat;
-    const bool crossing=fabs(selected-lead.lat)<(WID+.15) ||
-                        fabs(selected-rear.lat)<(WID+.15);
-    if(crossing){
-      for(double trial:{12.,10.5,9.,7.,5.,3.,0.}){
+    if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.)<0.){
+      speedCeiling=0.;
+      for(double trial:{12.,10.5,9.,7.,5.,3.,1.,0.}){
         if(trial>vt+.01)continue;
-        const double safety=forecast(selected,elapsed,now,team.changing,trial,1.8);
-        if(safety>=-0.5){speedCeiling=trial;break;}
-        speedCeiling=0.;
+        if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.)>=0.){
+          speedCeiling=trial;break;
+        }
       }
-    }
-    if(speedCeiling<vt-1. && now-lastSpeedLog>=2.){
-      lastSpeedLog=now;
-      std::cout<<"[BATTLE] CLOSE_HAZARD_BRAKE desired="<<vt
-               <<" limit="<<speedCeiling<<" front_ttc="<<frontTTC<<std::endl;
+      if(speedCeiling<vt-1. && now-lastSpeedLog>=2.){
+        lastSpeedLog=now;
+        std::cout<<"[BATTLE] TTC_1S_BRAKE desired="<<vt<<" limit="<<speedCeiling
+                 <<" front_ttc="<<frontTTC<<std::endl;
+      }
     }
   }
   vt=std::min(vt,speedCeiling);
-  if(!team.changing && frontGap>2.0 && !joinPending)emergencyBraking=false;
+  if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<10.9)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
     std::cout<<"[BATTLE] PRACTICE BRAKING lead="<<vl<<" rear="<<vr<<std::endl;
@@ -235,7 +234,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     a.s+=(before+a.v)*.5*dt;
   };
   update(team,vt);update(lead,vl);update(rear,vr);
-  if(team.s>lead.s+LEN+0.4&&!passed &&
+  if(team.s>lead.s+LEN+targetGap&&!passed &&
      fabs(team.lat-lead.lat)>WID+.12){
     passed=true;
     std::cout<<"[BATTLE] OVERTAKE COMPLETED mode="
@@ -274,6 +273,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       }
     }
   }
+  minimumClearance=std::min(minimumClearance,
+      std::min(clearance(a,b),clearance(a,c)));
   for(auto pr:std::array<std::pair<Car*,Pos>,3>{{{&team,a},{&lead,b},{&rear,c}}})
    gz::sim::Model(pr.first->entity).SetWorldPoseCmd(
     ecm,gz::math::Pose3d(pr.second.x,pr.second.y,pr.second.z+.09,0,0,pr.second.yaw));
@@ -288,7 +289,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
              <<" minimum_rear_ttc="<<minRearTTC<<" attempts="<<attemptCount
              <<" replans="<<replanCount<<" practice_braking="<<braked
-             <<" minimum_center_m="<<minimumCenter<<std::endl;
+             <<" minimum_center_m="<<minimumCenter
+             <<" min_body_clearance_m="<<minimumClearance<<std::endl;
     finish(!passed?"FAIL_NO_OVERTAKE":(defended?"PASS_BATTLE":"PARTIAL_DEFENSE_UNVERIFIED"));return;
   }
   if(elapsed>300)finish("FAIL_TIMEOUT");
@@ -327,6 +329,22 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }
   return true;
+ }
+ // Conservative signed body-to-body clearance (SAT-axis lower bound).
+ double clearance(const Pos&a,const Pos&b)const{
+   double maxGap=-1e6;
+   const double dx=b.x-a.x,dy=b.y-a.y;
+   for(double yaw:{a.yaw,b.yaw}){
+     for(int k=0;k<2;k++){
+       double ux=k==0?cos(yaw):-sin(yaw),uy=k==0?sin(yaw):cos(yaw);
+       auto radius=[&](const Pos&p){
+         double cs=cos(p.yaw),sn=sin(p.yaw);
+         return LEN*.5*fabs(ux*cs+uy*sn)+WID*.5*fabs(-ux*sn+uy*cs);
+       };
+       maxGap=std::max(maxGap,fabs(dx*ux+dy*uy)-radius(a)-radius(b));
+     }
+   }
+   return maxGap;
  }
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
@@ -373,12 +391,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       const Pos op=pose(sample);
       const double center=hypot(p.x-op.x,p.y-op.y);
       minGap=std::min(minGap,center);
-      // Inflate both future footprints with 0.15m positional uncertainty.
-      if(center<LEN+.15 && collide(p,op))return -1.;
+      const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
+      if(clearance(p,op)<need)return -1.;
     }
     lastLastP=lastP;lastP=p;
   }
-  return minGap-(LEN+.15);
+  return minGap-(LEN+STRAIGHT_GAP);
  }
  void change(double dest,double now){
   team.from=team.lat;team.to=dest;team.changeStart=now;
@@ -390,7 +408,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
            <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
            <<" rear_ttc_min="<<minRearTTC<<" attempts="<<attemptCount
            <<" replans="<<replanCount<<" braked="<<braked
-           <<" min_center="<<minimumCenter<<std::endl;
+           <<" min_center="<<minimumCenter
+           <<" min_body_clearance="<<minimumClearance<<std::endl;
  }
  void Start(const gz::msgs::Boolean&b){if(b.data())startSignal.store(true);}
  gz::sim::Entity worldEntity{gz::sim::kNullEntity};
@@ -398,7 +417,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
- double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,preferredLane=0.;
+ double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=10.;
  int attemptCount=0,replanCount=0;
