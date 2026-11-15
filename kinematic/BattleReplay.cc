@@ -229,24 +229,28 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
-  // A same-speed leading car within 3m must not become a permanent
-  // artificial 9m/s cruise limit. Only permit acceleration when swept
-  // future body clearance over the next 2s remains compliant.
+  // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
+  // Do not force unsafe speed through an overlapping lane. Instead allow
+  // short rolling-horizon acceleration only when projected body spacing
+  // remains compliant. Re-evaluate it on every simulation update.
   double passingSpeedWindow=0.;
-  const bool followingS=!passed && frontGap>LEN+STRAIGHT_GAP &&
-                         frontGap<6. && std::fabs(team.v-lead.v)<.25;
-  if(followingS && !corner && !team.changing){
-    for(double trial:{11.0,10.5,10.0}){
-      if(forecast(team.lat,elapsed,now,false,trial,2.0,false,
-                  STRAIGHT_GAP)>=0.){
-        passingSpeedWindow=trial;
-        vt=std::max(vt,trial);
-        if(now-lastPassSpeedLog>3.0){
-          lastPassSpeedLog=now;
-          std::cout<<"[BATTLE] PASS_SPEED_WINDOW trial="<<trial
-                   <<" gap="<<frontGap<<std::endl;
+  const bool trackingLead=!passed && frontGap>LEN+STRAIGHT_GAP &&
+                          frontGap<6. && std::fabs(team.v-lead.v)<.40;
+  if(trackingLead && !corner && !team.changing && !joinPending){
+    const double currentBody=clearance(pose(team),pose(lead));
+    if(currentBody>STRAIGHT_GAP+.25){
+      for(double trial:{10.5,10.0,9.5}){
+        if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
+                    STRAIGHT_GAP+.08)>=0.){
+          passingSpeedWindow=trial;
+          if(now-lastPassSpeedLog>3.0){
+            lastPassSpeedLog=now;
+            std::cout<<"[BATTLE] PASS_SPEED_WINDOW trial="<<trial
+                     <<" gap="<<frontGap
+                     <<" body="<<currentBody<<std::endl;
+          }
+          break;
         }
-        break;
       }
     }
   }
@@ -328,12 +332,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       comfortSpeed=teamCruise;
     }
   }
-  // Do not discard a specifically verified passing window by restoring
-  // the stale 9m/s comfort limit from a different long-horizon forecast.
-  if(passingSpeedWindow>comfortSpeed &&
-     forecast(team.lat,elapsed,now,false,passingSpeedWindow,2.0,false,
-              STRAIGHT_GAP)>=0.)
-    comfortSpeed=passingSpeedWindow;
+  // Preserve a locally safe acceleration window; the existing 2.5s
+  // following forecast otherwise repeatedly resets the limit to 9m/s.
+  if(passingSpeedWindow>comfortSpeed)comfortSpeed=passingSpeedWindow;
   // Record why a safe passing speed is not being selected, instead of
   // assuming that every no-overtake case is a lane-planner failure.
   if(!passed && !team.changing && now-lastOvertakeDiagnostic>=5.0){
@@ -345,10 +346,16 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" curve="<<curve(team.s)
              <<" comfort_limit="<<comfortSpeed
              <<" rear_ttc="<<rearTTC
-             <<" lane_join_pending="<<joinPending<<std::endl;
+             <<" lane_join_pending="<<joinPending
+             <<" pass_window="<<passingSpeedWindow
+             <<" speed_target="<<vt<<std::endl;
   }
   // Only a gentle approach for hazards 1-2.5s out, never an instant stop.
   vt=std::min(vt,std::max(team.v-1.5,comfortSpeed));
+  // The same-lane cruise clamp is only a proximity heuristic. Lift it
+  // through a collision-checked 1s speed window, never unconditionally.
+  if(passingSpeedWindow>0. && comfortSpeed>=passingSpeedWindow)
+    vt=std::max(vt,passingSpeedWindow);
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
   if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
   // Restrict strong braking to hazards predicted inside one second.
