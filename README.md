@@ -209,3 +209,17 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 12회 후방방어: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense`
 
 한계: 전방 S자 차량은 시나리오에서 지정한 주기적 움직임을 미리 알고 예측하는 **리플레이 검증**이며 실차 센서 인식/조향의 검증은 아님. 실제 ROS2 Jazzy + Gazebo Harmonic 빌드 및 24회 주행은 로컬 환경에서 미검증.
+
+## 2026-11-15 15:15/15:42 최신 24회 로그 대응
+
+- 일반 주행 PASS 4, PARTIAL 6, FAIL 2(Monaco 1·2). Monaco 1은 코너 구간에서 TEAM11↔rear 간격 0.5936m로 0.7m 위반, Monaco 2는 추월 미완료·후방 차량 추월 허용
+- 방어 주행 PASS 0, PARTIAL 6, FAIL 6. Baku/COTA/Hungaroring grid1의 3건은 **연습 S ↔ 연습 후방 차량** 충돌, Monaco 양 그리드는 TEAM11↔후방 차량 코너 간격 위반, Monza grid2는 TEAM11↔S 차량 0.699884m(코너 0.7m) 위반
+- 수정: 연습 후방 차량이 앞 TEAM11 또는 S차량에 접근할 때 추종 차량 역할에 맞게 미리 감속하도록 설정. **14m/s는 전방이 비어 있을 때의 목표속도**이며 충돌 위험에는 감속합니다. 스폰 위치와 차량 충돌은 유지
+- 수정: 방어 성공 기준은 2초간 뒤에 있었다는 중간 기록이 아닌 **최종 완주 시 후방 차량이 추월하지 않았으며 실제 접근 상황이 존재한 경우**입니다. `DEFENSE HOLD_MONITOR`는 중간 상태, `DEFENSE VERIFIED_FINISH`만 최종 성공
+- 수정: S자 차량이 실제로 다른 차선에 있으며 앞 방향으로 충분히 떨어져 있고 단기 예측이 안전하면 불필요하게 앞차 속도에 맞추지 않고 직진 가속
+- 직선 차체 최소 간격 0.5m, 코너 0.7m 유지. 팀 11 또는 상대 연습차량 충돌의 실패 분류는 유지
+- 개발은 **kinematic 리플레이 시뮬레이터** 전용입니다. ROS 카메라/실제 차량 조향 및 센서 처리 로직을 변경한 것이 아닙니다
+- 단독 검증: `bash run.sh battle monaco 1 3` / `bash run.sh battle monaco 2 1`
+- 전체: `bash run.sh battle stage1` / `bash run.sh battle defense`
+
+**실제 Jazzy/Gazebo 빌드 및 재시험은 아직 미수행**.
