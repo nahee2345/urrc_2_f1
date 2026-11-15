@@ -230,7 +230,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     const double d=gap(rear.s,ahead->s);
     if(d>24. || d<=0.)continue;
     const bool crossing=ahead==&lead;
-    const bool aligned=fabs(rear.lat-ahead->lat)<WID+.20;
+    // In bends the body corners can be much closer than the difference
+    // between centreline offsets suggests; include diagonal neighbours.
+    const bool aligned=fabs(rear.lat-ahead->lat)<
+      (d<10.0?WID+CORNER_TARGET+.15:WID+.20);
     if(!crossing && !aligned)continue;
     // Look ahead along both trajectories; the current instantaneous
     // curvature alone becomes true only after a vehicle enters the bend.
@@ -240,17 +243,17 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                            fabs(curve(ahead->s+ahead->v*2.0))>.18;
     // Add following margin, rather than commanding a zero closing speed
     // only when the measured rear gap is already near the hard limit.
-    const double desiredGap=(nearCorner?CORNER_TARGET:STRAIGHT_TARGET)+.35;
+    const double desiredGap=(nearCorner?CORNER_TARGET:STRAIGHT_TARGET)+.55;
     const double free=d-LEN-desiredGap;
     const double closing=std::max(0.,rear.v-ahead->v);
     // Begin matching at speed-dependent range; no abrupt 0m/s command.
-    const double anticipation=std::max(6.0,
+    const double anticipation=std::max(7.0,
       closing*3.0+closing*closing/(2.*4.0)+desiredGap);
     if(free<anticipation){
       // Anticipate pace several seconds in advance; the actual acceleration
       // controller below limits deceleration to 5m/s^2.
       const double permitted=ahead->v+
-        std::clamp((free-1.0)*.20,-.8,1.2);
+        std::clamp((free-1.4)*.22,-1.0,1.2);
       vr=std::min(vr,std::max(0.,permitted));
       if(now-lastPracticeYield>1.5){
         lastPracticeYield=now;
@@ -277,7 +280,18 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
         comfortSpeed=trial;foundComfort=true;break;
       }
     }
-    if(!foundComfort)comfortSpeed=9.;
+    if(!foundComfort){
+      // A five-sample 2.5s forecast can reject all constant-speed
+      // candidates when the S-car temporarily shares a lane. Allow a
+      // modest, continuously rechecked 1s acceleration window rather
+      // than locking both cars to exactly 9m/s forever.
+      comfortSpeed=9.;
+      if(frontGap>LEN+STRAIGHT_TARGET+1.5 &&
+         !team.changing &&
+         forecast(team.lat,elapsed,now,false,10.0,1.0,false,
+                  corner?CORNER_TARGET:STRAIGHT_TARGET)>=0.)
+        comfortSpeed=10.;
+    }
     // Avoid unnecessary 2.5-second following when the S-car is safely
     // alongside in a different corridor and can be passed on the straight.
     // The one-second emergency forecast remains active regardless.
@@ -534,7 +548,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     const double t=i*.1;
     Car candidate=team;
     const double vmax=desiredSpeed<0?std::max(0.,team.v):desiredSpeed;
-    const double acc=vmax<team.v?-12.:6.;
+    // Match the real replay controller: +3 / -5m/s^2. An
+    // unrealistically fast predicted brake gives false safety clearance.
+    const double acc=vmax<team.v?-5.:3.;
     const double reach=fabs(vmax-team.v)/fabs(acc);
     const double until=std::min(t,reach);
     const double distance=team.v*until+.5*acc*until*until+
