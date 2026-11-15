@@ -223,6 +223,30 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
+  // The scripted rear opponent also needs basic collision avoidance.
+  // Without this it drives into the scripted S-car even when TEAM11 is
+  // nowhere near them, invalidating the defense experiment.
+  for(const Car*ahead:{&team,&lead}){
+    const double d=gap(rear.s,ahead->s);
+    if(d>22.)continue;
+    const bool laneCrossing=ahead==&lead;
+    const bool sharedCorridor=fabs(rear.lat-ahead->lat)<WID+.20;
+    if(!laneCrossing && !sharedCorridor)continue;
+    const double target=fabs(curve(rear.s))>.18?CORNER_TARGET:STRAIGHT_TARGET;
+    const double free=std::max(0.,d-LEN-target);
+    const double closing=std::max(0.,rear.v-ahead->v);
+    const double stopping=closing*closing/(2.*5.);
+    if(free<stopping+closing*.65+1.0){
+      // Smoothly prepare to match the car ahead. Do not teleport positions.
+      const double pace=std::max(0.,ahead->v+std::min(2.,free*.45));
+      vr=std::min(vr,pace);
+      if(now-lastPracticeYield>1.5){
+        lastPracticeYield=now;
+        std::cout<<"[BATTLE] PRACTICE_YIELD to="<<ahead->name
+                 <<" gap="<<d<<" desired="<<vr<<std::endl;
+      }
+    }
+  }
   // Lead crosses three lanes on a known 2-second S-curve. A comfortable
   // speed change should begin before the hard 0.5m/0.7m boundary.
   // Calculate an early target from predicted occupied footprints.
@@ -505,7 +529,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.;
+ double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
