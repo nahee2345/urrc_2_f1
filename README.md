@@ -223,3 +223,10 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 전체: `bash run.sh battle stage1` / `bash run.sh battle defense`
 
 **실제 Jazzy/Gazebo 빌드 및 재시험은 아직 미수행**.
+
+## 2026-11-15 Monaco 16:37/16:38 재현 로그와 수정
+- Monaco 일반 grid1: `team_11/practice_rear_11` 코너 간격 **0.699822m** (기준 0.7m)에서 FAIL_CLEARANCE, grid2: **0.647175m**에서 FAIL_CLEARANCE. 두 경우 모두 추격 연습 차량이 TEAM11 코너 추종속도(약 9m/s)를 늦게 따라가면서 간격 축소
+- 후방 연습 차량은 기존 2~3m 근처에서 급히 감속하던 패턴을 폐기. 전방 자동차의 속도 및 양쪽 코너 구간 여부, 상대 접근 속도와 제동거리에 따라 **4m 이상 선제 감속**. 코너 시 제어 목표 **0.8m**로 유지, 최소 허용 0.7m를 변경하지 않음
+- `PRACTICE_YIELD`에 `corner` 표기. 앞차 속도 추종은 가감속 제한 하에서 실행. 이는 연습 상대 차량의 운전 품질 수정이며 TEAM11 자체 ROS/카메라 기반 센서 주행은 아님
+- 일반 주행 이전 12건 PASS3/PARTIAL6/FAIL3, 방어 12건 PASS10/FAIL2. 이 수정 후 재시험 결과는 아직 없음
+- 재확인: `bash run.sh battle monaco 1 3` 와 `bash run.sh battle monaco 2 1`, 해당 사례가 개선되면 `bash run.sh battle stage1` 및 `bash run.sh battle defense`
