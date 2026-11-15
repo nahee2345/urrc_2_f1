@@ -235,11 +235,13 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // remains compliant. Re-evaluate it on every simulation update.
   double passingSpeedWindow=0.;
   const bool trackingLead=!passed && frontGap>LEN+STRAIGHT_GAP &&
-                          frontGap<6. && std::fabs(team.v-lead.v)<.40;
+                          frontGap<7. && team.v<11.0;
   if(trackingLead && !corner && !team.changing && !joinPending){
     const double currentBody=clearance(pose(team),pose(lead));
     if(currentBody>STRAIGHT_GAP+.25){
-      for(double trial:{10.5,10.0,9.5}){
+      // Continue checking at the current passing speed, not just while
+      // team speed is almost identical to the 9m/s lead car.
+      for(double trial:{11.0,10.5,10.0,9.5}){
         if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
                     STRAIGHT_GAP+.08)>=0.){
           passingSpeedWindow=trial;
@@ -378,6 +380,18 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }
   vt=std::min(vt,speedCeiling);
+  if(!passed && now-lastSpeedDecisionLog>=3.0 &&
+     frontGap<7. && team.v<lead.v+2.0){
+    lastSpeedDecisionLog=now;
+    std::cout<<"[BATTLE] SPEED_DECISION t="<<elapsed
+             <<" current="<<team.v<<" target="<<vt
+             <<" cruise="<<cruise(team,teamCruise)
+             <<" comfort="<<comfortSpeed
+             <<" one_sec_limit="<<speedCeiling
+             <<" pass_window="<<passingSpeedWindow
+             <<" team_changing="<<team.changing
+             <<" front_gap="<<frontGap<<std::endl;
+  }
   // Braking for a pursuer behind would make a rear-end collision worse.
   if(rearBehind && rearTTC<2. && frontTTC>2. &&
      !team.changing && speedCeiling>=team.v)
@@ -655,7 +669,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6;
+ double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
