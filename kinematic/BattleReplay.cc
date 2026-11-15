@@ -346,7 +346,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   alignToMotion(a,previousTeam);
   alignToMotion(b,previousLead);
   alignToMotion(c,previousRear);
-  // Swept SAT: sample previous-to-next movement to prevent tunneling.
+  // Sample swept oriented rectangles to prevent tunneling.
   auto blend=[](const Pos&old,const Pos&next,double t){
     return Pos{old.x+(next.x-old.x)*t,old.y+(next.y-old.y)*t,
                old.z+(next.z-old.z)*t,
@@ -458,21 +458,56 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   return true;
  }
- // Conservative signed body-to-body clearance (SAT-axis lower bound).
+ // Exact Euclidean edge-to-edge distance for two oriented rectangles.
+ // A maximum SAT separating-axis gap is only a LOWER BOUND on distance
+ // when corners are diagonal. It incorrectly rejected Monaco safe passes.
  double clearance(const Pos&a,const Pos&b)const{
-   double maxGap=-1e6;
-   const double dx=b.x-a.x,dy=b.y-a.y;
-   for(double yaw:{a.yaw,b.yaw}){
-     for(int k=0;k<2;k++){
-       double ux=k==0?cos(yaw):-sin(yaw),uy=k==0?sin(yaw):cos(yaw);
-       auto radius=[&](const Pos&p){
-         double cs=cos(p.yaw),sn=sin(p.yaw);
-         return LEN*.5*fabs(ux*cs+uy*sn)+WID*.5*fabs(-ux*sn+uy*cs);
-       };
-       maxGap=std::max(maxGap,fabs(dx*ux+dy*uy)-radius(a)-radius(b));
+   auto corners=[](const Pos&p){
+     std::array<std::array<double,2>,4> out{};
+     const double cs=cos(p.yaw),sn=sin(p.yaw);
+     const double xs[4]={-LEN/2.,LEN/2.,LEN/2.,-LEN/2.};
+     const double ys[4]={-WID/2.,-WID/2.,WID/2.,WID/2.};
+     for(size_t i=0;i<4;++i){
+       out[i]={p.x+cs*xs[i]-sn*ys[i],p.y+sn*xs[i]+cs*ys[i]};
      }
+     return out;
+   };
+   const auto ca=corners(a),cb=corners(b);
+   // Check intersection first; overlapping rectangles have zero distance.
+   double dx=b.x-a.x,dy=b.y-a.y;
+   bool overlap=true;
+   for(double yaw:{a.yaw,b.yaw}){
+     for(int axis=0;axis<2;++axis){
+       const double ux=axis? -sin(yaw):cos(yaw);
+       const double uy=axis? cos(yaw):sin(yaw);
+       auto radius=[&](const Pos&p){
+         const double cs=cos(p.yaw),sn=sin(p.yaw);
+         return LEN*.5*fabs(ux*cs+uy*sn)+
+                WID*.5*fabs(-ux*sn+uy*cs);
+       };
+       if(fabs(dx*ux+dy*uy)>radius(a)+radius(b)){
+         overlap=false;break;
+       }
+     }
+     if(!overlap)break;
    }
-   return maxGap;
+   if(overlap)return 0.;
+   double best=1e9;
+   auto measure=[&](const auto&points,const auto&edges){
+     for(const auto&p:points){
+       for(size_t j=0;j<4;++j){
+         const auto&u=edges[j],&v=edges[(j+1)%4];
+         const double ex=v[0]-u[0],ey=v[1]-u[1];
+         const double denom=ex*ex+ey*ey;
+         const double t=std::clamp(((p[0]-u[0])*ex+
+                                   (p[1]-u[1])*ey)/denom,0.,1.);
+         best=std::min(best,hypot(p[0]-u[0]-t*ex,
+                                  p[1]-u[1]-t*ey));
+       }
+     }
+   };
+   measure(ca,cb);measure(cb,ca);
+   return best;
  }
  // Predict both opponents' future occupancy and score each lane-change
  // candidate. Negative means a predicted collision or >30deg equivalent
