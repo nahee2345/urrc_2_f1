@@ -232,25 +232,32 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     const bool crossing=ahead==&lead;
     const bool aligned=fabs(rear.lat-ahead->lat)<WID+.20;
     if(!crossing && !aligned)continue;
+    // Look ahead along both trajectories; the current instantaneous
+    // curvature alone becomes true only after a vehicle enters the bend.
     const bool nearCorner=fabs(curve(rear.s))>.18 ||
-                           fabs(curve(ahead->s))>.18;
-    const double desiredGap=nearCorner?CORNER_TARGET:STRAIGHT_TARGET;
+                           fabs(curve(ahead->s))>.18 ||
+                           fabs(curve(rear.s+rear.v*2.0))>.18 ||
+                           fabs(curve(ahead->s+ahead->v*2.0))>.18;
+    // Add following margin, rather than commanding a zero closing speed
+    // only when the measured rear gap is already near the hard limit.
+    const double desiredGap=(nearCorner?CORNER_TARGET:STRAIGHT_TARGET)+.35;
     const double free=d-LEN-desiredGap;
     const double closing=std::max(0.,rear.v-ahead->v);
     // Begin matching at speed-dependent range; no abrupt 0m/s command.
-    const double anticipation=std::max(4.0,
-      closing*2.5+closing*closing/(2.*4.0)+desiredGap);
+    const double anticipation=std::max(6.0,
+      closing*3.0+closing*closing/(2.*4.0)+desiredGap);
     if(free<anticipation){
       // Anticipate pace several seconds in advance; the actual acceleration
       // controller below limits deceleration to 5m/s^2.
       const double permitted=ahead->v+
-        std::clamp((free-.25)*.35,0.0,1.5);
+        std::clamp((free-1.0)*.20,-.8,1.2);
       vr=std::min(vr,std::max(0.,permitted));
       if(now-lastPracticeYield>1.5){
         lastPracticeYield=now;
         std::cout<<"[BATTLE] PRACTICE_YIELD to="<<ahead->name
                  <<" gap="<<d<<" desired="<<vr
-                 <<" corner="<<nearCorner<<std::endl;
+                 <<" corner="<<nearCorner
+                 <<" target_gap="<<desiredGap<<std::endl;
       }
     }
   }
