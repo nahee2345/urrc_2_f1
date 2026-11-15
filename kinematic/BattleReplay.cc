@@ -264,6 +264,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       }
     }
     if(!foundComfort)comfortSpeed=9.;
+    // Avoid unnecessary 2.5-second following when the S-car is safely
+    // alongside in a different corridor and can be passed on the straight.
+    // The one-second emergency forecast remains active regardless.
+    if(fabs(team.lat-lead.lat)>WID+STRAIGHT_TARGET &&
+       gap(team.s,lead.s)>LEN+STRAIGHT_TARGET+3.0 &&
+       forecast(team.lat,elapsed,now,team.changing,team.v,1.0,false)>=0.){
+      comfortSpeed=teamCruise;
+    }
   }
   // Only a gentle approach for hazards 1-2.5s out, never an instant stop.
   vt=std::min(vt,std::max(team.v-1.5,comfortSpeed));
