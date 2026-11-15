@@ -141,7 +141,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }else if(now-changeFinishedAt<2.0){
     // Hysteresis prevents immediate re-selection of the opposite lane.
   }else if(!corner && rearBehind && rearTTC<=5.0 && !defended &&
-            frontTTC>1.0){
+            frontTTC>1.0 && !(frontGap<8. && !passed)){
     // Handle rear pressure before an optional front overtake. Safest
     // defense is maintaining a corridor or speeding away, not cutting off
     // a vehicle already alongside.
@@ -160,23 +160,29 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                  <<" gap="<<rearGap<<" clearance="<<backClearance<<std::endl;
       }
     }
-  }else if(!corner && !passed && frontGap>1.0 && frontGap<20. && frontTTC<=3. &&
-            (fabs(team.lat-lead.lat)<WID+.18 ||
-             forecast(team.lat,elapsed,now,false,team.v,2.5)<=-0.5)){
-    // On a separate free corridor, overtake by accelerating straight ahead.
-    double bestScore=-1e9,bestTarget=team.lat;
+  }else if(!corner && !passed && frontGap>LEN+STRAIGHT_TARGET &&
+            frontGap<12. && (frontTTC<=3. || frontGap<5.0)){
+    // Include speed-up in lane candidate prediction. Testing a lane
+    // change at today's 9m/s could never establish that a faster pass is
+    // possible, and made equal-speed following a permanent deadlock.
+    double bestScore=-1e9,bestTarget=team.lat,bestSpeed=team.v;
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      const double score=forecast(dst,elapsed,now,false);
-      const double cost=.08*fabs(dst-team.lat);
-      if(score>0.0 && score-cost>bestScore){
-        bestScore=score-cost;bestTarget=dst;
+      for(double trial:{11.0,10.0,9.0}){
+        const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
+                                    STRAIGHT_GAP);
+        const double utility=score-.10*fabs(dst-team.lat)+
+                             .06*(trial-lead.v);
+        if(score>=0. && utility>bestScore){
+          bestScore=utility;bestTarget=dst;bestSpeed=trial;
+        }
       }
     }
     if(fabs(bestTarget-team.lat)>.2*lateralOffset){
       change(bestTarget,now);attempted=true;attemptCount++;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
-               <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
+               <<"s target_offset="<<bestTarget<<" speed="<<bestSpeed
+               <<" score="<<bestScore<<std::endl;
     }
   }
   // Only a final lap-end result counts as a verified defense. Holding a
@@ -223,6 +229,25 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
+  // A same-speed leading car within 3m must not become a permanent
+  // artificial 9m/s cruise limit. Only permit acceleration when swept
+  // future body clearance over the next 2s remains compliant.
+  const bool followingS=!passed && frontGap>LEN+STRAIGHT_GAP &&
+                         frontGap<6. && std::fabs(team.v-lead.v)<.25;
+  if(followingS && !corner && !team.changing){
+    for(double trial:{11.0,10.5,10.0}){
+      if(forecast(team.lat,elapsed,now,false,trial,2.0,false,
+                  STRAIGHT_GAP)>=0.){
+        vt=std::max(vt,trial);
+        if(now-lastPassSpeedLog>3.0){
+          lastPassSpeedLog=now;
+          std::cout<<"[BATTLE] PASS_SPEED_WINDOW trial="<<trial
+                   <<" gap="<<frontGap<<std::endl;
+        }
+        break;
+      }
+    }
+  }
   // Scripted rear driver anticipates a cornering car's pace well before
   // the physical 0.7m limit. Relative-speed braking at 2-3m was too late
   // on Monaco: 11m/s rear closed into a 9m/s corner-following TEAM11.
@@ -615,7 +640,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6;
+ double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
