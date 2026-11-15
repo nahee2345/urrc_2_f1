@@ -223,27 +223,34 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   };
   const double teamCruise=12.0;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
-  // The scripted rear opponent also needs basic collision avoidance.
-  // Without this it drives into the scripted S-car even when TEAM11 is
-  // nowhere near them, invalidating the defense experiment.
+  // Scripted rear driver anticipates a cornering car's pace well before
+  // the physical 0.7m limit. Relative-speed braking at 2-3m was too late
+  // on Monaco: 11m/s rear closed into a 9m/s corner-following TEAM11.
   for(const Car*ahead:{&team,&lead}){
     const double d=gap(rear.s,ahead->s);
-    if(d>22.)continue;
-    const bool laneCrossing=ahead==&lead;
-    const bool sharedCorridor=fabs(rear.lat-ahead->lat)<WID+.20;
-    if(!laneCrossing && !sharedCorridor)continue;
-    const double target=fabs(curve(rear.s))>.18?CORNER_TARGET:STRAIGHT_TARGET;
-    const double free=std::max(0.,d-LEN-target);
+    if(d>24. || d<=0.)continue;
+    const bool crossing=ahead==&lead;
+    const bool aligned=fabs(rear.lat-ahead->lat)<WID+.20;
+    if(!crossing && !aligned)continue;
+    const bool nearCorner=fabs(curve(rear.s))>.18 ||
+                           fabs(curve(ahead->s))>.18;
+    const double desiredGap=nearCorner?CORNER_TARGET:STRAIGHT_TARGET;
+    const double free=d-LEN-desiredGap;
     const double closing=std::max(0.,rear.v-ahead->v);
-    const double stopping=closing*closing/(2.*5.);
-    if(free<stopping+closing*.65+1.0){
-      // Smoothly prepare to match the car ahead. Do not teleport positions.
-      const double pace=std::max(0.,ahead->v+std::min(2.,free*.45));
-      vr=std::min(vr,pace);
+    // Begin matching at speed-dependent range; no abrupt 0m/s command.
+    const double anticipation=std::max(4.0,
+      closing*2.5+closing*closing/(2.*4.0)+desiredGap);
+    if(free<anticipation){
+      // Anticipate pace several seconds in advance; the actual acceleration
+      // controller below limits deceleration to 5m/s^2.
+      const double permitted=ahead->v+
+        std::clamp((free-.25)*.35,0.0,1.5);
+      vr=std::min(vr,std::max(0.,permitted));
       if(now-lastPracticeYield>1.5){
         lastPracticeYield=now;
         std::cout<<"[BATTLE] PRACTICE_YIELD to="<<ahead->name
-                 <<" gap="<<d<<" desired="<<vr<<std::endl;
+                 <<" gap="<<d<<" desired="<<vr
+                 <<" corner="<<nearCorner<<std::endl;
       }
     }
   }
@@ -267,7 +274,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // Avoid unnecessary 2.5-second following when the S-car is safely
     // alongside in a different corridor and can be passed on the straight.
     // The one-second emergency forecast remains active regardless.
-    if(fabs(team.lat-lead.lat)>WID+STRAIGHT_TARGET &&
+    if(!corner && fabs(team.lat-lead.lat)>WID+STRAIGHT_TARGET &&
        gap(team.s,lead.s)>LEN+STRAIGHT_TARGET+3.0 &&
        forecast(team.lat,elapsed,now,team.changing,team.v,1.0,false)>=0.){
       comfortSpeed=teamCruise;
