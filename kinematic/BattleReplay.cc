@@ -287,6 +287,19 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       comfortSpeed=teamCruise;
     }
   }
+  // Record why a safe passing speed is not being selected, instead of
+  // assuming that every no-overtake case is a lane-planner failure.
+  if(!passed && !team.changing && now-lastOvertakeDiagnostic>=5.0){
+    lastOvertakeDiagnostic=now;
+    std::cout<<"[BATTLE] PASS_DIAGNOSTIC time="<<elapsed
+             <<" team_v="<<team.v<<" lead_v="<<lead.v
+             <<" forward_gap="<<frontGap
+             <<" lateral_delta="<<fabs(team.lat-lead.lat)
+             <<" curve="<<curve(team.s)
+             <<" comfort_limit="<<comfortSpeed
+             <<" rear_ttc="<<rearTTC
+             <<" lane_join_pending="<<joinPending<<std::endl;
+  }
   // Only a gentle approach for hazards 1-2.5s out, never an instant stop.
   vt=std::min(vt,std::max(team.v-1.5,comfortSpeed));
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
@@ -586,7 +599,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6;
+ double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
