@@ -249,3 +249,10 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 변경: 추월 실패 진단을 위해 5초마다 `PASS_DIAGNOSTIC`(팀속도, 선행차속도, 차량 사이 전방 거리·횡방향 거리, 곡률, 안전속도 제한, rear TTC, 최초 차선합류 미완료 여부) 기록. 추월 성공 조건은 완화하지 않음
 - **검증 필요:** `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`. 두 실행 후 PASS 여부와 `PASS_DIAGNOSTIC` 기록을 비교. 기존 전체 방어 10/12 PASS도 반드시 회귀시험
 - Gazebo 실주행 결과와 실제 컴파일은 아직 미검증
+
+## 2026-11-15 Monaco 22:52/22:55 재시험: 9m/s 동일속도 고착 대응
+- 두 그리드 모두 `FAIL_NO_OVERTAKE`, `attempts=2`, `defense=1`, `min_body_clearance >1.28m`. 실제 추월을 시작하는 후보 선택은 발생했으나 TEAM11 실제 속도와 S 차량 속도가 끝까지 **9m/s**로 같아 전방 거리 약 2.47m에서 고착
+- 원인: 기존 `passingSpeedWindow`는 장기 2초 예측과 `cruise(team)`의 앞차 추종 9m/s 상한에 가로막힘. 앞차를 통과하기 위한 속도 증가 경로를 실행하지 못함
+- 수정: 현재 실제 차체 간격이 최소 0.5m보다 **0.25m** 이상 여유 있고 코너/차선 변경 중이 아니며 **1초 구간 0.58m 이상**의 몸체 간격 예측을 통과하면 9.5~10.5m/s 안전 가속을 허용, 매 시뮬레이션 스텝 재확인. 기존 1초 충돌 예측 제동, 직선 0.5m / 코너 0.7m 실패 기준 및 추월 조건은 유지
+- `PASS_DIAGNOSTIC`에 `pass_window`와 `speed_target`을 출력하도록 추가. 안전한 가속 창이 없으면 속도를 강제로 올리지 않음
+- 테스트: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`. **Gazebo 실행 결과는 아직 검증되지 않음**
