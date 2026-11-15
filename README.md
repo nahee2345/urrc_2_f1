@@ -230,3 +230,12 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - `PRACTICE_YIELD`에 `corner` 표기. 앞차 속도 추종은 가감속 제한 하에서 실행. 이는 연습 상대 차량의 운전 품질 수정이며 TEAM11 자체 ROS/카메라 기반 센서 주행은 아님
 - 일반 주행 이전 12건 PASS3/PARTIAL6/FAIL3, 방어 12건 PASS10/FAIL2. 이 수정 후 재시험 결과는 아직 없음
 - 재확인: `bash run.sh battle monaco 1 3` 와 `bash run.sh battle monaco 2 1`, 해당 사례가 개선되면 `bash run.sh battle stage1` 및 `bash run.sh battle defense`
+
+## 2026-11-15 19:03 Monaco 재시험 대응
+
+- `17735ee` 재시험: Monaco 일반 grid1 0.699720m / grid2 0.663981m, 모두 팀11-후방 연습 차량의 코너 0.7m 기준 위반. 전체 stage1 PASS 3, PARTIAL 6, FAIL 3; defense PASS 10, FAIL 2. 기존과 동일한 실패 맵
+- 원인: practice rear 운전자의 `PRACTICE_YIELD`가 주로 `corner=0`으로 기록됨. 코너에 진입한 후에야 간격 증가 필요성을 평가하며 0.7m 목표에 비해 약하게 감속함
+- 수정: 연습 후방 차량의 코너 진입 감지를 현재 위치만이 아니라 **2초 미래 이동거리**에서 미리 검사. 목표 차체 간격은 평지 0.60+0.35=0.95m, 코너 0.80+0.35=1.15m로 설정. 차간거리 6m 이상에서 닫힘 속도에 따라 조기 추종 감속을 시작; 목표가 너무 가까우면 전방 차보다 최대 0.8m/s 느리게 주행하여 여유 복원. 연습 후방 차량의 실제 감속 한계 -5m/s² 유지
+- **평가 최소 기준은 직선 0.5m / 코너 0.7m로 변경하지 않음.** TEAM11 차량 제어 로직 및 완주/추월/방어 성공 판정도 이번 커밋에서는 바꾸지 않음
+- 확인: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`
+- 미검증: 실제 Gazebo 구동 결과. 통과하면 `bash run.sh battle stage1` 및 `bash run.sh battle defense`로 나머지 맵 회귀 검증
