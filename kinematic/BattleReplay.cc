@@ -232,12 +232,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // A same-speed leading car within 3m must not become a permanent
   // artificial 9m/s cruise limit. Only permit acceleration when swept
   // future body clearance over the next 2s remains compliant.
+  double passingSpeedWindow=0.;
   const bool followingS=!passed && frontGap>LEN+STRAIGHT_GAP &&
                          frontGap<6. && std::fabs(team.v-lead.v)<.25;
   if(followingS && !corner && !team.changing){
     for(double trial:{11.0,10.5,10.0}){
       if(forecast(team.lat,elapsed,now,false,trial,2.0,false,
                   STRAIGHT_GAP)>=0.){
+        passingSpeedWindow=trial;
         vt=std::max(vt,trial);
         if(now-lastPassSpeedLog>3.0){
           lastPassSpeedLog=now;
@@ -326,6 +328,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       comfortSpeed=teamCruise;
     }
   }
+  // Do not discard a specifically verified passing window by restoring
+  // the stale 9m/s comfort limit from a different long-horizon forecast.
+  if(passingSpeedWindow>comfortSpeed &&
+     forecast(team.lat,elapsed,now,false,passingSpeedWindow,2.0,false,
+              STRAIGHT_GAP)>=0.)
+    comfortSpeed=passingSpeedWindow;
   // Record why a safe passing speed is not being selected, instead of
   // assuming that every no-overtake case is a lane-planner failure.
   if(!passed && !team.changing && now-lastOvertakeDiagnostic>=5.0){
