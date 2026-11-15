@@ -147,7 +147,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // a vehicle already alongside.
     const double backClearance=clearance(pose(team),pose(rear));
     if(rearGap>LEN+STRAIGHT_TARGET && backClearance>STRAIGHT_TARGET){
-      if(defenseOutcome!="HOLDING"){
+      if(defenseOutcome=="DETECTED" || defenseOutcome=="SAFE_ABORT"){
         defenseOutcome="HOLDING";
         std::cout<<"[BATTLE] DEFENSE HOLD_START TTC="<<rearTTC
                  <<"s gap="<<rearGap<<"m clearance="<<backClearance<<std::endl;
@@ -179,19 +179,20 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                <<"s target_offset="<<bestTarget<<" score="<<bestScore<<std::endl;
     }
   }
-  // A reaction is not a defense success. Verify the pursuer stays behind
-  // during a sustained interval; cancel the claim if it overtakes.
+  // Only a final lap-end result counts as a verified defense. Holding a
+  // corridor for two seconds is preliminary evidence, not a race outcome.
   if(defenseOpportunity){
-    const double unwrapped=team.s-rear.s;
-    if(unwrapped<-LEN){
-      defenseOutcome="OVERTAKEN";
+    if(rear.s>team.s+LEN){
+      if(!rearOvertook)std::cout<<"[BATTLE] REAR OVERTAKE at t="<<elapsed
+        <<" rear_s="<<rear.s<<" team_s="<<team.s<<std::endl;
+      rearOvertook=true;
       defended=false;
-    }else if(defenseOutcome=="HOLDING" && now-defenseStart>=2.0 &&
-             rearBehind && rearGap>LEN+(corner?CORNER_GAP:STRAIGHT_GAP)){
-      if(!defended)std::cout<<"[BATTLE] DEFENSE VERIFIED gap="<<rearGap
-        <<" t="<<elapsed<<std::endl;
-      defended=true;
-      defenseOutcome="HELD_BEHIND_2S";
+      defenseOutcome="OVERTAKEN";
+    }else if(defenseOutcome=="HOLDING" &&
+             now-defenseStart>=2.0 && !rearOvertook){
+      defenseOutcome="HOLD_MONITOR";
+      std::cout<<"[BATTLE] DEFENSE HOLD_MONITOR t="<<elapsed
+               <<" rear_gap="<<rearGap<<std::endl;
     }
   }
   if(team.changing){
@@ -355,7 +356,17 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     report.flush();lastCsv=now;
   }
   if(team.s-teamStart>=lap){
-    if(defenseOutcome=="OVERTAKEN")defended=false;
+    // Defense is earned only if a true rear threat occurred and no pass
+    // happened during the whole lap. Gap is measured between body edges.
+    const double finalRearGap=team.s-rear.s-LEN;
+    defended=defenseOpportunity && !rearOvertook &&
+             finalRearGap>=(fabs(curve(team.s))>.18?CORNER_GAP:STRAIGHT_GAP);
+    if(defended){
+      defenseOutcome="HELD_TO_FINISH";
+      std::cout<<"[BATTLE] DEFENSE VERIFIED_FINISH rear_gap="
+               <<finalRearGap<<std::endl;
+    }else if(rearOvertook)defenseOutcome="OVERTAKEN";
+    else if(defenseOpportunity)defenseOutcome="UNVERIFIED_AT_FINISH";
     std::cout<<"[BATTLE] SUMMARY overtake="<<passed<<" defense="<<defended
              <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
              <<" minimum_rear_ttc="<<minRearTTC<<" attempts="<<attemptCount
@@ -498,7 +509,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
- bool defenseOpportunity=false;
+ bool defenseOpportunity=false,rearOvertook=false;
  bool joinPending=false,emergencyBraking=false;
  int initialLane=1,teamGrid=1;
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
