@@ -239,3 +239,13 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - **평가 최소 기준은 직선 0.5m / 코너 0.7m로 변경하지 않음.** TEAM11 차량 제어 로직 및 완주/추월/방어 성공 판정도 이번 커밋에서는 바꾸지 않음
 - 확인: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`
 - 미검증: 실제 Gazebo 구동 결과. 통과하면 `bash run.sh battle stage1` 및 `bash run.sh battle defense`로 나머지 맵 회귀 검증
+
+## 2026-11-15 20:15 Monaco geometric-clearance diagnosis
+
+- Monaco grid1: `FAIL_NO_OVERTAKE`, 무사고 완주 및 방어 기록, 최종 최소 차체 간격 **1.01993m**. 문제는 간격이 아니라 S자 차량을 추월하지 못한 데 있음
+- Monaco grid2: `FAIL_CLEARANCE`, `team_11/practice_rear_11` 간격 **0.672013m**(코너 0.7m 요구)
+- **기존 `clearance()`는 SAT 축의 최대 분리 간격을 실제 차체간 최단거리처럼 사용함.** 두 회전 직사각형의 대각선 분리 시 실제 거리보다 작게 측정하는 보수적 하한값으로서 실측 0.7m 위반 판단을 과대평가할 수 있음
+- 변경: 차체 사각형의 4개 모서리와 반대 차체의 4개 변 간 점-선분 거리(양방향 총 32개)를 계산하고, 겹침은 SAT로 구별하여 0m 처리. **실제 유클리드 차체 경계 거리**에 직선 0.5m, 코너 0.7m 규정을 그대로 적용
+- 변경: 추월 실패 진단을 위해 5초마다 `PASS_DIAGNOSTIC`(팀속도, 선행차속도, 차량 사이 전방 거리·횡방향 거리, 곡률, 안전속도 제한, rear TTC, 최초 차선합류 미완료 여부) 기록. 추월 성공 조건은 완화하지 않음
+- **검증 필요:** `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`. 두 실행 후 PASS 여부와 `PASS_DIAGNOSTIC` 기록을 비교. 기존 전체 방어 10/12 PASS도 반드시 회귀시험
+- Gazebo 실주행 결과와 실제 컴파일은 아직 미검증
