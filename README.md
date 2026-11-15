@@ -256,3 +256,9 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 수정: 현재 실제 차체 간격이 최소 0.5m보다 **0.25m** 이상 여유 있고 코너/차선 변경 중이 아니며 **1초 구간 0.58m 이상**의 몸체 간격 예측을 통과하면 9.5~10.5m/s 안전 가속을 허용, 매 시뮬레이션 스텝 재확인. 기존 1초 충돌 예측 제동, 직선 0.5m / 코너 0.7m 실패 기준 및 추월 조건은 유지
 - `PASS_DIAGNOSTIC`에 `pass_window`와 `speed_target`을 출력하도록 추가. 안전한 가속 창이 없으면 속도를 강제로 올리지 않음
 - 테스트: `cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle monaco 1 3 && bash run.sh battle monaco 2 1`. **Gazebo 실행 결과는 아직 검증되지 않음**
+
+## 2026-11-16 Monaco 단계별 추월속도 유지 수정
+- 2026-11-15 23:00/23:02 Monaco grid1/2: 둘 다 `FAIL_NO_OVERTAKE`, 방어 성공, 최소 차체간격 grid1 0.614299m / grid2 0.799432m. 추월 시도 각각 2/1회. `PASS_SPEED_WINDOW`이 9.5m/s에서 단발로 등장했지만 결국 9m/s로 다시 고착
+- 수정: 속도 차이가 0.4m/s 미만일 때에만 가속 판단을 실행하던 구간을 없애고 `team.v < 11m/s`, 앞차 거리 7m 미만 및 단기 예측 간격 통과 조건으로 유지. 가속 후보 11, 10.5, 10, 9.5m/s를 매 스텝 검토
+- `SPEED_DECISION`에는 최종 목표속도, 근접 추종속도, 편안한 선제 속도, 1초 위험 감속 상한, 추월 가속 허용 창, 차선변경 여부, 앞차 거리를 표시. 안전 예측에 걸리면 가속하지 않는 기존 제한 유지
+- 컴파일 및 Gazebo 주행은 아직 재검증되지 않음. 우선 `bash run.sh battle monaco 1 3`와 `bash run.sh battle monaco 2 1`, 통과 후 다른 맵 및 방어 전체 회귀 테스트
