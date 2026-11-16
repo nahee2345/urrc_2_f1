@@ -577,7 +577,15 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
           break;
         }
       }
-      if(!found)raceSafeTarget=0.;
+      if(!found){
+        // No constant-speed candidate can satisfy both cars' worst-case
+        // trajectories. A blind full stop can itself cause a rear impact
+        // from the S-car after TEAM11 has passed it. Hold corner pace while
+        // the S-car is behind and the current footprints are still apart.
+        const bool sCarBehind=lead.s<team.s &&
+          team.s-lead.s<12. && clearance(pose(team),pose(lead))>0.5;
+        raceSafeTarget=sCarBehind?std::min(vt,curvatureSpeedLimit):0.;
+      }
       if(now-lastRaceHazardLog>2.){
         lastRaceHazardLog=now;
         std::cout<<"[BATTLE] RACE3_EARLY_BRAKE risk="<<risk
