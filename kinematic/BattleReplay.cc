@@ -227,7 +227,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
       for(double trial:{12.,11.,10.,9.}){
-        if(trial>passingLimit+.01)continue;
+        // A lane change at or below the 9m/s leader is not an overtake.
+        if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
                                     mildAhead?CORNER_GAP:STRAIGHT_GAP);
         const double utility=score-.10*fabs(dst-team.lat)+
@@ -443,7 +444,22 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(passingSpeedWindow>0. && comfortSpeed>=passingSpeedWindow)
     vt=std::max(vt,passingSpeedWindow);
   vt=std::min(vt,curvatureSpeedLimit);
-  if(team.changing)vt=std::min(vt,teamCruise-1.5);
+  // Ordinary lane joins are capped at 10.5m/s. A committed pass
+  // may use its planned speed only after validating the actual changing
+  // path against BOTH predicted opponent trajectories.
+  if(team.changing){
+    const bool passClear=passingActive && overtakeZone &&
+      forecast(team.to,elapsed,now,true,
+        std::min(plannedPassSpeed,curvatureSpeedLimit),1.2,true,
+        mildAhead?CORNER_GAP:STRAIGHT_GAP)>=0.;
+    if(!passClear)vt=std::min(vt,teamCruise-1.5);
+    else if(now-lastPassMotionLog>3.){
+      lastPassMotionLog=now;
+      std::cout<<"[BATTLE] PASS_LANE_SPEED planned="<<plannedPassSpeed
+               <<" target="<<vt<<" lat="<<team.lat
+               <<" destination="<<team.to<<std::endl;
+    }
+  }
   if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
   // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
@@ -755,7 +771,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6;
+ double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.,plannedPassSpeed=9.;
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
