@@ -23,8 +23,9 @@ def grid_lateral(point,grid):
     return ((float(grid["x"])-point["x"])*(-math.sin(yaw))+
             (float(grid["y"])-point["y"])*math.cos(yaw))
 
-def build(track,lib,output,grid_position=1,lane=None,defense=False):
+def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
     if grid_position not in (1,2):raise ValueError("Grid must be 1 or 2")
+    if laps not in (1,3):raise ValueError("Supported lap counts: 1 or 3")
     if lane is None:lane=3 if grid_position==1 else 1
     if lane not in (1,2,3):raise ValueError("Lane must be 1..3")
     result=build_single(track,lane,lib,output,10.0)
@@ -55,10 +56,20 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False):
     lx=lead["x"]+offset*math.sin(lead["yaw"])
     ly=lead["y"]-offset*math.cos(lead["yaw"])
     center_file=output/"battle_centerline.csv"
+    with (PACKAGE/"tracks"/"processed"/f"{track}_centerline.csv").open(newline="") as f:
+        road_points=list(csv.DictReader(f))
+    if len(road_points)!=len(pts):
+        raise ValueError("Road-width samples and centerline sample counts differ")
     with center_file.open("w",newline="") as f:
         writer=csv.writer(f)
-        writer.writerow(("distance_m","x_m","y_m","z_m","yaw_rad"))
-        for p in pts:writer.writerow([format(p[k],".9f") for k in ("s","x","y","z","yaw")])
+        writer.writerow(("distance_m","x_m","y_m","z_m","yaw_rad","road_width_m"))
+        for p,road in zip(pts,road_points):
+            if abs(p["x"]-float(road["x_m"]))>.1 or abs(p["y"]-float(road["y_m"]))>.1:
+                raise ValueError("Road width profile is not aligned with the centerline")
+            width=float(road["road_width_m"])
+            if not math.isfinite(width) or width<=0:
+                raise ValueError("Invalid road width profile")
+            writer.writerow([*[format(p[k],".9f") for k in ("s","x","y","z","yaw")],format(width,".9f")])
     world=ET.parse(result["world_file"])
     root=world.getroot().find("world")
     for p in list(root.findall("plugin")):
@@ -69,6 +80,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False):
       "centerline_file":str(center_file.resolve()),
       "log_file":str((output/"battle_state.csv").resolve()),
       "lap_length_m":loop,
+      "race_laps":laps,
       "lane_offset_m":offset,
       "team_initial_lane":lane,
       "team_grid":grid_position,
@@ -107,7 +119,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False):
                     rp["y"]+rear_lat*cos(rp["yaw"]),
                     rp["z"]+REPLAY_BASE_Z_OFFSET_M,rp["yaw"]]
     result.update({
-      "mode":"battle_defense" if defense else "battle",
+      "mode":"battle_3laps" if laps==3 else ("battle_defense" if defense else "battle"),
       "team_initial_lane":lane,
       "team_grid":grid_position,
       "lead_model":str(lead_model),
@@ -120,7 +132,9 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False):
         "practice_rear_11":rear_spawn if defense else [float(grids[10]["x"]),float(grids[10]["y"]),
                            float(grids[10]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[10]["yaw"])]
       },
-      "scenario":{"team_mps":10,"s_vehicle_mps":9,
+      "scenario":{"team_max_mps":15,"team_cruise_target_mps":10,"team_sharp_corner_target_mps":7 if laps==3 else 7,
+                  "laps":laps,"wall_check":"geometric road-width envelope, not Gazebo physics contact",
+                  "s_vehicle_mps":9,
                   "rear_grid10_mps":14 if defense else 11,"s_lane_sequence":[1,2,3,2,1],
                   "s_segment_seconds":2,
                   "start_signal":"5 lamps off via Gazebo service, not camera",
@@ -136,8 +150,9 @@ if __name__=="__main__":
     p.add_argument("--track",choices=("monza","spa","monaco","cota","hungaroring","baku"),required=True)
     p.add_argument("--grid",type=int,choices=(1,2),required=True)
     p.add_argument("--defense",action="store_true")
+    p.add_argument("--laps",type=int,choices=(1,3),default=1)
     p.add_argument("--lane",type=int,choices=(1,2,3),default=None)
     p.add_argument("--plugin",type=Path,required=True)
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
-    build(a.track,a.plugin,a.output,a.grid,a.lane,a.defense)
+    build(a.track,a.plugin,a.output,a.grid,a.lane,a.defense,a.laps)
