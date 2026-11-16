@@ -551,11 +551,47 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" team_changing="<<team.changing
              <<" front_gap="<<frontGap<<std::endl;
   }
-  // Braking for a pursuer behind would make a rear-end collision worse.
+  // Braking for a pursuer behind would make a rear-end collision worse,
+  // but only when the forward trajectory also remains clear.
   if(rearBehind && rearTTC<2. && frontTTC>2. &&
-     !team.changing && speedCeiling>=team.v)
+     !team.changing && speedCeiling>=team.v &&
+     (!raceMode || forecast(team.lat,elapsed,now,false,
+          std::min(curvatureSpeedLimit,team.v+0.5),1.5,true)>=0.))
     vt=std::max(vt,std::min(curvatureSpeedLimit,team.v+0.5));
   vt=std::min(vt,curvatureSpeedLimit);
+  if(raceMode && now-lastRaceHazardCheck>=.1){
+    lastRaceHazardCheck=now;
+    // The old emergency check only looked one second ahead and could
+    // return speed=0 when the lead car was already beside TEAM11.
+    // Check a longer window while braking is still physically possible.
+    const double horizon=2.5;
+    const double dst=team.changing?team.to:team.lat;
+    const double risk=forecast(dst,elapsed,now,team.changing,vt,horizon,true);
+    if(risk<0.){
+      bool found=false;
+      for(double candidate:{15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.,2.,1.,0.}){
+        if(candidate>vt+.01)continue;
+        if(forecast(dst,elapsed,now,team.changing,candidate,horizon,true)>=0.){
+          raceSafeTarget=candidate;
+          found=true;
+          break;
+        }
+      }
+      if(!found)raceSafeTarget=0.;
+      if(now-lastRaceHazardLog>2.){
+        lastRaceHazardLog=now;
+        std::cout<<"[BATTLE] RACE3_EARLY_BRAKE risk="<<risk
+                 <<" desired="<<vt<<" safe_target="<<raceSafeTarget
+                 <<" team_v="<<team.v
+                 <<" lead_v="<<lead.v
+                 <<" body_gap="<<clearance(pose(team),pose(lead))
+                 <<std::endl;
+      }
+    }else{
+      raceSafeTarget=MAX_TEAM_SPEED;
+    }
+  }
+  if(raceMode)vt=std::min(vt,raceSafeTarget);
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -671,7 +707,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                  <<" team_lat="<<team.lat<<" rear_ttc="<<rearTTC<<std::endl;
       }
       if(raceMode){
-        ++closeWarningCount;
+        if(sweep==0)++closeWarningCount;
       }else{
         finish("FAIL_CLEARANCE");return;
       }
@@ -913,7 +949,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
       // Three-lap racing only rejects predicted overlap, not a near miss.
       // Keep the original 0.5/0.7m safety policy in one-lap battle tests.
-      const double threshold=raceMode?0.03:
+      // Hard failure remains footprint overlap. Earlier proactive braking
+      // keeps a small predictive cushion without disqualifying near passes.
+      const double threshold=raceMode?0.15:
         (requiredGap>=0?std::max(need,requiredGap):need);
       const double margin=clearance(p,op)-threshold;
       if(margin < -CLEARANCE_EPS)return -1.;
@@ -962,6 +1000,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  bool raceMode=false;
  double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9,lastElapsed=0.;
  double lastCloseWarningLog=-1e6,lastWallCorrectionLog=-1e6,lastWallWarningLog=-1e6;
+ double lastRaceHazardCheck=-1e6,lastRaceHazardLog=-1e6,raceSafeTarget=MAX_TEAM_SPEED;
  long long closeWarningCount=0,wallWarningCount=0;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
