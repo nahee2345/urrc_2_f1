@@ -692,13 +692,13 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    measure(ca,cb);measure(cb,ca);
    return best;
  }
- // Predict both opponents' future occupancy and score each lane-change
- // candidate. Negative means a predicted collision or >30deg equivalent
- // steering. Positive means minimum centre clearance above collision radius.
+ // Predict both opponents' occupied footprints at future time points.
+ // Nonnegative score means every predicted body-to-body clearance meets
+ // its required limit. Never use centre separation as a substitute:
+ // safe lateral passes may have short centre distances.
  double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.)const{
-  double minGap=1e6;
+  double minimumMargin=1e6;
   Pos lastP=pose(team);
-  Pos lastLastP=lastP;
   double lastHeading=lastP.yaw;
   for(int i=1;i<=static_cast<int>(horizon*10+.5);i++){
     const double t=i*.1;
@@ -740,15 +740,15 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
         sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*ease((absolute-2.*period)/2.);
       }
       const Pos op=pose(sample);
-      const double center=hypot(p.x-op.x,p.y-op.y);
-      minGap=std::min(minGap,center);
       const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
       const double threshold=requiredGap>=0?std::max(need,requiredGap):need;
-      if(clearance(p,op)<threshold)return -1.;
+      const double margin=clearance(p,op)-threshold;
+      if(margin < -CLEARANCE_EPS)return -1.;
+      minimumMargin=std::min(minimumMargin,margin);
     }
-    lastLastP=lastP;lastP=p;
+    lastP=p;
   }
-  return minGap-(LEN+STRAIGHT_GAP);
+  return std::max(0.,minimumMargin);
  }
  void change(double dest,double now){
   team.from=team.lat;team.to=dest;team.changeStart=now;
