@@ -753,7 +753,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    auto it=std::upper_bound(route.begin(),route.end(),t,
      [](double x,const Pt&pt){return x<pt.s;});
    size_t i=it==route.begin()?0:static_cast<size_t>(it-route.begin()-1);
-   const Pt&sample=route[i];
+   const double width=2.*(roadOffsetLimit(s)+.5*WID+.10);
    Car center;center.s=s;center.lat=0.;
    const Pos ref=pose(center);
    const double nx=-sin(ref.yaw),ny=cos(ref.yaw);
@@ -761,7 +761,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
    const double dyaw=wrap(p.yaw-ref.yaw);
    const double halfProjection=.5*LEN*fabs(sin(dyaw))+
                                .5*WID*fabs(cos(dyaw));
-   return .5*sample.width-fabs(lateral)-halfProjection;
+   return .5*width-fabs(lateral)-halfProjection;
  }
  double gap(double from,double to)const {
   double x=fmod(to-from,lap);if(x<0)x+=lap;return x;
@@ -871,6 +871,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     const double start=active?team.changeStart:now;
     const double duration=active?team.changeDuration:2.5;
     candidate.lat=from+(destination-from)*ease((now+t-start)/duration);
+    if(raceMode &&
+       fabs(candidate.lat)>roadOffsetLimit(candidate.s)+.01)return -3.;
     Pos p=pose(candidate);
     const double ds=hypot(p.x-lastP.x,p.y-lastP.y);
     if(ds>1e-4){
@@ -894,6 +896,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
         const int phase=period%4;
         sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*ease((absolute-2.*period)/2.);
       }
+      if(raceMode)
+        sample.lat=std::clamp(sample.lat,-roadOffsetLimit(sample.s),
+                                           roadOffsetLimit(sample.s));
       const Pos op=pose(sample);
       const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
       // Three-lap racing only rejects predicted overlap, not a near miss.
