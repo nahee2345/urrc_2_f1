@@ -262,3 +262,14 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 수정: 속도 차이가 0.4m/s 미만일 때에만 가속 판단을 실행하던 구간을 없애고 `team.v < 11m/s`, 앞차 거리 7m 미만 및 단기 예측 간격 통과 조건으로 유지. 가속 후보 11, 10.5, 10, 9.5m/s를 매 스텝 검토
 - `SPEED_DECISION`에는 최종 목표속도, 근접 추종속도, 편안한 선제 속도, 1초 위험 감속 상한, 추월 가속 허용 창, 차선변경 여부, 앞차 거리를 표시. 안전 예측에 걸리면 가속하지 않는 기존 제한 유지
 - 컴파일 및 Gazebo 주행은 아직 재검증되지 않음. 우선 `bash run.sh battle monaco 1 3`와 `bash run.sh battle monaco 2 1`, 통과 후 다른 맵 및 방어 전체 회귀 테스트
+
+## 2026-11-16 직선·완만한 코너 추월 통합 및 급격한 코너 사전 감속
+
+- 범위: `kinematic/BattleReplay.cc`의 **Gazebo 위치 직접 지정 방식 3차량 배틀 테스트**. 실제 ROS 2 센서·카메라/라이다·실제 조향 제어는 이 변경으로 수정되지 않습니다
+- 곡률(절댓값) 단계: 직선 < 0.08 1/m, 완만한 코너 0.08~0.18 1/m, 급격한 코너 >= 0.18 1/m. 경계값은 시뮬레이션 검증을 위한 초기 설정이며 Gazebo 실제 시험 후 조정해야 합니다
+- 코너 접근 판정은 현재 위치에서만 하지 않고 **최소 8m 또는 현재 속도에서 계산한 감속거리+4m**까지 8분할로 미리 곡률 검사. 직선 최대 12m/s, 완만한 코너 최대 10m/s, 급격한 코너 7m/s로 목표속도 제한. 감속은 기존 한계 -5m/s² 적용
+- 직선 및 완만한 코너에서 앞차 TTC <=3초 또는 앞차 거리 <5m일 때 3개 경로×여러 속도 후보를 향후 3초간 비교. 완만한 코너에서 계획 간격 0.7m, 직선 0.5m 이상 확보하고, 후방 차량의 미래 위치·조향 30° 제한을 통과한 후보만 채택
+- 차선 변경을 선택하면 `passingActive`와 `plannedPassSpeed`로 추월 목표를 기억하고, 실제 변경 중인 보간 경로의 미래 차체 간격을 매 스텝 확인하여 가능한 경우 앞차 추종 9m/s 상한보다 높은 목표속도를 허용. 급격한 코너 접근 시 신규 추월을 중지하고 가속 계획을 보류. 안전 경로가 없으면 무리하게 차선변경하지 않음
+- 로그: `CORNER_SPEED`, `OVERTAKE ATTEMPT`, `OVERTAKE PAUSE`, `PASS_SPEED_WINDOW`, `OVERTAKE COMPLETED`, `SPEED_DECISION` 참고
+- 차체 간격 실패 기준 직선 0.5m / 급격한 코너 0.7m, 판정 로직과 전체 배틀 결과 규칙 유지
+- 로컬 Gazebo 컴파일·실주행은 아직 검증되지 않음. 우선 `bash run.sh battle monaco 1 3`, `bash run.sh battle monaco 2 1` 후 `bash run.sh battle stage1` 및 `bash run.sh battle defense`로 회귀 검증 필요
