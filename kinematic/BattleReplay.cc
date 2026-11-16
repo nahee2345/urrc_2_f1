@@ -231,8 +231,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
                                     mildAhead?CORNER_GAP:STRAIGHT_GAP);
-        const double utility=score-.10*fabs(dst-team.lat)+
-                             .12*(trial-lead.v);
+        // Prefer a genuinely faster passing profile after it has passed
+        // the hard footprint checks; excessive clearance alone should not
+        // make a 10m/s plan outrank a safe 12m/s plan.
+        const double utility=.25*std::min(score,1.5)-
+                             .10*fabs(dst-team.lat)+
+                             .50*(trial-lead.v);
         if(score>=0. && utility>bestScore){
           bestScore=utility;bestTarget=dst;bestSpeed=trial;
         }
