@@ -387,3 +387,20 @@ bash run.sh race3 both
 - 기존 race3 안전 경고는 `CLEARANCE_WARNING`으로 유지하고 물리적 차체 겹침 `FAIL_COLLISION`만 실격. `clearance_warning_count`는 같은 물리 업데이트에서 중복 스윕 11회를 반복 집계하지 않도록 일부 조정
 - 기존 1바퀴 배틀의 감속·안전 판정 및 직선15/평균목표10/코너7.5m/s 구성 유지. 실제 Gazebo 사고 재현 및 12개 전맵 회귀 주행 검증은 아직 완료되지 않음
 - 우선: `bash run.sh battle monaco 2 1 race3` 성공 여부 및 `RACE3_EARLY_BRAKE`, `COLLISION`, `RACE3_RESULT` 로그 확인. 이후 `bash run.sh race3 both`
+
+## 2026-11-16 19:28 Monaco grid2 충돌 대응과 12개 race3 경로 고정
+
+- **3바퀴 전용 매핑 강제:** 그리드 **1번→3번 경로**, 그리드 **2번→1번 경로**. `run_battle.sh`에서 다른 조합이면 사전 오류로 종료. `bash run.sh race3 both`는 6개 맵×2개 그리드 총 **12사례**, 각 **3바퀴**, 3대 동시 운동학적 주행
+- 사용자가 제출한 **Monaco grid2, 20261116_192801** 로그: `FAIL_COLLISION t=24.479 pair=team_11/practice_s_09`, `min_body_clearance=0.000100096m`. 1바퀴 완료 전, `RACE3_EARLY_BRAKE risk=-1 safe_target=0` 직후 감속. `practice_s_09` 속도 2.69914m/s가 기록되어 일반적인 9m/s 예측과 불일치
+- 이번 수정: S자 차량이 정상 속도로 진행하거나 **최대 -5m/s²로 감속**하는 두 상황을 함께 충돌 예측에 사용하고, 이미 추월한 S자 차량이 가까이 뒤따르는 상황에서 모든 일정속도 예측이 실패했다고 **무조건 0m/s로 급감속하는 방식**을 완화. 단, 추월/방어 성공이나 무충돌을 **보장하지는 않음**
+- 정식 재시험:
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+python3 kinematic/test_diagnose_battle.py
+python3 kinematic/test_three_lap_report.py
+bash run.sh battle monaco 2 1 race3
+bash run.sh race3 both
+```
+- 결과 파일: `log/race3/<실행시각>/summary.csv`. **12건 전부 `PASS_3_LAPS` 및 `failure_category=SUCCESS_3_LAPS`일 때만 12/12 성공**으로 판정. `COLLISION` 발생 시 실패 이유 기록, 차간거리 경고는 실격 아님. 도로 경계는 기하학적 프록시이며 Gazebo 실제 벽 접촉 검증이 아님
+- **검증 범위**: GitHub 소스 수정 및 정적 점검 가능. 대화 환경에서는 사용자의 Gazebo Harmonic+ROS2 Jazzy 12회 실제 실행 결과를 직접 확인할 수 없으므로 전체 주행 **미검증** 상태
