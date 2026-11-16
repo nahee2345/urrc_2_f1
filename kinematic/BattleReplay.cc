@@ -24,12 +24,13 @@
 #include <vector>
 namespace urrc {
 constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
-constexpr double STRAIGHT_TARGET=.60, CORNER_TARGET=.80;
+constexpr double STRAIGHT_TARGET=1.00, CORNER_TARGET=1.00;
 constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
-constexpr double SHARP_SPEED=7., MILD_SPEED=10.;
-constexpr double MAX_TEAM_SPEED=12.;
+constexpr double SHARP_SPEED=7., MILD_SPEED=11.;
+constexpr double MAX_TEAM_SPEED=15.;
+constexpr double NORMAL_LANE_CHANGE_SPEED=10.5;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
 struct Pt {double s,x,y,z,yaw;};
@@ -71,7 +72,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,min_center_m,min_body_clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team 12m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team "<<MAX_TEAM_SPEED<<"m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -226,7 +227,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{12.,11.,10.,9.}){
+      for(double trial:{15.,14.,13.,12.,11.,10.,9.}){
         // A lane change at or below the 9m/s leader is not an overtake.
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
@@ -284,7 +285,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       if(d>20. || fabs(a.lat-b->lat)>WID+.09)continue;
       const double bumper=std::max(0.,d-LEN);
       const bool inCorner=fabs(curve(a.s))>.18;
-      const double minimum=inCorner?CORNER_TARGET:STRAIGHT_TARGET;
+      // TEAM11 follows at a preferred 1.0m body-to-body gap.
+      // Practice traffic retains its existing own driving policy.
+      const double minimum=(&a==&team)?(inCorner?CORNER_TARGET:STRAIGHT_TARGET):
+                          (inCorner?CORNER_GAP:STRAIGHT_GAP);
       const double ttc=a.v>b->v+.05?(bumper-minimum)/(a.v-b->v):1e6;
       if(ttc<=1. || bumper<=minimum){
         desired=std::min(desired,b->v+std::max(0.,bumper-minimum)*1.2);
@@ -310,7 +314,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     if(currentBody>STRAIGHT_GAP+.25){
       // Continue checking at the current passing speed, not just while
       // team speed is almost identical to the 9m/s lead car.
-      for(double trial:{11.0,10.5,10.0,9.5}){
+      for(double trial:{15.,14.,13.,12.,11.,10.5,10.,9.5}){
         if(trial>curvatureSpeedLimit+.01)continue;
         if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
                     STRAIGHT_GAP+.08)>=0.){
@@ -374,7 +378,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
     bool foundComfort=false;
-    for(double trial:{12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
+    for(double trial:{15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
       if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
@@ -456,7 +460,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       forecast(team.to,elapsed,now,true,
         std::min(plannedPassSpeed,curvatureSpeedLimit),1.2,true,
         mildAhead?CORNER_GAP:STRAIGHT_GAP)>=0.;
-    if(!passClear)vt=std::min(vt,teamCruise-1.5);
+    if(!passClear)vt=std::min(vt,NORMAL_LANE_CHANGE_SPEED);
     else if(now-lastPassMotionLog>3.){
       lastPassMotionLog=now;
       std::cout<<"[BATTLE] PASS_LANE_SPEED planned="<<plannedPassSpeed
@@ -471,7 +475,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     speedCeiling=teamCruise;
     if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
-      for(double trial:{12.,10.5,9.,7.,5.,3.,1.,0.}){
+      for(double trial:{15.,14.,13.,12.,11.,10.5,9.,7.,5.,3.,1.,0.}){
         if(trial>vt+.01)continue;
         if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
@@ -775,8 +779,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.,plannedPassSpeed=9.;
+ double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=9.;
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
