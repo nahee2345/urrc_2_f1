@@ -931,31 +931,44 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
     for(const Car*o:{&lead,&rear}){
       if(o==&rear && !includeRear)continue;
-      Car sample=*o;
       const double cap=o==&lead?9.:rearCruise;
       const double tacc=std::min(t,std::max(0.,cap-o->v)/3.);
-      sample.s+=o->v*tacc+1.5*tacc*tacc+cap*std::max(0.,t-tacc);
-      if(o==&lead){
-        const double seq[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
-        const double absolute=elapsed+t;
-        const int period=static_cast<int>(absolute/2.);
-        const int phase=period%4;
-        sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*ease((absolute-2.*period)/2.);
+      const double normalTravel=o->v*tacc+1.5*tacc*tacc+
+                                cap*std::max(0.,t-tacc);
+      // In race3 the 9m/s weaving car can yield abruptly when the team
+      // passes it. Forecasting only 9m/s is optimistic and was implicated
+      // in Monaco grid2's 24.479s car-body overlap. Account for both the
+      // nominal path and a physically possible -5m/s^2 brake to a stop.
+      const int scenarios=(raceMode && o==&lead &&
+                           std::fabs(candidate.s-o->s)<30.)?2:1;
+      for(int scenario=0;scenario<scenarios;++scenario){
+        Car sample=*o;
+        if(scenario==0){
+          sample.s+=normalTravel;
+        }else{
+          const double brakingTime=std::min(t,o->v/5.);
+          sample.s+=std::max(0.,o->v*brakingTime-
+                                2.5*brakingTime*brakingTime);
+        }
+        if(o==&lead){
+          const double seq[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
+          const double absolute=elapsed+t;
+          const int period=static_cast<int>(absolute/2.);
+          const int phase=period%4;
+          sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*
+                     ease((absolute-2.*period)/2.);
+        }
+        if(raceMode)
+          sample.lat=std::clamp(sample.lat,-roadOffsetLimit(sample.s),
+                                             roadOffsetLimit(sample.s));
+        const Pos op=pose(sample);
+        const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
+        const double threshold=raceMode?0.15:
+          (requiredGap>=0?std::max(need,requiredGap):need);
+        const double margin=clearance(p,op)-threshold;
+        if(margin < -CLEARANCE_EPS)return -1.;
+        minimumMargin=std::min(minimumMargin,margin);
       }
-      if(raceMode)
-        sample.lat=std::clamp(sample.lat,-roadOffsetLimit(sample.s),
-                                           roadOffsetLimit(sample.s));
-      const Pos op=pose(sample);
-      const double need=fabs(curve(candidate.s))>.18?CORNER_GAP:STRAIGHT_GAP;
-      // Three-lap racing only rejects predicted overlap, not a near miss.
-      // Keep the original 0.5/0.7m safety policy in one-lap battle tests.
-      // Hard failure remains footprint overlap. Earlier proactive braking
-      // keeps a small predictive cushion without disqualifying near passes.
-      const double threshold=raceMode?0.15:
-        (requiredGap>=0?std::max(need,requiredGap):need);
-      const double margin=clearance(p,op)-threshold;
-      if(margin < -CLEARANCE_EPS)return -1.;
-      minimumMargin=std::min(minimumMargin,margin);
     }
     lastP=p;
   }
