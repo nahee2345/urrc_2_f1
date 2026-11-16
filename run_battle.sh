@@ -139,7 +139,18 @@ while kill -0 "$WORLD_PID" 2>/dev/null;do
   fi
   if (( $(date +%s)-STARTED>600 ));then
     echo "FAIL: no battle result within 600 seconds" >&2
-    tail -55 "$LOG/gazebo.log";exit 11
+    echo "Diagnostics: $LOG/gazebo.log" >&2
+    echo "=== Gazebo last non-multicast messages ===" >&2
+    grep -v 'Exception sending a multicast message:Network is unreachable' "$LOG/gazebo.log" | tail -35 >&2 || true
+    echo "=== Last recorded simulation state ===" >&2
+    if [[ -f "$OUT/battle_state.csv" ]]; then
+      tail -3 "$OUT/battle_state.csv" >&2
+    else
+      echo "battle_state.csv missing (plugin may not have started)" >&2
+    fi
+    echo "=== Gazebo process ===" >&2
+    ps -p "$WORLD_PID" -o pid,stat,etime,cmd >&2 || true
+    exit 11
   fi
   sleep 1
 done
