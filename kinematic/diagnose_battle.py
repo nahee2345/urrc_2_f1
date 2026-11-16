@@ -42,7 +42,13 @@ def classify(case_log, rc):
     defense_status = status[-1] if status else "UNKNOWN"
     pair = contacts[-1] if contacts else (breaches[-1][0] if breaches else "")
     detail = ""
-    if code == "PASS_BATTLE":
+    if code == "PASS_3_LAPS":
+        category = "SUCCESS_3_LAPS"
+        detail = "Completed three laps; inspect RACE3_RESULT for final rank and speed"
+    elif code == "FAIL_WALL_BOUNDARY":
+        category = "GEOMETRIC_WALL_BOUNDARY"
+        detail = "Road-width geometry envelope crossed (not confirmed Gazebo contact)"
+    elif code == "PASS_BATTLE":
         category = "SUCCESS"
         detail = "Overtake and defense criteria satisfied"
     elif code == "PARTIAL_DEFENSE_UNVERIFIED":
