@@ -281,3 +281,10 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 곡률 분류가 낮아지는 방향 전환은 0.5초 유지로 로그 토글 억제. `CORNER_SPEED`에 급코너까지의 거리 출력
 - 주의: 후행차의 코너 감속과 선행 S 차량의 9m/s 일정속도 때문에 무조건 추월 성공을 보장하지 않음. 선행 S차량의 속도/경로를 조정하여 인위적으로 PASS를 만들지는 않음
 - 확인: `bash run.sh battle monaco 1 3` / `bash run.sh battle monaco 2 1` → 전체 `stage1` 및 `defense` 회귀 테스트. 실제 Gazebo 재시험은 아직 수행되지 않음
+
+## 2026-11-16 09:31~09:33 Monaco 추월 재검증과 사전 차선 위치 선정
+- 일반 Monaco grid1 및 grid2: 각각 `FAIL_NO_OVERTAKE`, `attempts=6`, 방어는 `HELD_TO_FINISH`. 차체 최소 간격 1.00544m / 1.02661m, 충돌·간격 위반 없음. 71초경 마지막 `OVERTAKE ATTEMPT` 후 곧 완주하여 추월 미완료. `HAZARD_REPLAN future=-1 stay=-1 back=-1` 발생해 당시 예측상 안전한 재계획 후보도 없었음
+- 수정: 추월 검토를 전방 차량 5m 이내에 도달하기 전에 시작할 수 있도록 조건 확장. 직선·완만한 코너에서 앞차 거리 18m 미만이고 도달 가능한 곡률 제한 속도가 선행 S차량(9m/s)보다 0.5m/s 이상 높으며, 결승까지 25m 이상 남았을 때 차선 변경 후보를 미리 점검
+- 기존처럼 3초 미래 시뮬레이션의 양쪽 상대차량 차체 간격/30도 조향 등 안전검사를 통과한 후보만 채택. 급격한 코너 접근 시 새 추월은 시작하지 않고, 직선 0.5m·코너 0.7m 기준 완화하지 않음. 안전한 경로 후보가 없으면 추월 시도 보류
+- `OVERTAKE ATTEMPT` 로그에 `front_gap`, `lap_remaining` 추가하여 추월 시도 시점 확인. 이 패치는 선행 S차량의 움직임이나 배틀 성공판정을 변경하지 않음
+- 검증: `bash run.sh battle monaco 1 3`, `bash run.sh battle monaco 2 1`; 두 결과 확인 후 `bash run.sh battle stage1`, `bash run.sh battle defense`. 실제 Gazebo 실행 결과는 아직 미확인
