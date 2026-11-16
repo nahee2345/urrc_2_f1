@@ -214,11 +214,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       }
     }
   }else if(overtakeZone && !passed &&
-            frontGap>LEN+STRAIGHT_TARGET && frontGap<12. &&
-            (frontTTC<=3. || frontGap<5.0)){
-    // Include speed-up in lane candidate prediction. Testing a lane
-    // change at today's 9m/s could never establish that a faster pass is
-    // possible, and made equal-speed following a permanent deadlock.
+            frontGap>LEN+STRAIGHT_TARGET && frontGap<20. &&
+            (frontTTC<=3. || frontGap<5.0 ||
+             (frontGap<18. && curvatureSpeedLimit>lead.v+0.5 &&
+              team.s-teamStart<lap-25.))){
+    // Start looking before following at 5m. A 2.5s manoeuvre begun
+    // after the lead is already alongside is often too late on Monaco.
+    // Pre-position only if both opponents and the bend remain safe for
+    // the complete forecast; don't make a mandatory unsafe lane change.
     double bestScore=-1e9,bestTarget=team.lat,bestSpeed=team.v;
     const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
     for(double dst:{-lateralOffset,0.,lateralOffset}){
@@ -241,6 +244,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
                <<"s target_offset="<<bestTarget<<" speed="<<bestSpeed
                <<" curve="<<upcomingCurve
+               <<" front_gap="<<frontGap
+               <<" lap_remaining="<<(lap-(team.s-teamStart))
                <<" score="<<bestScore<<std::endl;
     }
   }
