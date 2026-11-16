@@ -288,3 +288,11 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 기존처럼 3초 미래 시뮬레이션의 양쪽 상대차량 차체 간격/30도 조향 등 안전검사를 통과한 후보만 채택. 급격한 코너 접근 시 새 추월은 시작하지 않고, 직선 0.5m·코너 0.7m 기준 완화하지 않음. 안전한 경로 후보가 없으면 추월 시도 보류
 - `OVERTAKE ATTEMPT` 로그에 `front_gap`, `lap_remaining` 추가하여 추월 시도 시점 확인. 이 패치는 선행 S차량의 움직임이나 배틀 성공판정을 변경하지 않음
 - 검증: `bash run.sh battle monaco 1 3`, `bash run.sh battle monaco 2 1`; 두 결과 확인 후 `bash run.sh battle stage1`, `bash run.sh battle defense`. 실제 Gazebo 실행 결과는 아직 미확인
+
+## 2026-11-16 09:37~09:39 Monaco 추월 11회 시도/0회 완료 대응
+- Monaco grid1/grid2: `FAIL_NO_OVERTAKE`, `attempts=11`, `defense=1`; 최소 차체간격 1.00984m / 1.00904m
+- 추월 시도는 초반(앞차 약 10m, 남은 124~126m)부터 발생하였지만 곧 급격한 코너를 만나 `OVERTAKE PAUSE`와 `HAZARD_REPLAN future=-1 stay=-1 back=-1` 발생. 급코너에선 TEAM11 7m/s, 선행 S 차량 9m/s라 간격이 다시 벌어짐
+- **명확한 코드 충돌:** `plannedPassSpeed=11`로 안전 후보를 선택했더라도 `if(team.changing) vt=min(vt,10.5)`가 무조건 적용되어 2.5초 차선 변경 중 10.5m/s를 초과할 수 없었음
+- 수정: 차선 변경 중에도 추월 목표속도로 양쪽 상대차량 포함 1.2초 차체간격을 재검증할 때만 해당 **10.5m/s 일반 차선 변경 제한 예외** 허용. 그 외 일반 차선 이동은 10.5m/s 제한 유지. 미래 위험 1초 긴급감속·곡률별 최고속도·차체 최소 간격 판정은 유지
+- 앞차와 같거나 느린 속도의 차선 변경을 `OVERTAKE ATTEMPT`로 집계하지 않게 `trial > lead.v + 0.5m/s` 요구. `PASS_LANE_SPEED` 진단 로그 추가
+- 코드 정적 중괄호/수정 위치 확인, **실제 컴파일 및 Gazebo 완주 여부 미검증**. `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`로 재검증 후 `stage1` / `defense` 회귀시험 필요
