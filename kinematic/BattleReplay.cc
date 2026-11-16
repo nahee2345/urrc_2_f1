@@ -798,7 +798,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       double ux=k==0?cos(yaw):-sin(yaw),uy=k==0?sin(yaw):cos(yaw);
       auto r=[&](const Pos&p){double cs=cos(p.yaw),sn=sin(p.yaw);
         return LEN*.5*fabs(ux*cs+uy*sn)+WID*.5*fabs(-ux*sn+uy*cs);};
-      if(fabs(dx*ux+dy*uy)>r(a)+r(b)+.025)return false;
+      // Race3: only overlapping physical chassis footprints count.
+      // Preserve the legacy conservative 25mm SAT cushion for one-lap tests.
+      if(fabs(dx*ux+dy*uy)>r(a)+r(b)+(raceMode?0.:.025))
+        return false;
     }
   }
   return true;
