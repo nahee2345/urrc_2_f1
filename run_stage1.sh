@@ -8,7 +8,7 @@ RUN_ID="$(date +%Y%m%d_%H%M%S)"
 DEST="$ROOT/log/battle_stage1/$RUN_ID"
 mkdir -p "$DEST"
 CSV="$DEST/summary.csv"
-printf 'number,track,grid,lane,result,exit_code,log_file\n' > "$CSV"
+printf 'number,track,grid,lane,result,exit_code,replay_result,failure_category,wall_contact,log_file\n' > "$CSV"
 PASS_COUNT=0
 FAIL_COUNT=0
 PARTIAL_COUNT=0
@@ -39,11 +39,16 @@ for TRACK in "${TRACKS[@]}"; do
       STATUS=FAIL
       FAIL_COUNT=$((FAIL_COUNT+1))
     fi
-    printf '%s,%s,%s,%s,%s,%s,%s\n' "$N" "$TRACK" "$GRID" "$LANE" "$STATUS" "$RC" "$CASE_LOG" >> "$CSV"
-    echo "[$N/12] $STATUS (exit=$RC); $CASE_LOG"
+    DIAG="$(python3 "$ROOT/kinematic/diagnose_battle.py" --case "$CASE_LOG" --exit-code "$RC")"
+    REPLAY_RESULT="$(printf '%s\n' "$DIAG" | sed -n 's/^replay_result=//p')"
+    FAILURE_CATEGORY="$(printf '%s\n' "$DIAG" | sed -n 's/^failure_category=//p')"
+    WALL_CONTACT="$(printf '%s\n' "$DIAG" | sed -n 's/^wall_contact=//p')"
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$N" "$TRACK" "$GRID" "$LANE" "$STATUS" "$RC" "$REPLAY_RESULT" "$FAILURE_CATEGORY" "$WALL_CONTACT" "$CASE_LOG" >> "$CSV"
+    echo "[$N/12] $STATUS cause=$FAILURE_CATEGORY replay=$REPLAY_RESULT wall=$WALL_CONTACT (exit=$RC); $CASE_LOG"
     sleep 2
   done
 done
 echo "STAGE1 COMPLETE: PASS=$PASS_COUNT PARTIAL=$PARTIAL_COUNT FAIL=$FAIL_COUNT"
+python3 "$ROOT/kinematic/diagnose_battle.py" --summary "$CSV"
 echo "Results: $CSV"
 if (( FAIL_COUNT>0 )); then exit 1; fi
