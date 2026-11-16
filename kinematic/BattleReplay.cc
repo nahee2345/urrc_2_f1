@@ -123,6 +123,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const double curvatureSpeedLimit=sharpAhead?SHARP_SPEED:
                                    (mildAhead?MILD_SPEED:MAX_TEAM_SPEED);
   const bool overtakeZone=!sharpAhead && currentCurve<SHARP_CURVE;
+  const int curveMode=sharpAhead?2:(mildAhead?1:0);
+  if(curveMode!=previousCurveMode){
+    previousCurveMode=curveMode;
+    std::cout<<"[BATTLE] CORNER_SPEED mode="
+             <<(curveMode==2?"SHARP":(curveMode==1?"MILD":"STRAIGHT"))
+             <<" cap="<<curvatureSpeedLimit<<" curve="<<upcomingCurve
+             <<" speed="<<team.v<<std::endl;
+  }
   const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
   minRearTTC=std::min(minRearTTC,rearTTC);
   if(rearBehind && rearTTC<=5.){
@@ -716,7 +724,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.,plannedPassSpeed=9.;
- int attemptCount=0,replanCount=0;
+ int attemptCount=0,replanCount=0,previousCurveMode=-1;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false,rearOvertook=false;
  bool joinPending=false,emergencyBraking=false,passingActive=false;
