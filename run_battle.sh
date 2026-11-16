@@ -11,6 +11,15 @@ if [[ -z "$LANE" ]];then
   if [[ "$GRID" == 1 ]];then LANE=3;else LANE=1;fi
 fi
 case "$LANE" in 1|2|3) ;; *) echo "Lane must be 1, 2 or 3" >&2;exit 2;; esac
+# In the three-lap tournament, starting grid determines lane deterministically.
+if [[ "$MODE" == race3 ]]; then
+  EXPECTED_LANE=3
+  if [[ "$GRID" == 2 ]]; then EXPECTED_LANE=1; fi
+  if [[ "$LANE" != "$EXPECTED_LANE" ]]; then
+    echo "race3 fixed assignment: grid 1 -> lane 3; grid 2 -> lane 1" >&2
+    exit 2
+  fi
+fi
 case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *)
   echo "Valid tracks: monza spa monaco cota hungaroring baku" >&2;exit 2 ;;
 esac
