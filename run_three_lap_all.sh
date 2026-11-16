@@ -20,7 +20,7 @@ for TRACK in "${TRACKS[@]}"; do
     if [[ "$GRID" == 1 ]]; then LANE=3; else LANE=1; fi
     CASE_LOG="$DEST/${TRACK}_grid${GRID}.log"
     echo "RACE3 START track=$TRACK grid=$GRID laps=3 lane=$LANE"
-    if timeout --signal=TERM --kill-after=15 "${URRC_RACE3_CASE_TIMEOUT_S:-2100}" \
+    if timeout --signal=TERM --kill-after=15 "${URRC_RACE3_CASE_TIMEOUT_S:-3300}" \
          bash "$ROOT/run_battle.sh" "$TRACK" "$GRID" "$LANE" race3 >"$CASE_LOG" 2>&1; then
       RC=0
     else
