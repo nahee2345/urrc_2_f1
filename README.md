@@ -316,3 +316,14 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - **변경 코드·실행 스크립트 정적 검사 19/19 PASS:** 속도값, 추종 목표, 최소 간격, 감속거리식, 급코너 추월 금지, 15m/s 추월 후보, 30도 예측 제한, 후방 미래 차량 포함, 충돌/간격 판정, 가감속 범위, 일반 합류 상한, 로그, 두 개 12회 배치의 6맵×2그리드, 신호 게이트, C++ 중괄호 균형. **정적 텍스트 검사이지 컴파일/실주행 검증이 아님**
 - **필수 로컬 검증:** `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`; 그다음 `bash run.sh battle stage1`(일반 12개)과 `bash run.sh battle defense`(방어 12개). 총 24개 전체 케이스의 `PASS_BATTLE`, `FAIL_CLEARANCE`, `FAIL_COLLISION`, `FAIL_NO_OVERTAKE`, 600초 타임아웃 확인. `log/battle_stage1/*/summary.csv`, `log/battle_defense/*/summary.csv` 결과 제출 필요
 - 현재 **GitHub 변경 및 19항목 정적 확인만 완료**. 사용자 Gazebo / ROS Jazzy에서 전체 24회 실주행 성공 여부는 미검증. 특히 최신 12m/s 사례에서 차체 최소거리 0.508m / 0.518m처럼 근접했던 점을 고려해 속도 상향 후 충돌 회귀검증이 필요
+
+## 2026-11-16 배틀 FAIL 원인 세분화 및 기존 주행 로그 재진단
+
+- 기존 `run_stage1.sh` 및 `run_defense.sh`의 `FAIL`은 종료코드만 표시하여 차량 충돌/간격 위반/추월 실패/방어 미달/실행 오류를 식별하지 못했음. 최근 로컬 시험 일반(stage1) 8/12 케이스까지 기록 후 사용자 중단, 방어(defense) 12개 중 PASS 1 / PARTIAL 8 / FAIL 3
+- `kinematic/diagnose_battle.py` 추가: 각 `summary.csv`와 개별 `*.log`, 원본 `gazebo.log`에서 `[BATTLE] RESULT`, `COLLISION pair`, `CLEARANCE_BREACH pair/actual/required`, `defense_status`를 검색. `diagnosis.csv`에 실제 원인 및 관련 차량 저장. **과거 로그를 재주행하지 않고도 분석 가능**
+- 원인 범주: `VEHICLE_COLLISION`(팀 차량 충돌), `PRACTICE_VEHICLE_COLLISION`(연습 차량끼리 충돌), `VEHICLE_CLEARANCE_BREACH`(접촉은 없지만 규정 간격 위반), `TASK_NO_OVERTAKE`(추월 미달), `TASK_DEFENSE_UNVERIFIED`(추월 성공/방어 미확인), `EXECUTION_TIMEOUT` 및 기타 실행 실패. `FAIL_NO_OVERTAKE`는 반드시 충돌을 뜻하는 것이 아님
+- **벽 충돌은 `NOT_MEASURED`로 구분**. 현재 `BattleReplay.cc`는 차량 위치를 직접 설정하고 차량 간 차체 간격을 자체 계산하는 테스트입니다. 벽과의 실제 물리 접촉 이벤트를 수집하지 않으므로 기존 로그에서 `벽 충돌 없음`이라고 단정할 수 없습니다. 벽 충돌 증명에는 별도 벽 충돌 센서나 실제 충돌 이벤트 연동이 필요합니다
+- 새 전체 시험은 한 케이스마다 `cause=<실패원인> replay=<원본판정> wall=NOT_MEASURED`를 출력하고, `summary.csv`에 원인 범주 컬럼을 추가하고 `diagnosis.csv`를 자동 작성합니다. 사용자가 중간에 Ctrl+C로 중단해도 현재까지 쌓인 `summary.csv`는 아래 명령으로 재진단 가능
+- **기존 로그 즉시 분류:** `cd ~/urrc_2_f1 && git pull --ff-only origin main && python3 kinematic/diagnose_battle.py --all`
+- 특정 실행: `python3 kinematic/diagnose_battle.py --summary log/battle_stage1/20261116_132922/summary.csv --summary log/battle_defense/20261116_135232/summary.csv`
+- 분류기 회귀 단위시험: `python3 kinematic/test_diagnose_battle.py` (6개 케이스). GitHub 소스 정적 확인만 완료했으며 **사용자 환경의 파이썬 단위시험·Gazebo 실제 재실행 결과는 아직 확인되지 않았음**. 배틀 물리/속도 로직은 이 변경에서 수정하지 않음
