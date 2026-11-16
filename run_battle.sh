@@ -133,13 +133,25 @@ echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
 RESULT=""
+MAX_WALL_S=600
+if [[ "$MODE" == race3 ]]; then MAX_WALL_S=1800; fi
+MAX_WALL_S="${URRC_BATTLE_TIMEOUT_S:-$MAX_WALL_S}"
+LAST_LAP=0
 while kill -0 "$WORLD_PID" 2>/dev/null;do
   if grep -q '\[BATTLE\] RESULT ' "$LOG/gazebo.log";then
     RESULT=$(grep '\[BATTLE\] RESULT ' "$LOG/gazebo.log" | tail -1)
     echo "$RESULT"
     break
   fi
-  if (( $(date +%s)-STARTED>${URRC_BATTLE_TIMEOUT_S:-$([[ "$MODE" == race3 ]] && echo 1800 || echo 600)} ));then
+  if [[ "$MODE" == race3 ]] && grep -q '\[BATTLE\] LAP_COMPLETED ' "$LOG/gazebo.log"; then
+    LAP_LINE="$(grep '\[BATTLE\] LAP_COMPLETED ' "$LOG/gazebo.log" | tail -1)"
+    LAP_NOW="$(printf '%s\n' "$LAP_LINE" | sed -n 's/.*LAP_COMPLETED \([0-9]*\)\/3.*/\1/p')"
+    if [[ -n "$LAP_NOW" ]] && (( LAP_NOW>LAST_LAP )); then
+      echo "$LAP_LINE"
+      LAST_LAP="$LAP_NOW"
+    fi
+  fi
+  if (( $(date +%s)-STARTED>MAX_WALL_S ));then
     echo "FAIL: no battle result within configured wall-clock timeout" >&2
     echo "Diagnostics: $LOG/gazebo.log" >&2
     echo "=== Gazebo last non-multicast messages ===" >&2
