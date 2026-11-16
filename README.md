@@ -361,3 +361,21 @@ bash run.sh battle monaco 1 3 race3
 결과: `log/race3/<YYYYMMDD_HHMMSS>/summary.csv`. 컬럼: `track,grid,lane,result,rank,team_peak_mps,team_average_mps,min_wall_margin_m,wall_boundary_status,min_body_clearance_m,failure_category,exit_code,wall_measurement,case_log`. 실패/중단 후에도 각 완료한 케이스까지 CSV 기록.
 
 **검증 한계:** GitHub 코드 작성 및 정적 확인은 가능하지만, 이 대화 실행 환경에는 사용자 Ubuntu 24.04/ROS2 Jazzy/Gazebo Harmonic 실행 환경이 없어 실제 3바퀴 완주, 순위, 물리적 벽 접촉 여부는 사용자 실행 로그가 필요합니다. 평균속도 10m/s 달성 또한 보장값이 아니라 측정 대상입니다.
+
+## 2026-11-16 race3 비접촉 차간거리 및 도로 경계 처리 변경
+
+- **적용 범위는 `race3`(3바퀴 기하학적 리플레이) 한정**. 기존 1바퀴 `battle`/일반/방어 테스트의 최소 차간거리 FAIL 정책은 유지
+- 요청 기준: 실제 **차체 겹침(기하학적 차량 충돌)**만 `FAIL_COLLISION` 또는 `FAIL_SCENARIO_COLLISION`. 차량 간 간격이 직선 0.5m, 코너 0.7m보다 작더라도 실제 차체가 겹치지 않으면 `CLEARANCE_WARNING`만 기록하며 완주를 허용. 3바퀴 `collide()`의 구형 25mm 가상 패딩을 제거하여 실제 회전 직사각형 겹침을 검사
+- **도로 경계 보정:** 차량의 위치·방향 및 공식 도로폭 프로파일을 이용해 3대 모두 안전한 횡방향 범위를 계산. TEAM11의 예정 이동은 향후 3초간 최소 도로폭을 고려해 제한하고, 연습 S차량·후행차의 좌우 오프셋도 도로폭 내로 제한. 벽 가까이 가면 `ROAD_CORRECTION` 로그 출력
+- 도로 경계 기하학적 침범은 실제 Gazebo 벽 접촉으로 확인된 것이 아님. `WALL_BOUNDARY_WARNING`으로 **경고·기록만** 하며 `FAIL_WALL_BOUNDARY`로 즉시 실격하지 않음. 최종 결과에 `wall_margin_min_m`과 `wall_warning_count` 기록. `wall_boundary_status=CROSSED`는 여전히 보고되어야 하며, 이는 **물리 접촉 여부가 아니라 계산상 도로 경계 침범**만 의미함
+- 경로 후보의 미래 위치가 허용 도로폭 밖이면 선택하지 않도록 차단, 선행차 예측도 도로폭 보정값 사용. 최소 차간거리 경고 건수 `clearance_warning_count` 별도 기록
+- 최종 `log/race3/<실행시각>/summary.csv`에는 `min_body_clearance_m`, `clearance_warning_count`, `wall_warning_count`, `wall_boundary_status`, 순위 및 평균/최고속도 포함
+- **중요 제한:** 차량 차체 충돌은 경로 리플레이의 회전 직사각형 기하학적 충돌로 판정됩니다. Gazebo 벽 접촉 센서는 아직 구현되지 않았으므로 **실제 벽과 접촉하지 않았다는 것을 검증한 것은 아닙니다**. 벽 관련 결과는 기하학적 대리 지표일 뿐입니다
+- 재검증:
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+python3 kinematic/test_three_lap_report.py
+bash run.sh race3 both
+```
+- 이번 수정은 아직 사용자 ROS2 Jazzy/Gazebo Harmonic에서 컴파일·12회 재주행 확인 전입니다. 기존 12회 로그(8회 통과, 4회 FAIL)는 이전 코드 버전이므로 새 기준 결과가 아닙니다
