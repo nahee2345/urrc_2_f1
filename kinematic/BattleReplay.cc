@@ -102,6 +102,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     std::cout<<"[BATTLE] START grid="<<teamGrid<<" (all five lights off)"<<std::endl;
   }
   const double elapsed=now-begin;
+  lastElapsed=elapsed;
   // Use actual simulation-time delta. Limiting dt to 50ms dropped distance
   // whenever Gazebo advances in larger steps and caused visible stutter.
   const double dt=std::clamp(now-last,0.,.2);last=now;
@@ -128,6 +129,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const double currentCurve=fabs(curve(team.s));
   double upcomingCurve=currentCurve;
   double curveSpeedRaw=MAX_TEAM_SPEED;
+  const double sharpTarget=raceMode?7.5:SHARP_SPEED;
+  const double mildTarget=raceMode?10.:MILD_SPEED;
   double sharpDistance=1e6,mildDistance=1e6;
   for(double d=0.;d<=stoppingLookahead;d+=.5){
     const double k=fabs(curve(team.s+d));
@@ -136,12 +139,12 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       sharpDistance=std::min(sharpDistance,d);
       const double available=std::max(0.,d-1.5);
       curveSpeedRaw=std::min(curveSpeedRaw,
-        std::sqrt(SHARP_SPEED*SHARP_SPEED+10.*available));
+        std::sqrt(sharpTarget*sharpTarget+10.*available));
     }else if(k>=MILD_CURVE){
       mildDistance=std::min(mildDistance,d);
       const double available=std::max(0.,d-1.);
       curveSpeedRaw=std::min(curveSpeedRaw,
-        std::sqrt(MILD_SPEED*MILD_SPEED+10.*available));
+        std::sqrt(mildTarget*mildTarget+10.*available));
     }
   }
   // Hold classification for a short period at the transition to prevent
@@ -839,6 +842,20 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  }
  void finish(const char*result){
   if(ended)return;ended=true;report.flush();
+  if(raceMode && std::string(result)!="PASS_3_LAPS"){
+    const double average=(team.s-teamStart)/std::max(.001,lastElapsed);
+    std::cout<<"[BATTLE] RACE3_RESULT "<<result
+             <<" rank=UNRANKED"
+             <<" laps="<<completedTeamLaps<<"/"<<raceLaps
+             <<" team_peak_mps="<<peakTeam
+             <<" team_average_mps="<<average
+             <<" lead_peak_mps="<<peakLead
+             <<" rear_peak_mps="<<peakRear
+             <<" wall_margin_min_m="<<minWallMargin
+             <<" wall_check=GEOMETRIC_ROAD_ENVELOPE"
+             <<" min_body_clearance_m="<<minimumClearance
+             <<" elapsed_s="<<lastElapsed<<std::endl;
+  }
   std::cout<<"[BATTLE] RESULT "<<result<<" overtake="<<passed<<" defense="<<defended
            <<" defense_status="<<(defenseOpportunity?defenseOutcome:"NOT_TRIGGERED")
            <<" rear_ttc_min="<<minRearTTC<<" attempts="<<attemptCount
@@ -854,7 +871,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  int raceLaps=1,completedTeamLaps=0;
  bool raceMode=false;
- double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9;
+ double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9,lastElapsed=0.;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
