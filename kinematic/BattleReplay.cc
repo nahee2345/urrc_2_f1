@@ -109,26 +109,54 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const bool rearBehind=rearGap>LEN && rearGap<25.;
   double rearTTC=rearBehind && rear.v>team.v+.01?
     std::max(0.,rearGap-LEN)/(rear.v-team.v):1e6;
-  // Speed limits depend on the worst curvature over the stopping
-  // distance, not just on the vehicle's current point on the track.
-  const double stoppingLookahead=std::max(8.0,team.v*team.v/10.0+4.0);
-  double upcomingCurve=0.;
-  for(int i=0;i<=8;++i)
-    upcomingCurve=std::max(upcomingCurve,
-      fabs(curve(team.s+stoppingLookahead*i/8.0)));
+  // Search the braking horizon for the FIRST bend, not only the
+  // largest curve. A distant hairpin must not force 7m/s immediately.
+  // With maximum replay deceleration of 5m/s^2, v^2 <= v_bend^2+2*a*d.
+  const double stoppingLookahead=std::max(16.0,team.v*team.v/10.0+8.0);
   const double currentCurve=fabs(curve(team.s));
-  const bool sharpAhead=upcomingCurve>=SHARP_CURVE;
-  const bool mildAhead=upcomingCurve>=MILD_CURVE;
+  double upcomingCurve=currentCurve;
+  double curveSpeedRaw=MAX_TEAM_SPEED;
+  double sharpDistance=1e6,mildDistance=1e6;
+  for(double d=0.;d<=stoppingLookahead;d+=.5){
+    const double k=fabs(curve(team.s+d));
+    upcomingCurve=std::max(upcomingCurve,k);
+    if(k>=SHARP_CURVE){
+      sharpDistance=std::min(sharpDistance,d);
+      const double available=std::max(0.,d-1.5);
+      curveSpeedRaw=std::min(curveSpeedRaw,
+        std::sqrt(SHARP_SPEED*SHARP_SPEED+10.*available));
+    }else if(k>=MILD_CURVE){
+      mildDistance=std::min(mildDistance,d);
+      const double available=std::max(0.,d-1.);
+      curveSpeedRaw=std::min(curveSpeedRaw,
+        std::sqrt(MILD_SPEED*MILD_SPEED+10.*available));
+    }
+  }
+  // Hold classification for a short period at the transition to prevent
+  // repeated MILD / STRAIGHT switching at near-identical curvature samples.
+  int rawMode=sharpDistance<1e5?2:(mildDistance<1e5?1:0);
+  if(rawMode>previousCurveMode || previousCurveMode<0){
+    previousCurveMode=rawMode;
+    curveModeChangedAt=now;
+  }else if(rawMode<previousCurveMode &&
+           now-curveModeChangedAt>.5){
+    previousCurveMode=rawMode;
+    curveModeChangedAt=now;
+  }
+  const bool sharpAhead=sharpDistance<1e5;
+  const bool mildAhead=mildDistance<1e5 || sharpAhead;
   const bool corner=currentCurve>=SHARP_CURVE;
-  const double curvatureSpeedLimit=sharpAhead?SHARP_SPEED:
-                                   (mildAhead?MILD_SPEED:MAX_TEAM_SPEED);
-  const bool overtakeZone=!sharpAhead && currentCurve<SHARP_CURVE;
-  const int curveMode=sharpAhead?2:(mildAhead?1:0);
-  if(curveMode!=previousCurveMode){
-    previousCurveMode=curveMode;
+  const double curvatureSpeedLimit=std::clamp(curveSpeedRaw,3.,MAX_TEAM_SPEED);
+  // Starting a 2.5s overtake is unsafe if a sharp bend is within its
+  // projected travel range, even if the current speed cap is still high.
+  const bool overtakeZone=!sharpAhead &&
+    currentCurve<SHARP_CURVE;
+  if(previousCurveMode!=lastLoggedCurveMode){
+    lastLoggedCurveMode=previousCurveMode;
     std::cout<<"[BATTLE] CORNER_SPEED mode="
-             <<(curveMode==2?"SHARP":(curveMode==1?"MILD":"STRAIGHT"))
+             <<(previousCurveMode==2?"SHARP":(previousCurveMode==1?"MILD":"STRAIGHT"))
              <<" cap="<<curvatureSpeedLimit<<" curve="<<upcomingCurve
+             <<" sharp_distance="<<sharpDistance
              <<" speed="<<team.v<<std::endl;
   }
   const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
@@ -724,7 +752,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6;
  double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.,plannedPassSpeed=9.;
- int attemptCount=0,replanCount=0,previousCurveMode=-1;
+ int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
+ double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false,rearOvertook=false;
  bool joinPending=false,emergencyBraking=false,passingActive=false;
