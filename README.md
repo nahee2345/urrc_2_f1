@@ -273,3 +273,11 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 로그: `CORNER_SPEED`, `OVERTAKE ATTEMPT`, `OVERTAKE PAUSE`, `PASS_SPEED_WINDOW`, `OVERTAKE COMPLETED`, `SPEED_DECISION` 참고
 - 차체 간격 실패 기준 직선 0.5m / 급격한 코너 0.7m, 판정 로직과 전체 배틀 결과 규칙 유지
 - 로컬 Gazebo 컴파일·실주행은 아직 검증되지 않음. 우선 `bash run.sh battle monaco 1 3`, `bash run.sh battle monaco 2 1` 후 `bash run.sh battle stage1` 및 `bash run.sh battle defense`로 회귀 검증 필요
+
+## 2026-11-16 09:17~09:19 Monaco 회귀 원인 및 코너 감속 보정
+- 최신 실제 실행: 일반 Monaco grid1/grid2 모두 `FAIL_NO_OVERTAKE`, 후방 방어 완료, 최소 간격 1.29486m / 1.3348m, 추월 시도 각 3회. 70초 지점 선행 S차량과 종방향 거리 33.42m / 33.71m까지 벌어졌으며 TEAM11의 12m/s 가속이 뒤늦게 발생
+- 원인: 이전 로직은 현재 위치에서 최대 18m 이상 선행한 구간에 급커브가 한 지점만 있어도 **즉시 최고속도 7m/s**로 제한함. 리플레이 S차량은 9m/s를 유지하므로 코너에서 앞차와 거리가 크게 벌어짐. 또한 곡률 임계점에서 `MILD/STRAIGHT` 반복 출력
+- 개선: 현재 차량에서 감속 가능한 첫 코너까지 **0.5m 간격**으로 샘플하고, `v_allowed = sqrt(v_corner²+2*5*max(0, distance-buffer))`로 현재 최고속도를 계산. 실제 급코너 위치에서는 7m/s, 완만한 코너에서는 10m/s, 직선 최대 12m/s 기준 유지. 코너 이전에 감속을 시작하되 먼 구간에서부터 무조건 7m/s 주행하는 현상 제거
+- 곡률 분류가 낮아지는 방향 전환은 0.5초 유지로 로그 토글 억제. `CORNER_SPEED`에 급코너까지의 거리 출력
+- 주의: 후행차의 코너 감속과 선행 S 차량의 9m/s 일정속도 때문에 무조건 추월 성공을 보장하지 않음. 선행 S차량의 속도/경로를 조정하여 인위적으로 PASS를 만들지는 않음
+- 확인: `bash run.sh battle monaco 1 3` / `bash run.sh battle monaco 2 1` → 전체 `stage1` 및 `defense` 회귀 테스트. 실제 Gazebo 재시험은 아직 수행되지 않음
