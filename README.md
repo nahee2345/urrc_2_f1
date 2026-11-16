@@ -327,3 +327,37 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - **기존 로그 즉시 분류:** `cd ~/urrc_2_f1 && git pull --ff-only origin main && python3 kinematic/diagnose_battle.py --all`
 - 특정 실행: `python3 kinematic/diagnose_battle.py --summary log/battle_stage1/20261116_132922/summary.csv --summary log/battle_defense/20261116_135232/summary.csv`
 - 분류기 회귀 단위시험: `python3 kinematic/test_diagnose_battle.py` (6개 케이스). GitHub 소스 정적 확인만 완료했으며 **사용자 환경의 파이썬 단위시험·Gazebo 실제 재실행 결과는 아직 확인되지 않았음**. 배틀 물리/속도 로직은 이 변경에서 수정하지 않음
+
+## 2026-11-16 3대 차량, 6개 맵별 3바퀴 순위·속도·도로 경계 검증
+
+이번 기능은 **kinematic/Gazebo SetWorldPoseCmd 배틀 리플레이 전용**이며 실제 ROS 2 센서/조향 제어 로직과 별개입니다. 기존 `bash run.sh battle ...`의 **1바퀴 시험은 유지**됩니다.
+
+### 주행 설정
+- 모든 맵: 3대 차량(team_11, practice_s_09, practice_rear_11), 지도당 3바퀴
+- TEAM11: **15m/s 최고속도**, 평상시 **10m/s 목표**, 완만한 코너 **10m/s 목표**, 급격한 코너 **7.5m/s 목표**. 실제 평균속도는 `TEAM11 주행거리 / 경과 시간`으로 기록하여 목표 10m/s에 도달했는지 검증합니다. 충돌 회피가 필요하면 목표보다 느려질 수 있습니다
+- 선행 S 연습차량 기준속도 9m/s, 후방 연습차량 일반 11m/s (기존 시나리오 동일)
+- **벽 판정은 도로 폭과 차량(0.53×0.25m)의 회전 외형이 도로 경계를 넘는지 검사하는 기하학적 대리 지표**입니다. `WALL_BOUNDARY` 발견 시 즉시 `FAIL_WALL_BOUNDARY`, 그 밖에는 `wall_boundary_status=CLEAR_GEOMETRIC`으로 보고. **Gazebo 충돌 이벤트와 충돌 센서를 읽는 구조는 아니므로 실제 벽 메시 충돌과 같다고 단정하지 않습니다.**
+- 참가 3대의 동일 결승선을 사용해 TEAM11이 3바퀴를 완료한 시점에 이미 결승선을 통과한 상대 수를 비교하여 순위 `1/3`, `2/3`, `3/3` 계산. 결승 전에 충돌/경계 침범/제한시간 종료가 있으면 `UNRANKED`로 구분
+- **측정 출력:** `[BATTLE] LAP_COMPLETED` (랩), `[BATTLE] RACE3_RESULT` (순위/실제 최고속도/실제 평균/최소 도로 경계 여유/차체 최소 간격), `[BATTLE] RESULT` (성공·실패)
+- 배틀 안전 검사: 3대 차체 간 충돌, 차체 간 최소 간격, 기하학적 도로 경계, 기존 30° 조향 후보 제한은 유지
+
+### 실행
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+python3 kinematic/test_diagnose_battle.py
+python3 kinematic/test_three_lap_report.py
+
+# 6개 맵 × 그리드1 × 3바퀴 = 6회
+bash run.sh race3
+
+# 선택: 6개 맵 × 그리드 1·2 × 3바퀴 = 12회
+bash run.sh race3 both
+
+# 개별 Monaco 3바퀴
+bash run.sh battle monaco 1 3 race3
+```
+
+결과: `log/race3/<YYYYMMDD_HHMMSS>/summary.csv`. 컬럼: `track,grid,lane,result,rank,team_peak_mps,team_average_mps,min_wall_margin_m,wall_boundary_status,min_body_clearance_m,failure_category,exit_code,wall_measurement,case_log`. 실패/중단 후에도 각 완료한 케이스까지 CSV 기록.
+
+**검증 한계:** GitHub 코드 작성 및 정적 확인은 가능하지만, 이 대화 실행 환경에는 사용자 Ubuntu 24.04/ROS2 Jazzy/Gazebo Harmonic 실행 환경이 없어 실제 3바퀴 완주, 순위, 물리적 벽 접촉 여부는 사용자 실행 로그가 필요합니다. 평균속도 10m/s 달성 또한 보장값이 아니라 측정 대상입니다.
