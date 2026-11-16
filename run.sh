@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # ONE COMMAND: bash run.sh monza 1 [speed_mps] or bash run.sh battle monza
+# Three-lap three-car validation: bash run.sh race3 [both]
+if [[ "${1:-}" == "race3" ]]; then
+  shift
+  exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_three_lap_all.sh" "$@"
+fi
 # Optional 3-car S-curve/overtake/defense trial. Existing fixed-lane runs unchanged.
 if [[ "${1:-}" == "battle" ]]; then
   shift
