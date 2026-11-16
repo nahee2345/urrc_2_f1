@@ -132,7 +132,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
         "practice_rear_11":rear_spawn if defense else [float(grids[10]["x"]),float(grids[10]["y"]),
                            float(grids[10]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[10]["yaw"])]
       },
-      "scenario":{"team_max_mps":15,"team_cruise_target_mps":10,"team_sharp_corner_target_mps":7 if laps==3 else 7,
+      "scenario":{"team_max_mps":15,"team_cruise_target_mps":10,"team_sharp_corner_target_mps":7.5 if laps==3 else 7,
                   "laps":laps,"wall_check":"geometric road-width envelope, not Gazebo physics contact",
                   "s_vehicle_mps":9,
                   "rear_grid10_mps":14 if defense else 11,"s_lane_sequence":[1,2,3,2,1],
