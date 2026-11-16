@@ -5,7 +5,7 @@ TRACK="${1:-monza}"
 GRID="${2:-1}"
 LANE="${3:-}"
 MODE="${4:-normal}"
-case "$MODE" in normal|defense) ;; *) echo "Mode must be normal or defense" >&2;exit 2;; esac
+case "$MODE" in normal|defense|race3) ;; *) echo "Mode must be normal, defense or race3" >&2;exit 2;; esac
 case "$GRID" in 1|2) ;; *) echo "Grid must be 1 or 2" >&2;exit 2;; esac
 if [[ -z "$LANE" ]];then
   if [[ "$GRID" == 1 ]];then LANE=3;else LANE=1;fi
@@ -58,8 +58,10 @@ echo "[4/6] Prepare 0.30m walls and grid $GRID / grid 10 models"
 OUT="$LOG/prepared"
 DEFENSE_ARGS=()
 if [[ "$MODE" == defense ]]; then DEFENSE_ARGS=(--defense); fi
+RACE_ARGS=()
+if [[ "$MODE" == race3 ]]; then RACE_ARGS=(--laps 3); fi
 /usr/bin/python3 "$ROOT/kinematic/prepare_battle.py" \
-  --track "$TRACK" --grid "$GRID" --lane "$LANE" "${DEFENSE_ARGS[@]}" \
+  --track "$TRACK" --grid "$GRID" --lane "$LANE" "${DEFENSE_ARGS[@]}" "${RACE_ARGS[@]}" \
   --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
     tail -80 "$LOG/prepare.log";exit 6;
 }
@@ -126,7 +128,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE laps=$([[ "$MODE" == race3 ]] && echo 3 || echo 1) team11 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
@@ -137,8 +139,8 @@ while kill -0 "$WORLD_PID" 2>/dev/null;do
     echo "$RESULT"
     break
   fi
-  if (( $(date +%s)-STARTED>600 ));then
-    echo "FAIL: no battle result within 600 seconds" >&2
+  if (( $(date +%s)-STARTED>${URRC_BATTLE_TIMEOUT_S:-$([[ "$MODE" == race3 ]] && echo 1800 || echo 600)} ));then
+    echo "FAIL: no battle result within configured wall-clock timeout" >&2
     echo "Diagnostics: $LOG/gazebo.log" >&2
     echo "=== Gazebo last non-multicast messages ===" >&2
     grep -v 'Exception sending a multicast message:Network is unreachable' "$LOG/gazebo.log" | tail -35 >&2 || true
@@ -156,7 +158,10 @@ while kill -0 "$WORLD_PID" 2>/dev/null;do
 done
 [[ -n "$RESULT" ]] || { echo "FAIL: Gazebo closed before battle result" >&2;exit 11; }
 grep '\[BATTLE\]' "$LOG/gazebo.log" | tail -35
-if [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
+if [[ "$RESULT" == *"RESULT PASS_3_LAPS"* ]];then
+  grep '\[BATTLE\] RACE3_RESULT ' "$LOG/gazebo.log" | tail -1
+  echo "PASS RACE3: $TRACK grid $GRID lane $LANE results $LOG"
+elif [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
   echo "PASS BATTLE: $TRACK grid $GRID lane $LANE results $LOG"
 elif [[ "$RESULT" == *"RESULT PARTIAL_DEFENSE_UNVERIFIED"* ]];then
   echo "PARTIAL BATTLE: $TRACK grid $GRID lane $LANE defense not verified; results $LOG"
