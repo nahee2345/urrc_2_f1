@@ -296,3 +296,11 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 수정: 차선 변경 중에도 추월 목표속도로 양쪽 상대차량 포함 1.2초 차체간격을 재검증할 때만 해당 **10.5m/s 일반 차선 변경 제한 예외** 허용. 그 외 일반 차선 이동은 10.5m/s 제한 유지. 미래 위험 1초 긴급감속·곡률별 최고속도·차체 최소 간격 판정은 유지
 - 앞차와 같거나 느린 속도의 차선 변경을 `OVERTAKE ATTEMPT`로 집계하지 않게 `trial > lead.v + 0.5m/s` 요구. `PASS_LANE_SPEED` 진단 로그 추가
 - 코드 정적 중괄호/수정 위치 확인, **실제 컴파일 및 Gazebo 완주 여부 미검증**. `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`로 재검증 후 `stage1` / `defense` 회귀시험 필요
+
+## 2026-11-16 13:00~13:09 Monaco 재시험: timeout 및 추월 실패 대응
+- grid1: `FAIL: no battle result within 600 seconds`; 후속 `Exception sending a multicast message:Network is unreachable` 다수. Gazebo 시작/차량 스폰/출발 메시지는 확인됐으나, 최종 `[BATTLE] RESULT`가 없으므로 **추월 실패로 분류하지 않고 환경/진행 중단으로 구분**. 멀티캐스트 오류만으로 네트워크 원인 또는 코드 원인을 확정하지 않음
+- grid2: `FAIL_NO_OVERTAKE`, `attempts=10`, `defense=1`, `min_body_clearance=0.803867m`. `PASS_LANE_SPEED`는 실행됐으나 선행차를 통과하기 전 레이스 종료. `HAZARD_REPLAN future=-0.111646` 등 재계획 위험 판정 반복
+- 진짜 결함: `forecast()`가 차체 간 실제 최소거리 `clearance()`가 기준을 충족하더라도, **차체 중심거리에서 차량 길이와 직선 간격을 뺀 값**이 음수면 안전 후보를 음수로 반환했음. 차선 옆으로 지나가는 경우 안전한 위치가 잘못 거부될 수 있음. 미래 0.1초 샘플의 차체 최단거리−해당 구간 법정 최소거리로 점수 및 안전 여부를 통일. 실제 충돌·차체 거리 판정 기준 변경 없음
+- 속도 선택: 안전 검사를 통과한 후보들 중에는 필요 이상 여유거리보다 앞차 대비 높은 추월 속도를 우선하도록 후보 점수 보정. 제한속도·최대조향±30도·곡률 감속·미래 전후방 상대 위치 확인 유지
+- `run_battle.sh` 600초 시간초과 시 반복되는 Gazebo 멀티캐스트 오류를 제외한 마지막 로그, `battle_state.csv` 마지막 3행 및 Gazebo PID 상태를 표시하도록 진단 강화. 타임아웃 값을 단순히 증가시키지 않음
+- 실제 Gazebo 재시험은 아직 확인되지 않음: `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`. 반복되는 `Network is unreachable`는 호스트 네트워크 설정도 별도 확인 필요
