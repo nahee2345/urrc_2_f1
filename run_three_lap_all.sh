@@ -14,6 +14,7 @@ RUN_ID="$(date +%Y%m%d_%H%M%S)"
 DEST="$ROOT/log/race3/$RUN_ID"
 mkdir -p "$DEST"
 CSV="$DEST/summary.csv"
+FAIL_COUNT=0
 for TRACK in "${TRACKS[@]}"; do
   for GRID in "${GRIDS[@]}"; do
     if [[ "$GRID" == 1 ]]; then LANE=3; else LANE=1; fi
@@ -24,6 +25,7 @@ for TRACK in "${TRACKS[@]}"; do
       RC=0
     else
       RC=$?
+      FAIL_COUNT=$((FAIL_COUNT+1))
     fi
     python3 "$ROOT/kinematic/three_lap_report.py" \
       --case "$CASE_LOG" --track "$TRACK" --grid "$GRID" --lane "$LANE" \
@@ -32,3 +34,5 @@ for TRACK in "${TRACKS[@]}"; do
 done
 echo "RACE3 COMPLETE: $CSV"
 echo "Rank, peak/average speeds, road-boundary crossings, car collisions and failed objectives are in summary.csv"
+echo "RACE3 FAILED_CASES=$FAIL_COUNT"
+if (( FAIL_COUNT>0 )); then exit 1; fi
