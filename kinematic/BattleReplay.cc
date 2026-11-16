@@ -488,7 +488,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
-    speedCeiling=teamCruise;
+    // The emergency ceiling is not the normal 10m/s cruise target:
+    // collision-checked passes must still be able to reach 15m/s.
+    speedCeiling=MAX_TEAM_SPEED;
     if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
       for(double trial:{15.,14.,13.,12.,11.,10.5,9.,7.,5.,3.,1.,0.}){
