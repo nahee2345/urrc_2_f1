@@ -379,3 +379,11 @@ python3 kinematic/test_three_lap_report.py
 bash run.sh race3 both
 ```
 - 이번 수정은 아직 사용자 ROS2 Jazzy/Gazebo Harmonic에서 컴파일·12회 재주행 확인 전입니다. 기존 12회 로그(8회 통과, 4회 FAIL)는 이전 코드 버전이므로 새 기준 결과가 아닙니다
+
+## 2026-11-16 18:36 Monaco 2번 그리드 3바퀴 충돌 재발 대응
+- 최신 로그: `FAIL_COLLISION t=120.854 pair=team_11/practice_s_09 positions=(67.6186,30.1379)/(67.87,30.6309)`. TEAM11 1/3바퀴 완료 후 충돌. `TTC_1S_BRAKE desired=7.82624 limit=0`가 출력됐고 앞차가 다른 차선/진로에 있는 경우 기존 단일 `front_ttc`는 `1e+06`을 보였음. `min_body_clearance_m=2.93234e-05`로 사실상 접촉. 과거 15:14 Monaco 2번 그리드의 `PASS_3_LAPS`는 이번 18:36 사고 결과와 별개
+- 수정: **race3 한정** 기존 1초 비상 감속 외에 2.5초 전방·후방 차체 예측 검사(`RACE3_EARLY_BRAKE`) 추가. 현재 주행 목표 속도가 불안전할 경우 15~0m/s 후보를 3/-5m/s² 실제 가감속 모델로 재검사해 안전한 후보를 선택. 후보가 하나도 없으면 긴급 감속 목표 0m/s를 적용하되, **충돌하지 않는다는 보장은 아님**
+- 뒷차 위협 시 속도를 올리는 방어 보정도 race3에서 1.5초 차량 전후방 예측이 안전할 때만 수행. 속도 안전 상한은 차선 변경/추월 가속보다 최종적으로 우선함
+- 기존 race3 안전 경고는 `CLEARANCE_WARNING`으로 유지하고 물리적 차체 겹침 `FAIL_COLLISION`만 실격. `clearance_warning_count`는 같은 물리 업데이트에서 중복 스윕 11회를 반복 집계하지 않도록 일부 조정
+- 기존 1바퀴 배틀의 감속·안전 판정 및 직선15/평균목표10/코너7.5m/s 구성 유지. 실제 Gazebo 사고 재현 및 12개 전맵 회귀 주행 검증은 아직 완료되지 않음
+- 우선: `bash run.sh battle monaco 2 1 race3` 성공 여부 및 `RACE3_EARLY_BRAKE`, `COLLISION`, `RACE3_RESULT` 로그 확인. 이후 `bash run.sh race3 both`
