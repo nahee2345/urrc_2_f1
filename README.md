@@ -304,3 +304,15 @@ cd ~/urrc_2_f1 && git pull --ff-only origin main && bash run.sh battle defense
 - 속도 선택: 안전 검사를 통과한 후보들 중에는 필요 이상 여유거리보다 앞차 대비 높은 추월 속도를 우선하도록 후보 점수 보정. 제한속도·최대조향±30도·곡률 감속·미래 전후방 상대 위치 확인 유지
 - `run_battle.sh` 600초 시간초과 시 반복되는 Gazebo 멀티캐스트 오류를 제외한 마지막 로그, `battle_state.csv` 마지막 3행 및 Gazebo PID 상태를 표시하도록 진단 강화. 타임아웃 값을 단순히 증가시키지 않음
 - 실제 Gazebo 재시험은 아직 확인되지 않음: `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`. 반복되는 `Network is unreachable`는 호스트 네트워크 설정도 별도 확인 필요
+
+## 2026-11-16 TEAM11 배틀 속도·차간거리 단순화 및 정적 검증
+
+**적용 범위:** `kinematic/BattleReplay.cc` 3대 차량의 *운동학적 Gazebo pose replay*. 실제 Team11 ROS2 노드의 카메라/라이다 감지 및 휠 조향 제어는 변경하지 않음.
+
+- TEAM11 목표 최고속도: 직선 **15m/s**, 완만한 코너 **11m/s**, 급격한 코너 **7m/s**. 곡률 분류 및 급코너 접근 시 감속거리 기반 속도 상한 유지. `run_battle.sh` 시작 로그의 최고속도도 15m/s로 수정
+- 앞차 추종 시 **차체 사이 목표 간격 1.0m**(직선/코너), 기존 **안전 최소 간격 직선 0.50m / 급코너 0.70m** 규칙 변경하지 않음. 목표 간격은 제어값이지 보장되는 결과가 아님. 추월 중에는 센서가 아닌 스크립트의 3차원 차량 pose 예측을 사용하며 법정 최소 간격을 계속 확인
+- 차선변경 속도: 일반 합류 **10.5m/s** 상한 유지, 안전한 추월 후보에 한하여 높은 목표속도 허용. 앞차/뒤차 미래 위치·±30도 조향 후보 필터, 실제 차체 충돌 및 스윕 검사 유지
+- 선행 S차량 9m/s, 후방 차량 일반 11m/s / defense 14m/s, 신호등 일괄 소등 게이트, 스폰 위치, 추월/방어 성공 기준 변경하지 않음
+- **변경 코드·실행 스크립트 정적 검사 19/19 PASS:** 속도값, 추종 목표, 최소 간격, 감속거리식, 급코너 추월 금지, 15m/s 추월 후보, 30도 예측 제한, 후방 미래 차량 포함, 충돌/간격 판정, 가감속 범위, 일반 합류 상한, 로그, 두 개 12회 배치의 6맵×2그리드, 신호 게이트, C++ 중괄호 균형. **정적 텍스트 검사이지 컴파일/실주행 검증이 아님**
+- **필수 로컬 검증:** `bash run.sh battle monaco 1 3` 및 `bash run.sh battle monaco 2 1`; 그다음 `bash run.sh battle stage1`(일반 12개)과 `bash run.sh battle defense`(방어 12개). 총 24개 전체 케이스의 `PASS_BATTLE`, `FAIL_CLEARANCE`, `FAIL_COLLISION`, `FAIL_NO_OVERTAKE`, 600초 타임아웃 확인. `log/battle_stage1/*/summary.csv`, `log/battle_defense/*/summary.csv` 결과 제출 필요
+- 현재 **GitHub 변경 및 19항목 정적 확인만 완료**. 사용자 Gazebo / ROS Jazzy에서 전체 24회 실주행 성공 여부는 미검증. 특히 최신 12m/s 사례에서 차체 최소거리 0.508m / 0.518m처럼 근접했던 점을 고려해 속도 상향 후 충돌 회귀검증이 필요
