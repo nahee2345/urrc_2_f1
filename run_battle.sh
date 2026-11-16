@@ -126,7 +126,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 12m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE team11 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
