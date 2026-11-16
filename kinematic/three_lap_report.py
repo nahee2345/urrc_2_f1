@@ -8,7 +8,8 @@ from diagnose_battle import classify, text_file
 
 FIELDS = ("track", "grid", "lane", "result", "rank", "team_peak_mps",
           "team_average_mps", "min_wall_margin_m", "wall_boundary_status",
-          "min_body_clearance_m", "failure_category", "exit_code",
+          "min_body_clearance_m", "clearance_warning_count",
+          "wall_warning_count", "failure_category", "exit_code",
           "wall_measurement", "case_log")
 
 def extract(case_log, track, grid, lane, exit_code):
@@ -24,7 +25,7 @@ def extract(case_log, track, grid, lane, exit_code):
     def get(key):
         found = re.search(r"(?<!\w)" + re.escape(key) + r"=([^\s]+)", record)
         return found.group(1) if found else ""
-    wall = bool(re.search(r"\[BATTLE\] WALL_BOUNDARY ", text))
+    wall = bool(re.search(r"\[BATTLE\] WALL_BOUNDARY(?:_WARNING)? ", text))
     margin = get("wall_margin_min_m")
     return {
         "track": track,
@@ -37,6 +38,8 @@ def extract(case_log, track, grid, lane, exit_code):
         "min_wall_margin_m": margin,
         "wall_boundary_status": "CROSSED" if wall else ("CLEAR_GEOMETRIC" if margin else "UNKNOWN"),
         "min_body_clearance_m": get("min_body_clearance_m"),
+        "clearance_warning_count": get("clearance_warning_count"),
+        "wall_warning_count": get("wall_warning_count"),
         "failure_category": result["failure_category"],
         "exit_code": exit_code,
         "wall_measurement": "GEOMETRIC_ONLY_NOT_PHYSICS_CONTACT",
