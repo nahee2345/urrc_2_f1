@@ -58,6 +58,27 @@ class ThreeLapReportTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_noncontact_warnings_do_not_fail(self):
+        temp, case, rc = self.make_case(
+            "[BATTLE] WALL_BOUNDARY_WARNING t=12 vehicle=team_11 margin=-0.02 "
+            "physical_contact=NOT_MEASURED\\n"
+            "[BATTLE] CLEARANCE_WARNING t=13 pair=team_11/practice_s_09 "
+            "actual=0.2 required=0.5\\n"
+            "[BATTLE] RACE3_RESULT PASS_3_LAPS rank=1/3 "
+            "team_peak_mps=15 team_average_mps=10 "
+            "wall_margin_min_m=-0.02 min_body_clearance_m=0.2 "
+            "clearance_warning_count=3 wall_warning_count=2\\n"
+            "[BATTLE] RESULT PASS_3_LAPS\\n")
+        try:
+            row = extract(case, "baku", "2", "1", rc)
+            self.assertEqual(row["result"], "PASS_3_LAPS")
+            self.assertEqual(row["wall_boundary_status"], "CROSSED")
+            self.assertEqual(row["clearance_warning_count"], "3")
+            self.assertEqual(row["wall_warning_count"], "2")
+            self.assertEqual(row["failure_category"], "SUCCESS_3_LAPS")
+        finally:
+            temp.cleanup()
+
     def test_summary_write(self):
         temp, case, rc = self.make_case("[BATTLE] RESULT FAIL_TIMEOUT\n", 12)
         try:
