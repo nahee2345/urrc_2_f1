@@ -33,7 +33,7 @@ constexpr double MAX_TEAM_SPEED=15.;
 constexpr double NORMAL_LANE_CHANGE_SPEED=10.5;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
-struct Pt {double s,x,y,z,yaw;};
+struct Pt {double s,x,y,z,yaw,width=0.;};
 struct Pos {double x,y,z,yaw;};
 struct Car {
  std::string name;gz::sim::Entity entity{gz::sim::kNullEntity};
@@ -53,8 +53,14 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   std::string row;std::getline(src,row);
   while(std::getline(src,row)){
    std::replace(row.begin(),row.end(),',',' ');
-   Pt p{};std::istringstream in(row);if(in>>p.s>>p.x>>p.y>>p.z>>p.yaw)route.push_back(p);
+   Pt p{};std::istringstream in(row);
+   if(in>>p.s>>p.x>>p.y>>p.z>>p.yaw){
+     if(!(in>>p.width))p.width=0.;
+     route.push_back(p);
+   }
   }
+  raceLaps=cfg->HasElement("race_laps")?cfg->Get<int>("race_laps"):1;
+  raceMode=raceLaps==3;
   lap=cfg->Get<double>("lap_length_m");
   lateralOffset=cfg->Get<double>("lane_offset_m");
   team.name="team_11";team.s=cfg->Get<double>("team_start_s");
@@ -67,12 +73,16 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   rear.lat=cfg->Get<double>("rear_start_offset_m");
   rearCruise=cfg->Get<double>("rear_cruise_mps");
   report.open(cfg->Get<std::string>("log_file"));
-  if(route.size()<100||lap<100||lateralOffset<=0||!report){
+  if(route.size()<100||lap<100||lateralOffset<=0||!report||
+     (raceMode && std::any_of(route.begin(),route.end(),
+                              [](const Pt&p){return p.width<=0.;}))){
    std::cerr<<"[BATTLE] INVALID SETUP"<<std::endl;return;
   }
   report<<"time_s,team_s,team_lat,team_speed,lead_s,lead_lat,lead_speed,rear_s,rear_lat,rear_speed,front_ttc,rear_ttc,min_center_m,min_body_clearance_m\n";
   ok=true;
-  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane<<" team "<<MAX_TEAM_SPEED<<"m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
+  std::cout<<"[BATTLE] READY grid="<<teamGrid<<" lane="<<initialLane
+           <<" laps="<<raceLaps<<" team max "<<MAX_TEAM_SPEED
+           <<"m/s, S-car 9m/s, rear="<<rearCruise<<"m/s"<<std::endl;
  }
  void PreUpdate(const gz::sim::UpdateInfo& info,gz::sim::EntityComponentManager& ecm) override {
   if(info.paused||!ok||ended)return;
@@ -99,6 +109,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // Preserve previous poses BEFORE lateral and longitudinal motion.
   // Needed to orient each car along its actual diagonal travel tangent.
   const Pos previousTeam=pose(team), previousLead=pose(lead), previousRear=pose(rear);
+  const std::array<double,3> previousS{{team.s,lead.s,rear.s}};
   const double lateral[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
   int period=static_cast<int>(elapsed/2.0);
   int phase=period%4;
@@ -300,7 +311,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
     return std::clamp(desired,0.,limit);
   };
-  const double teamCruise=MAX_TEAM_SPEED;
+  // Three-lap race: normal pace 10m/s, safe passing may reach 15m/s.
+  // A requested average is measured; it is not a hard speed controller.
+  const double teamCruise=raceMode?10.:MAX_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
   // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
   // Do not force unsafe speed through an overlapping lane. Instead allow
@@ -518,6 +531,18 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     a.s+=(before+a.v)*.5*dt;
   };
   update(team,vt);update(lead,vl);update(rear,vr);
+  if(raceMode){
+    peakTeam=std::max(peakTeam,team.v);
+    peakLead=std::max(peakLead,lead.v);
+    peakRear=std::max(peakRear,rear.v);
+    for(int i=completedTeamLaps+1;i<=raceLaps;++i){
+      if(team.s-teamStart>=lap*i){
+        completedTeamLaps=i;
+        std::cout<<"[BATTLE] LAP_COMPLETED "<<i<<"/"<<raceLaps
+                 <<" time="<<elapsed<<" team_speed="<<team.v<<std::endl;
+      }else break;
+    }
+  }
   if(team.s>lead.s+LEN+targetGap&&!passed &&
      fabs(team.lat-lead.lat)>WID+.12){
     passed=true;passingActive=false;
@@ -551,6 +576,20 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // Detect physical collision first and name the two vehicles involved.
     const std::array<Pos,3> snapshot{{ap,bp,cp}};
     const std::array<const char*,3> names{{"team_11","practice_s_09","practice_rear_11"}};
+    if(raceMode){
+      const std::array<double,3> currentS{{team.s,lead.s,rear.s}};
+      for(int i=0;i<3;++i){
+        const double sampleS=previousS[i]+t*(currentS[i]-previousS[i]);
+        const double margin=roadMargin(snapshot[i],sampleS);
+        minWallMargin=std::min(minWallMargin,margin);
+        if(margin<=0.){
+          std::cout<<"[BATTLE] WALL_BOUNDARY t="<<elapsed
+                   <<" vehicle="<<names[i]<<" margin="<<margin
+                   <<" sensor=GEOMETRIC_ROAD_ENVELOPE"<<std::endl;
+          finish("FAIL_WALL_BOUNDARY");return;
+        }
+      }
+    }
     for(int i=0;i<3;++i){
       for(int j=i+1;j<3;++j){
         const double dist=hypot(snapshot[i].x-snapshot[j].x,
@@ -592,7 +631,26 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
           <<frontTTC<<','<<rearTTC<<','<<minimumCenter<<','<<minimumClearance<<'\n';
     report.flush();lastCsv=now;
   }
-  if(team.s-teamStart>=lap){
+  if(raceMode && team.s-teamStart>=raceLaps*lap){
+    const double finishS=teamStart+raceLaps*lap;
+    // A car ahead of the common finish line has already completed
+    // three laps before TEAM11, so its final placing is known.
+    const int rank=1+static_cast<int>(lead.s>=finishS)+
+                     static_cast<int>(rear.s>=finishS);
+    const double average=(team.s-teamStart)/std::max(.001,elapsed);
+    std::cout<<"[BATTLE] RACE3_RESULT PASS_3_LAPS"
+             <<" rank="<<rank<<"/3 laps="<<raceLaps
+             <<" team_peak_mps="<<peakTeam
+             <<" team_average_mps="<<average
+             <<" lead_peak_mps="<<peakLead
+             <<" rear_peak_mps="<<peakRear
+             <<" wall_margin_min_m="<<minWallMargin
+             <<" wall_check=GEOMETRIC_ROAD_ENVELOPE"
+             <<" min_body_clearance_m="<<minimumClearance
+             <<" elapsed_s="<<elapsed<<std::endl;
+    finish("PASS_3_LAPS");return;
+  }
+  if(!raceMode && team.s-teamStart>=lap){
     // Defense is earned only if a true rear threat occurred and no pass
     // happened during the whole lap. Gap is measured between body edges.
     const double finalRearGap=team.s-rear.s-LEN;
@@ -612,10 +670,27 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" min_body_clearance_m="<<minimumClearance<<std::endl;
     finish(!passed?"FAIL_NO_OVERTAKE":(defended?"PASS_BATTLE":"PARTIAL_DEFENSE_UNVERIFIED"));return;
   }
-  if(elapsed>300)finish("FAIL_TIMEOUT");
+  if(elapsed>(raceMode?900.:300.))finish("FAIL_TIMEOUT");
   previousRearTTC=rearTTC;
  }
  private:
+ // Geometry-based road/wall envelope: not a Gazebo physics contact sensor.
+ // Measures projected oriented chassis corners against local half-road-width.
+ double roadMargin(const Pos&p,double s)const{
+   double t=fmod(s,lap);if(t<0)t+=lap;
+   auto it=std::upper_bound(route.begin(),route.end(),t,
+     [](double x,const Pt&pt){return x<pt.s;});
+   size_t i=it==route.begin()?0:static_cast<size_t>(it-route.begin()-1);
+   const Pt&sample=route[i];
+   Car center;center.s=s;center.lat=0.;
+   const Pos ref=pose(center);
+   const double nx=-sin(ref.yaw),ny=cos(ref.yaw);
+   const double lateral=(p.x-ref.x)*nx+(p.y-ref.y)*ny;
+   const double dyaw=wrap(p.yaw-ref.yaw);
+   const double halfProjection=.5*LEN*fabs(sin(dyaw))+
+                               .5*WID*fabs(cos(dyaw));
+   return .5*sample.width-fabs(lateral)-halfProjection;
+ }
  double gap(double from,double to)const {
   double x=fmod(to-from,lap);if(x<0)x+=lap;return x;
  }
@@ -777,6 +852,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
  std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
+ int raceLaps=1,completedTeamLaps=0;
+ bool raceMode=false;
+ double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
