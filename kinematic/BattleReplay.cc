@@ -27,6 +27,9 @@ constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
 constexpr double STRAIGHT_TARGET=.60, CORNER_TARGET=.80;
 constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
+constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
+constexpr double SHARP_SPEED=7., MILD_SPEED=10.;
+constexpr double MAX_TEAM_SPEED=12.;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
 struct Pt {double s,x,y,z,yaw;};
@@ -106,7 +109,20 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const bool rearBehind=rearGap>LEN && rearGap<25.;
   double rearTTC=rearBehind && rear.v>team.v+.01?
     std::max(0.,rearGap-LEN)/(rear.v-team.v):1e6;
-  bool corner=fabs(curve(team.s))>.18;
+  // Speed limits depend on the worst curvature over the stopping
+  // distance, not just on the vehicle's current point on the track.
+  const double stoppingLookahead=std::max(8.0,team.v*team.v/10.0+4.0);
+  double upcomingCurve=0.;
+  for(int i=0;i<=8;++i)
+    upcomingCurve=std::max(upcomingCurve,
+      fabs(curve(team.s+stoppingLookahead*i/8.0)));
+  const double currentCurve=fabs(curve(team.s));
+  const bool sharpAhead=upcomingCurve>=SHARP_CURVE;
+  const bool mildAhead=upcomingCurve>=MILD_CURVE;
+  const bool corner=currentCurve>=SHARP_CURVE;
+  const double curvatureSpeedLimit=sharpAhead?SHARP_SPEED:
+                                   (mildAhead?MILD_SPEED:MAX_TEAM_SPEED);
+  const bool overtakeZone=!sharpAhead && currentCurve<SHARP_CURVE;
   const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
   minRearTTC=std::min(minRearTTC,rearTTC);
   if(rearBehind && rearTTC<=5.){
@@ -119,7 +135,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // footprint collision* is detected. Negative clearance by itself is not
   // a collision and must not create oscillating replan requests.
   if(team.changing){
-    const double risk=forecast(team.to,elapsed,now,true);
+    const double risk=forecast(team.to,elapsed,now,true,
+      std::min(plannedPassSpeed,curvatureSpeedLimit),2.5);
     if(risk<0.0 && now-lastReplan>1.0){
       lastReplan=now;
       const double stay=forecast(team.lat,elapsed,now,false);
@@ -140,7 +157,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
   }else if(now-changeFinishedAt<2.0){
     // Hysteresis prevents immediate re-selection of the opposite lane.
-  }else if(!corner && rearBehind && rearTTC<=5.0 && !defended &&
+  }else if(!overtakeZone && rearBehind && rearTTC<=5.0 && !defended &&
             frontTTC>1.0 && !(frontGap<8. && !passed)){
     // Handle rear pressure before an optional front overtake. Safest
     // defense is maintaining a corridor or speeding away, not cutting off
@@ -160,19 +177,22 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                  <<" gap="<<rearGap<<" clearance="<<backClearance<<std::endl;
       }
     }
-  }else if(!corner && !passed && frontGap>LEN+STRAIGHT_TARGET &&
-            frontGap<12. && (frontTTC<=3. || frontGap<5.0)){
+  }else if(overtakeZone && !passed &&
+            frontGap>LEN+STRAIGHT_TARGET && frontGap<12. &&
+            (frontTTC<=3. || frontGap<5.0)){
     // Include speed-up in lane candidate prediction. Testing a lane
     // change at today's 9m/s could never establish that a faster pass is
     // possible, and made equal-speed following a permanent deadlock.
     double bestScore=-1e9,bestTarget=team.lat,bestSpeed=team.v;
+    const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{11.0,10.0,9.0}){
+      for(double trial:{12.,11.,10.,9.}){
+        if(trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
-                                    STRAIGHT_GAP);
+                                    mildAhead?CORNER_GAP:STRAIGHT_GAP);
         const double utility=score-.10*fabs(dst-team.lat)+
-                             .06*(trial-lead.v);
+                             .12*(trial-lead.v);
         if(score>=0. && utility>bestScore){
           bestScore=utility;bestTarget=dst;bestSpeed=trial;
         }
@@ -180,8 +200,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
     if(fabs(bestTarget-team.lat)>.2*lateralOffset){
       change(bestTarget,now);attempted=true;attemptCount++;
+      plannedPassSpeed=bestSpeed;
+      passingActive=true;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
                <<"s target_offset="<<bestTarget<<" speed="<<bestSpeed
+               <<" curve="<<upcomingCurve
                <<" score="<<bestScore<<std::endl;
     }
   }
@@ -227,7 +250,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     }
     return std::clamp(desired,0.,limit);
   };
-  const double teamCruise=12.0;
+  const double teamCruise=MAX_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
   // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
   // Do not force unsafe speed through an overlapping lane. Instead allow
@@ -236,12 +259,13 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   double passingSpeedWindow=0.;
   const bool trackingLead=!passed && frontGap>LEN+STRAIGHT_GAP &&
                           frontGap<7. && team.v<11.0;
-  if(trackingLead && !corner && !team.changing && !joinPending){
+  if(trackingLead && overtakeZone && !team.changing && !joinPending){
     const double currentBody=clearance(pose(team),pose(lead));
     if(currentBody>STRAIGHT_GAP+.25){
       // Continue checking at the current passing speed, not just while
       // team speed is almost identical to the 9m/s lead car.
       for(double trial:{11.0,10.5,10.0,9.5}){
+        if(trial>curvatureSpeedLimit+.01)continue;
         if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
                     STRAIGHT_GAP+.08)>=0.){
           passingSpeedWindow=trial;
@@ -305,7 +329,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     comfortSpeed=teamCruise;
     bool foundComfort=false;
     for(double trial:{12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
-      if(trial>vt+.25)continue;
+      if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
         corner?CORNER_TARGET:STRAIGHT_TARGET);
@@ -328,7 +352,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // Avoid unnecessary 2.5-second following when the S-car is safely
     // alongside in a different corridor and can be passed on the straight.
     // The one-second emergency forecast remains active regardless.
-    if(!corner && fabs(team.lat-lead.lat)>WID+STRAIGHT_TARGET &&
+    if(overtakeZone && fabs(team.lat-lead.lat)>WID+STRAIGHT_TARGET &&
        gap(team.s,lead.s)>LEN+STRAIGHT_TARGET+3.0 &&
        forecast(team.lat,elapsed,now,team.changing,team.v,1.0,false)>=0.){
       comfortSpeed=teamCruise;
@@ -337,6 +361,25 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // Preserve a locally safe acceleration window; the existing 2.5s
   // following forecast otherwise repeatedly resets the limit to 9m/s.
   if(passingSpeedWindow>comfortSpeed)comfortSpeed=passingSpeedWindow;
+  // Keep lane choice and speed together throughout a committed overtake.
+  // Recheck the actual interpolated lane against both traffic vehicles
+  // before lifting the normal leading-car following speed cap.
+  if(passingActive && !passed){
+    const double trial=std::min(plannedPassSpeed,curvatureSpeedLimit);
+    const double predicted=forecast(team.changing?team.to:team.lat,
+      elapsed,now,team.changing,trial,1.2,true,
+      mildAhead?CORNER_GAP:STRAIGHT_GAP);
+    if(overtakeZone && trial>lead.v+.1 && predicted>=0.){
+      passingSpeedWindow=std::max(passingSpeedWindow,trial);
+      comfortSpeed=std::max(comfortSpeed,trial);
+    }else if(sharpAhead){
+      passingActive=false;
+      std::cout<<"[BATTLE] OVERTAKE PAUSE sharp_corner speed_limit="
+               <<curvatureSpeedLimit<<std::endl;
+    }
+  }
+  // The speed ceiling for approaching bends remains mandatory.
+  comfortSpeed=std::min(comfortSpeed,curvatureSpeedLimit);
   // Record why a safe passing speed is not being selected, instead of
   // assuming that every no-overtake case is a lane-planner failure.
   if(!passed && !team.changing && now-lastOvertakeDiagnostic>=5.0){
@@ -358,6 +401,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // through a collision-checked 1s speed window, never unconditionally.
   if(passingSpeedWindow>0. && comfortSpeed>=passingSpeedWindow)
     vt=std::max(vt,passingSpeedWindow);
+  vt=std::min(vt,curvatureSpeedLimit);
   if(team.changing)vt=std::min(vt,teamCruise-1.5);
   if(emergencyBraking && frontTTC<=1.)vt=std::min(vt,5.0);
   // Restrict strong braking to hazards predicted inside one second.
@@ -395,7 +439,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   // Braking for a pursuer behind would make a rear-end collision worse.
   if(rearBehind && rearTTC<2. && frontTTC>2. &&
      !team.changing && speedCeiling>=team.v)
-    vt=std::max(vt,std::min(teamCruise,team.v+0.5));
+    vt=std::max(vt,std::min(curvatureSpeedLimit,team.v+0.5));
+  vt=std::min(vt,curvatureSpeedLimit);
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -410,7 +455,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   update(team,vt);update(lead,vl);update(rear,vr);
   if(team.s>lead.s+LEN+targetGap&&!passed &&
      fabs(team.lat-lead.lat)>WID+.12){
-    passed=true;
+    passed=true;passingActive=false;
     std::cout<<"[BATTLE] OVERTAKE COMPLETED mode="
              <<(attempted?"LANE_CHANGE":"CLEAR_LANE_ACCELERATION")<<std::endl;
   }
@@ -670,11 +715,11 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=12.,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=12.,rearCruise=11.,plannedPassSpeed=9.;
  int attemptCount=0,replanCount=0;
  std::string defenseOutcome="NOT_TRIGGERED";
  bool defenseOpportunity=false,rearOvertook=false;
- bool joinPending=false,emergencyBraking=false;
+ bool joinPending=false,emergencyBraking=false,passingActive=false;
  int initialLane=1,teamGrid=1;
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
 };
