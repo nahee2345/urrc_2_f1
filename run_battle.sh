@@ -143,7 +143,7 @@ echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
 RESULT=""
 MAX_WALL_S=600
-if [[ "$MODE" == race3 ]]; then MAX_WALL_S=1800; fi
+if [[ "$MODE" == race3 ]]; then MAX_WALL_S=3000; fi
 MAX_WALL_S="${URRC_BATTLE_TIMEOUT_S:-$MAX_WALL_S}"
 LAST_LAP=0
 while kill -0 "$WORLD_PID" 2>/dev/null;do
