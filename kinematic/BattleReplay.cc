@@ -61,6 +61,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   }
   raceLaps=cfg->HasElement("race_laps")?cfg->Get<int>("race_laps"):1;
   raceMode=raceLaps==3;
+  trackName=cfg->HasElement("track_name")?
+    cfg->Get<std::string>("track_name"):"";
   lap=cfg->Get<double>("lap_length_m");
   lateralOffset=cfg->Get<double>("lane_offset_m");
   team.name="team_11";team.s=cfg->Get<double>("team_start_s");
@@ -174,6 +176,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const bool sharpAhead=sharpDistance<1e5;
   const bool mildAhead=mildDistance<1e5 || sharpAhead;
   const bool corner=currentCurve>=SHARP_CURVE;
+  if(raceMode && trackName=="monaco" && corner)
+    lastMonacoSharpAt=now;
   const double curvatureSpeedLimit=std::clamp(curveSpeedRaw,3.,MAX_TEAM_SPEED);
   // Starting a 2.5s overtake is unsafe if a sharp bend is within its
   // projected travel range, even if the current speed cap is still high.
@@ -550,6 +554,25 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" pass_window="<<passingSpeedWindow
              <<" team_changing="<<team.changing
              <<" front_gap="<<frontGap<<std::endl;
+  }
+  // Phase 1 (Monaco only): a modest 11.5m/s corner-exit burst.
+  // Retain the existing 7.5m/s sharp-corner cap, front/rear collision
+  // forecasts, road envelope, and physical acceleration limit.
+  // Do not accelerate before the bend has actually ended.
+  if(raceMode && trackName=="monaco" &&
+     now-lastMonacoSharpAt>0. && now-lastMonacoSharpAt<3.0 &&
+     currentCurve<MILD_CURVE && sharpDistance>10. &&
+     !team.changing && !joinPending && curvatureSpeedLimit>=10.5 &&
+     forecast(team.lat,elapsed,now,false,11.5,1.5,true)>=0.){
+    const double prior=vt;
+    vt=std::max(vt,std::min(11.5,curvatureSpeedLimit));
+    if(vt>prior+.01 && now-lastMonacoExitLog>2.){
+      lastMonacoExitLog=now;
+      std::cout<<"[BATTLE] MONACO_EXIT_ACCEL target="<<vt
+               <<" speed="<<team.v
+               <<" curve="<<currentCurve
+               <<" sharp_ahead_m="<<sharpDistance<<std::endl;
+    }
   }
   // Braking for a pursuer behind would make a rear-end collision worse,
   // but only when the forward trajectory also remains clear.
@@ -1032,6 +1055,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
+ std::string trackName;
+ double lastMonacoSharpAt=-1e6,lastMonacoExitLog=-1e6;
  bool defenseOpportunity=false,rearOvertook=false;
  bool joinPending=false,emergencyBraking=false,passingActive=false;
  int initialLane=1,teamGrid=1;
