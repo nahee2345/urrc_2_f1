@@ -102,8 +102,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(!started){
     if(!startSignal.load())return;
     started=true;begin=now;last=now;lastCsv=now;
-    // Start at the actual official grid, then request a safe lane join.
-    joinPending=std::fabs(team.lat-preferredLane)>.05;
+    // Preserve the official grid-2 lateral corridor at the start.
+    // A small offset mismatch is not permission to slide sideways.
+    const double joinTolerance=(raceMode && teamGrid==2)?0.18:0.05;
+    joinPending=std::fabs(team.lat-preferredLane)>joinTolerance;
     std::cout<<"[BATTLE] START grid="<<teamGrid<<" (all five lights off)"<<std::endl;
   }
   const double elapsed=now-begin;
@@ -225,9 +227,19 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                <<" stay="<<stay<<" back="<<back<<std::endl;
     }
   }else if(joinPending){
-    if(forecast(preferredLane,elapsed,now,false)>0){
+    // Do not move laterally at the starting line. Travel forward along
+    // the grid heading first; only merge smoothly if the lane offset
+    // genuinely differs from the physical grid-2 lane.
+    const bool initialStraightDone=!raceMode ||
+      teamGrid!=2 || team.s-teamStart>=5.0;
+    if(initialStraightDone &&
+       forecast(preferredLane,elapsed,now,false,
+                std::min(team.v+1.0,10.0),2.5,true)>=0.){
       change(preferredLane,now);joinPending=false;
-      std::cout<<"[BATTLE] JOIN initial lane="<<initialLane<<std::endl;
+      std::cout<<"[BATTLE] JOIN initial lane="<<initialLane
+               <<" distance_from_grid_m="<<(team.s-teamStart)
+               <<" from_offset="<<team.lat
+               <<" to_offset="<<preferredLane<<std::endl;
     }
   }else if(now-changeFinishedAt<2.0){
     // Hysteresis prevents immediate re-selection of the opposite lane.
