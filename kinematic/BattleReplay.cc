@@ -600,6 +600,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                <<" sharp_ahead_m="<<sharpDistance<<std::endl;
     }
   }
+  // Preserve the emergency ceiling after both Monaco-specific accelerations.
+  vt=std::min(vt,speedCeiling);
   // Braking for a pursuer behind would make a rear-end collision worse,
   // but only when the forward trajectory also remains clear.
   if(rearBehind && rearTTC<2. && frontTTC>2. &&
