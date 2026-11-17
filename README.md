@@ -421,3 +421,11 @@ bash run.sh race3 both
 - 변경 범위: `race3` + `track_name=monaco`에서만. 실제 급코너 주행 후 3초 이내, 현재 곡률이 완만한 수준(`<0.08`), 다음 급코너가 10m 이상 떨어짐, 경로 변경 중 아님, 1.5초 전후방 차체 충돌 예측 통과 시 **탈출 가속 목표 최대 11.5m/s**. 가속은 기존 +3m/s² 물리시간 적분을 유지하며, 코너·급감속·도로 경계·충돌 검사가 최종적으로 우선
 - `[BATTLE] MONACO_EXIT_ACCEL`로 가속 활성화 여부 확인. 앞차 급감속 대응, 추월 조건, 기존 타 맵 속도 설정 및 출발 그리드→경로 매핑은 수정하지 않음
 - 이것은 1차 실험이며 1위 또는 평균속도 개선을 검증한 것은 아님. 먼저 `bash run.sh battle monaco 1 3 race3`, `bash run.sh battle monaco 2 1 race3`를 각각 3바퀴 실행하고 `RACE3_RESULT`, `MONACO_EXIT_ACCEL`, 충돌 여부를 비교
+
+## 2026-11-17 Monaco 2차 개선: 직선 추월 가속 및 상대 차량 순위 기록
+
+- 1차 Monaco 3바퀴 실제 결과: 그리드1 평균 8.91823m/s·2위, 그리드2 평균 8.91722m/s·2위; 각각 추월시도 6/5회, 추월완료 0회
+- 2차 범위: **Monaco race3만**. 차선 변경 종료 후 0.5초 경과, 급코너 예고 20m 초과, 현재 곡률 0.08 미만, 급코너 외, 앞 S차량 0.53~25m, 횡방향 분리·차체 간격 확보, **전후방 차체 1.5초 예측 통과** 시 직선 추월 목표속도 최대 12.5m/s. 기존 전방 1초 긴급제동·2.5초 사전 감속·곡률 상한이 마지막에 우선
+- 코너 탈출 11.5m/s, 급코너 기준 7.5m/s, 조향·차선·그리드 매핑, 다른 맵은 그대로 유지
+- 새 진단: `MONACO_PASS_ACCEL` (추월 가속 활성화), `MONACO_FINISH_GAP` (1위 차량, TEAM11 대비 각 차량 최종 상대위치 m). 이 수치는 **위치 차이**이며 시간차 기록은 아님
+- 이 단계도 실제 Gazebo 재검증 전. `bash run.sh battle monaco 1 3 race3`, `bash run.sh battle monaco 2 1 race3` 실행 후 `RACE3_RESULT`, `MONACO_FINISH_GAP`, `MONACO_PASS_ACCEL`, `COLLISION` 확인
