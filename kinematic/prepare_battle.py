@@ -24,37 +24,59 @@ def grid_lateral(point,grid):
             (float(grid["y"])-point["y"])*math.cos(yaw))
 
 def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
-    if grid_position not in (1,2):raise ValueError("Grid must be 1 or 2")
+    if grid_position not in ((2,3) if laps==3 else (1,2)):raise ValueError("Grid must be 2 or 3 in race3; 1 or 2 otherwise")
     if laps not in (1,3):raise ValueError("Supported lap counts: 1 or 3")
-    if lane is None:lane=3 if grid_position==1 else 1
+    if lane is None:lane=3 if grid_position%2 else 1
     if lane not in (1,2,3):raise ValueError("Lane must be 1..3")
     result=build_single(track,lane,lib,output,10.0)
     meta=json.loads((PACKAGE/"tracks"/"processed"/f"{track}.json").read_text())
     grids={int(g["position"]):g for g in meta["grid"]}
-    if grid_position not in grids or 10 not in grids:raise ValueError("Selected grid or grid 10 missing")
+    if grid_position not in grids or 1 not in grids or 10 not in grids:raise ValueError("Official grid 1, selected team grid or grid 10 missing")
     with (ROOT/"routes"/track/"lane_2.csv").open(newline="") as f:
         rows=list(csv.DictReader(f))
     pts=[dict(s=float(r["s_m"]),x=float(r["x_m"]),y=float(r["y_m"]),
               z=float(r["z_m"]),yaw=float(r["yaw_rad"])) for r in rows]
     n=len(pts)
     if n<100:raise ValueError("Insufficient centreline samples")
-    g1i=nearest(pts,grids[grid_position])
+    team_i=nearest(pts,grids[grid_position])
+    red_i=nearest(pts,grids[1])
     g10i=nearest(pts,grids[10])
-    g1s=pts[g1i]["s"]
+    team_s=pts[team_i]["s"]
+    red_s=pts[red_i]["s"]
     g10s=pts[g10i]["s"]
     loop=float(json.loads((ROOT/"routes"/track/"manifest.json").read_text())["length_m"])
-    # Unwrapped positions: grid 10 must remain behind the selected start.
-    if g10s>=g1s:g10s-=loop
-    ahead=g1s+12.0
+    # Race3: red car on the official grid 1; TEAM11 on grid 2 or 3.
+    # Use the shortest signed centreline displacement, including start-line wrap.
+    if laps==3:
+        red_ahead=(red_s-team_s+loop/2)%loop-loop/2
+        if not 0.5<red_ahead<30.0:
+            raise ValueError(f"Official grid 1 must be 0.5..30m ahead of team grid {grid_position}: {red_ahead:.3f}m")
+        ahead=team_s+red_ahead
+    else:
+        ahead=team_s+12.0
+    # Grid 10 must remain behind TEAM11 in unwrapped coordinates.
+    rear_behind=(g10s-team_s+loop/2)%loop-loop/2
+    if not defense and rear_behind>=-0.5:
+        raise ValueError(f"Official grid 10 must be behind team grid {grid_position}: {rear_behind:.3f}m")
+    g10s=team_s+rear_behind
     if defense:
         # Dedicated rear-pressure check; preserve grid10 practice model in ordinary battles.
-        g10s=g1s-7.0
+        g10s=team_s-7.0
     offset=float(json.loads((ROOT/"routes"/track/"manifest.json").read_text())["offset_m"])
     lead_mod=ahead%loop
     j=min(range(n),key=lambda i:abs(pts[i]["s"]-lead_mod))
     lead=pts[j]
-    lx=lead["x"]+offset*math.sin(lead["yaw"])
-    ly=lead["y"]-offset*math.cos(lead["yaw"])
+    red_lat=grid_lateral(pts[red_i],grids[1]) if laps==3 else -offset
+    if laps==3:
+        lx=float(grids[1]["x"])
+        ly=float(grids[1]["y"])
+        lead_z=float(grids[1]["road_z"])
+        lead_yaw=float(grids[1]["yaw"])
+    else:
+        lx=lead["x"]+offset*math.sin(lead["yaw"])
+        ly=lead["y"]-offset*math.cos(lead["yaw"])
+        lead_z=lead["z"]
+        lead_yaw=lead["yaw"]
     center_file=output/"battle_centerline.csv"
     with (PACKAGE/"tracks"/"processed"/f"{track}_centerline.csv").open(newline="") as f:
         road_points=list(csv.DictReader(f))
@@ -87,12 +109,13 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
       "team_grid":grid_position,
       "team_start_yaw":float(grids[grid_position]["yaw"]),
       "team_preferred_offset_m":{1:-offset,2:0.0,3:offset}[lane],
-      "team_start_s":g1s,
-      "team_start_offset_m":grid_lateral(pts[g1i],grids[grid_position]),
+      "team_start_s":team_s,
+      "team_start_offset_m":grid_lateral(pts[team_i],grids[grid_position]),
       "lead_start_s":ahead,
+      "lead_start_offset_m":red_lat,
       "rear_start_s":g10s,
       "rear_cruise_mps":14.0 if defense else 11.0,
-      "rear_start_offset_m":(grid_lateral(pts[g1i],grids[grid_position]) if defense else grid_lateral(pts[g10i],grids[10]))
+      "rear_start_offset_m":(grid_lateral(pts[team_i],grids[grid_position]) if defense else grid_lateral(pts[g10i],grids[10]))
     }
     for k,v in values.items():ET.SubElement(plug,k).text=str(v)
     world.write(result["world_file"],encoding="utf-8",xml_declaration=True)
@@ -123,13 +146,14 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
       "mode":"battle_3laps" if laps==3 else ("battle_defense" if defense else "battle"),
       "team_initial_lane":lane,
       "team_grid":grid_position,
+      "red_grid":1 if laps==3 else None,
       "lead_model":str(lead_model),
       "rear_model":str(rear_model),
       "start_topic":values["start_topic"],
       "start_positions":{
         "team_11":[float(grids[grid_position]["x"]),float(grids[grid_position]["y"]),
                    float(grids[grid_position]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[grid_position]["yaw"])],
-        "practice_s_09":[lx,ly,lead["z"]+REPLAY_BASE_Z_OFFSET_M,lead["yaw"]],
+        "practice_s_09":[lx,ly,lead_z+REPLAY_BASE_Z_OFFSET_M,lead_yaw],
         "practice_rear_11":rear_spawn if defense else [float(grids[10]["x"]),float(grids[10]["y"]),
                            float(grids[10]["road_z"])+REPLAY_BASE_Z_OFFSET_M,float(grids[10]["yaw"])]
       },
@@ -149,7 +173,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--track",choices=("monza","spa","monaco","cota","hungaroring","baku"),required=True)
-    p.add_argument("--grid",type=int,choices=(1,2),required=True)
+    p.add_argument("--grid",type=int,choices=(1,2,3),required=True)
     p.add_argument("--defense",action="store_true")
     p.add_argument("--laps",type=int,choices=(1,3),default=1)
     p.add_argument("--lane",type=int,choices=(1,2,3),default=None)
