@@ -555,6 +555,30 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
              <<" team_changing="<<team.changing
              <<" front_gap="<<frontGap<<std::endl;
   }
+  // Phase 2 (Monaco only): sustain a safe, straight-line passing window.
+  // Phase 1 did not complete any pass despite 5-6 attempts. After a
+  // committed lane change ends, normal 10m/s cruise can be too slow to
+  // close on the 9m/s S-car. Never override curvature or braking caps.
+  // Use both vehicles in the footprint prediction, including the pursuer.
+  if(raceMode && trackName=="monaco" && !passed &&
+     !team.changing && !joinPending &&
+     now-changeFinishedAt>0.5 && overtakeZone &&
+     currentCurve<MILD_CURVE && sharpDistance>20. &&
+     curvatureSpeedLimit>=12.5 &&
+     lead.s>team.s+LEN && lead.s-team.s<25. &&
+     fabs(team.lat-lead.lat)>WID+.25 &&
+     clearance(pose(team),pose(lead))>STRAIGHT_GAP &&
+     forecast(team.lat,elapsed,now,false,12.5,1.5,true)>=0.){
+    const double prior=vt;
+    vt=std::max(vt,12.5);
+    if(vt>prior+.01 && now-lastMonacoPassLog>2.){
+      lastMonacoPassLog=now;
+      std::cout<<"[BATTLE] MONACO_PASS_ACCEL target="<<vt
+               <<" lead_gap="<<(lead.s-team.s)
+               <<" lateral_delta="<<fabs(team.lat-lead.lat)
+               <<" lead_v="<<lead.v<<std::endl;
+    }
+  }
   // Phase 1 (Monaco only): a modest 11.5m/s corner-exit burst.
   // Retain the existing 7.5m/s sharp-corner cap, front/rear collision
   // forecasts, road envelope, and physical acceleration limit.
@@ -760,6 +784,18 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
     // three laps before TEAM11, so its final placing is known.
     const int rank=1+static_cast<int>(lead.s>=finishS)+
                      static_cast<int>(rear.s>=finishS);
+    if(trackName=="monaco"){
+      const double leadDiff=lead.s-team.s;
+      const double rearDiff=rear.s-team.s;
+      const std::string first=lead.s>=rear.s?"practice_s_09":"practice_rear_11";
+      const double winnerS=std::max(lead.s,rear.s);
+      std::cout<<"[BATTLE] MONACO_FINISH_GAP leader="<<
+        (winnerS>team.s?first:"team_11")
+        <<" team_vs_lead_m="<<leadDiff
+        <<" team_vs_rear_m="<<rearDiff
+        <<" leader_ahead_m="<<std::max(0.,winnerS-team.s)
+        <<std::endl;
+    }
     const double average=(team.s-teamStart)/std::max(.001,elapsed);
     std::cout<<"[BATTLE] RACE3_RESULT PASS_3_LAPS"
              <<" rank="<<rank<<"/3 laps="<<raceLaps
@@ -1056,7 +1092,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
  std::string trackName;
- double lastMonacoSharpAt=-1e6,lastMonacoExitLog=-1e6;
+ double lastMonacoSharpAt=-1e6,lastMonacoExitLog=-1e6,lastMonacoPassLog=-1e6;
  bool defenseOpportunity=false,rearOvertook=false;
  bool joinPending=false,emergencyBraking=false,passingActive=false;
  int initialLane=1,teamGrid=1;
