@@ -81,6 +81,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
       "log_file":str((output/"battle_state.csv").resolve()),
       "lap_length_m":loop,
       "race_laps":laps,
+      "track_name":track,
       "lane_offset_m":offset,
       "team_initial_lane":lane,
       "team_grid":grid_position,
