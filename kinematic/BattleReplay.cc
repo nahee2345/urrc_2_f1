@@ -102,9 +102,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   if(!started){
     if(!startSignal.load())return;
     started=true;begin=now;last=now;lastCsv=now;
-    // Preserve the official grid-2 lateral corridor at the start.
-    // A small offset mismatch is not permission to slide sideways.
-    const double joinTolerance=(raceMode && teamGrid==2)?0.18:0.05;
+    // All race3 grids must drive straight from their official starting
+    // pose. Small grid-to-lane offset differences never trigger a slide.
+    const double joinTolerance=raceMode?0.18:0.05;
     joinPending=std::fabs(team.lat-preferredLane)>joinTolerance;
     std::cout<<"[BATTLE] START grid="<<teamGrid<<" (all five lights off)"<<std::endl;
   }
@@ -227,11 +227,9 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                <<" stay="<<stay<<" back="<<back<<std::endl;
     }
   }else if(joinPending){
-    // Do not move laterally at the starting line. Travel forward along
-    // the grid heading first; only merge smoothly if the lane offset
-    // genuinely differs from the physical grid-2 lane.
-    const bool initialStraightDone=!raceMode ||
-      teamGrid!=2 || team.s-teamStart>=5.0;
+    // Apply forward-first joining to EVERY race3 grid. If the official
+    // position is already in its corridor, joinPending is false.
+    const bool initialStraightDone=!raceMode || team.s-teamStart>=5.0;
     if(initialStraightDone &&
        forecast(preferredLane,elapsed,now,false,
                 std::min(team.v+1.0,10.0),2.5,true)>=0.){
@@ -264,8 +262,15 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       }
     }
   }else if(overtakeZone && !passed &&
-            frontGap>LEN+STRAIGHT_TARGET && frontGap<20. &&
+            (!raceMode || team.s-teamStart>=5.0) &&
+            lead.s>team.s+LEN &&
+            frontGap>LEN+STRAIGHT_TARGET &&
+            frontGap<(raceMode && trackName=="monaco"?28.:20.) &&
             (frontTTC<=3. || frontGap<5.0 ||
+             (raceMode && trackName=="monaco" &&
+              frontGap<28. && team.v>lead.v+.3 &&
+              (frontGap-LEN-STRAIGHT_TARGET)/
+                std::max(.3,team.v-lead.v)<4.5) ||
              (frontGap<18. && curvatureSpeedLimit>lead.v+0.5 &&
               team.s-teamStart<lap-25.))){
     // Start looking before following at 5m. A 2.5s manoeuvre begun
@@ -297,7 +302,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
       plannedPassSpeed=bestSpeed;
       passingActive=true;
       std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
-               <<"s target_offset="<<bestTarget<<" speed="<<bestSpeed
+               <<"s lead_body_gap="<<clearance(pose(team),pose(lead))
+               <<" target_offset="<<bestTarget<<" speed="<<bestSpeed
                <<" curve="<<upcomingCurve
                <<" front_gap="<<frontGap
                <<" lap_remaining="<<(lap-(team.s-teamStart))
