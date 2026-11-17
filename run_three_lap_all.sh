@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Six official tracks, three laps per map, three cars. "both" also checks grid2.
+# Six official tracks, three laps per map: red grid1; TEAM11 grids 2 and 3.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 TRACKS=(monza spa monaco cota hungaroring baku)
-GRIDS=(1)
-if [[ "${1:-}" == both ]]; then GRIDS=(1 2)
+GRIDS=(2)
+if [[ "${1:-}" == both ]]; then GRIDS=(2 3)
 elif [[ -n "${1:-}" ]]; then
   echo "Usage: bash run_three_lap_all.sh [both]" >&2
   exit 2
@@ -17,7 +17,7 @@ CSV="$DEST/summary.csv"
 FAIL_COUNT=0
 for TRACK in "${TRACKS[@]}"; do
   for GRID in "${GRIDS[@]}"; do
-    if [[ "$GRID" == 1 ]]; then LANE=3; else LANE=1; fi
+    if [[ "$GRID" == 2 ]]; then LANE=1; else LANE=3; fi
     CASE_LOG="$DEST/${TRACK}_grid${GRID}.log"
     echo "RACE3 START track=$TRACK grid=$GRID laps=3 lane=$LANE"
     if timeout --signal=TERM --kill-after=15 "${URRC_RACE3_CASE_TIMEOUT_S:-3300}" \
