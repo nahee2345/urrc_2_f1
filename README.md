@@ -429,3 +429,21 @@ bash run.sh race3 both
 - 코너 탈출 11.5m/s, 급코너 기준 7.5m/s, 조향·차선·그리드 매핑, 다른 맵은 그대로 유지
 - 새 진단: `MONACO_PASS_ACCEL` (추월 가속 활성화), `MONACO_FINISH_GAP` (1위 차량, TEAM11 대비 각 차량 최종 상대위치 m). 이 수치는 **위치 차이**이며 시간차 기록은 아님
 - 이 단계도 실제 Gazebo 재검증 전. `bash run.sh battle monaco 1 3 race3`, `bash run.sh battle monaco 2 1 race3` 실행 후 `RACE3_RESULT`, `MONACO_FINISH_GAP`, `MONACO_PASS_ACCEL`, `COLLISION` 확인
+
+## 2026-11-17 race3 출발 그리드 변경 (현재 기준)
+
+- **빨간색 practice_s_09 = 공식 1번 그리드**에서 출발 (기존 TEAM11의 12m 전방 임의 스폰 폐지)
+- **TEAM11 = 공식 2번 또는 3번 그리드 선택**: 2번→1번 경로, 3번→3번 경로
+- **파란색 practice_rear_11 = 공식 10번 그리드** 유지
+- 3바퀴 레이스에서 차량 3대 모두 기존 5등 소등 후 출발하며, 빨간색 차량의 9m/s 목표속도와 S자 횡이동은 유지. 실제 그리드 횡위치에서 기존 S궤적으로 처음 2초간 부드럽게 연결
+- 다른 1바퀴 normal/defense 시나리오는 기존 그리드 1/2와 12m 전방 스폰을 유지. 이번 변경은 `race3`용
+- 실행:
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+bash run.sh battle monaco 2 1 race3
+bash run.sh battle monaco 3 3 race3
+# 6개 맵 x TEAM11 2개 그리드(2/3)
+bash run.sh race3 both
+```
+- 정적 조건 점검 통과, **새 그리드의 Gazebo 실제 3바퀴 완주/무충돌은 미검증**. 변경 전 12/12 완주 기록은 변경 이후의 검증 결과로 간주하지 않음
