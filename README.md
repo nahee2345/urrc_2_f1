@@ -459,3 +459,12 @@ cd ~/urrc_2_f1
 git pull --ff-only origin main
 bash run.sh battle monaco 2 1 race3
 ```
+
+## 2026-11-17 Monaco 사전 차선 변경 및 전체 그리드 직진 출발
+
+- 모든 race3 TEAM11 그리드(2·3번): 시작 위치와 주행 경로의 횡오차가 0.18m 이하이면 초기 차선변경 없음. 0.18m를 넘더라도 출발 직후 최소 5m **먼저 전진**, 안전 경로 확인 후 부드럽게 합류
+- race3에서는 출발 5m 이내 추월 차선변경도 금지. 빨간 차량 1번 그리드·파란 차량 10번 그리드는 유지
+- Monaco에서만 앞차가 실제 전방이고 28m 이내이며 상대속도가 +0.3m/s보다 높고 추정 안전 여유 소진시간이 4.5초 미만이면, 종전보다 먼저 추월 차선 후보 탐색. 기존의 3초 TTC 및 18m 조건도 유지
+- **미리 변경을 시도하더라도 강제 진입 없음:** 기존 3초 예측, 전후방 차체 겹침 검사, 도로 경계·코너 진입 안전성, 차선 변경 중 재평가 유지
+- 시험: `bash run.sh battle monaco 2 1 race3`, `bash run.sh battle monaco 3 3 race3`. `OVERTAKE ATTEMPT`, `JOIN initial lane`, `RACE3_RESULT`, `COLLISION` 확인
+- 새 알고리즘 실제 Gazebo 무충돌/완주 및 조기 차선변경 시점은 미검증
