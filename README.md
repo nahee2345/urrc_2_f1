@@ -468,3 +468,12 @@ bash run.sh battle monaco 2 1 race3
 - **미리 변경을 시도하더라도 강제 진입 없음:** 기존 3초 예측, 전후방 차체 겹침 검사, 도로 경계·코너 진입 안전성, 차선 변경 중 재평가 유지
 - 시험: `bash run.sh battle monaco 2 1 race3`, `bash run.sh battle monaco 3 3 race3`. `OVERTAKE ATTEMPT`, `JOIN initial lane`, `RACE3_RESULT`, `COLLISION` 확인
 - 새 알고리즘 실제 Gazebo 무충돌/완주 및 조기 차선변경 시점은 미검증
+
+## 2026-11-17 race3 급코너 속도 9m/s 실험
+
+- 모든 race3 맵의 TEAM11 급코너 목표속도만 기존 **7.5m/s → 9.0m/s**로 변경
+- 직선 기본 목표속도 **10m/s 유지** (15m/s 변경은 다음 단계). 기존 15m/s 최고속도 상한은 그대로
+- 완만한 코너 10m/s, +3m/s² 가속, -5m/s² 감속, 충돌 예측 및 회피, 그리드 출발 위치·경로는 그대로 유지
+- 이전 Monaco 결과 (변경 전): grid2 평균 8.86929m/s·2위·최소 차체간격 0.182574m·근접 경고 1467회; grid3 평균 8.88229m/s·2위·최소 차체간격 0.247678m·근접 경고 1335회
+- 변경은 코드와 시나리오 설정에 적용됨. 실제 Gazebo 3랩 완주/충돌 및 근접 경고 개선 여부는 재검증 필요
+- `bash run.sh battle monaco 2 1 race3`, `bash run.sh battle monaco 3 3 race3`
