@@ -2,21 +2,25 @@
 set -Eeuo pipefail
 # Run through one public command: bash run.sh battle monza
 TRACK="${1:-monza}"
-GRID="${2:-1}"
+GRID="${2:-2}"
 LANE="${3:-}"
 MODE="${4:-normal}"
 case "$MODE" in normal|defense|race3) ;; *) echo "Mode must be normal, defense or race3" >&2;exit 2;; esac
-case "$GRID" in 1|2) ;; *) echo "Grid must be 1 or 2" >&2;exit 2;; esac
+case "$GRID" in 1|2|3) ;; *) echo "Grid must be 1, 2 or 3" >&2;exit 2;; esac
 if [[ -z "$LANE" ]];then
-  if [[ "$GRID" == 1 ]];then LANE=3;else LANE=1;fi
+  if [[ "$GRID" == 2 ]];then LANE=1;else LANE=3;fi
 fi
 case "$LANE" in 1|2|3) ;; *) echo "Lane must be 1, 2 or 3" >&2;exit 2;; esac
 # In the three-lap tournament, starting grid determines lane deterministically.
 if [[ "$MODE" == race3 ]]; then
+  if [[ "$GRID" != 2 && "$GRID" != 3 ]]; then
+    echo "race3 TEAM11 must start at grid 2 or 3 (red car at grid 1)" >&2
+    exit 2
+  fi
   EXPECTED_LANE=3
   if [[ "$GRID" == 2 ]]; then EXPECTED_LANE=1; fi
   if [[ "$LANE" != "$EXPECTED_LANE" ]]; then
-    echo "race3 fixed assignment: grid 1 -> lane 3; grid 2 -> lane 1" >&2
+    echo "race3 fixed assignment: TEAM11 grid 2 -> lane 1; grid 3 -> lane 3" >&2
     exit 2
   fi
 fi
@@ -63,7 +67,7 @@ cmake --build "$ROOT/kinematic/build" --parallel 2 >>"$LOG/build.log" 2>&1 || {
 PLUGIN="$ROOT/kinematic/build/libteam11_battle_replay.so"
 [[ -f "$PLUGIN" ]] || { echo "Missing battle plugin library" >&2;exit 5; }
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}"
-echo "[4/6] Prepare 0.30m walls and grid $GRID / grid 10 models"
+echo "[4/6] Prepare 0.30m walls, TEAM11 grid $GRID, red grid 1 (race3), rear grid 10"
 OUT="$LOG/prepared"
 DEFENSE_ARGS=()
 if [[ "$MODE" == defense ]]; then DEFENSE_ARGS=(--defense); fi
@@ -137,7 +141,7 @@ for _ in 1 2 3;do
     }
   sleep .1
 done
-echo "BATTLE START: $TRACK grid $GRID lane $LANE mode $MODE laps=$([[ "$MODE" == race3 ]] && echo 3 || echo 1) team11 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
+echo "BATTLE START: $TRACK grid $GRID lane $LANE red_grid=$([[ "$MODE" == race3 ]] && echo 1 || echo scenario) mode $MODE laps=$([[ "$MODE" == race3 ]] && echo 3 || echo 1) team11 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
 echo "Trajectory-aligned headings; real wheel steering is disabled"
 echo "Log: $LOG/prepared/battle_state.csv"
 STARTED=$(date +%s)
