@@ -70,7 +70,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   preferredLane=cfg->Get<double>("team_preferred_offset_m");
   initialLane=cfg->Get<int>("team_initial_lane");
   teamGrid=cfg->Get<int>("team_grid");
-  lead.name="practice_s_09";lead.s=cfg->Get<double>("lead_start_s");lead.lat=-lateralOffset;
+  lead.name="practice_s_09";lead.s=cfg->Get<double>("lead_start_s");
+  leadInitialLat=cfg->HasElement("lead_start_offset_m")?
+    cfg->Get<double>("lead_start_offset_m"):-lateralOffset;
+  lead.lat=leadInitialLat;
   rear.name="practice_rear_11";rear.s=cfg->Get<double>("rear_start_s");
   rear.lat=cfg->Get<double>("rear_start_offset_m");
   rearCruise=cfg->Get<double>("rear_cruise_mps");
@@ -116,7 +119,10 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const double lateral[5]={-lateralOffset,0,lateralOffset,0,-lateralOffset};
   int period=static_cast<int>(elapsed/2.0);
   int phase=period%4;
-  lead.lat=lateral[phase]+(lateral[phase+1]-lateral[phase])*ease((elapsed-2.0*period)/2.0);
+  // Race3 red car starts at the actual grid-1 lateral offset and merges
+  // smoothly into its existing S-curve sequence during the first 2 seconds.
+  const double leadFrom=(raceMode && period==0)?leadInitialLat:lateral[phase];
+  lead.lat=leadFrom+(lateral[phase+1]-leadFrom)*ease((elapsed-2.0*period)/2.0);
   // Keep the scripted weaving vehicle inside its actual road envelope;
   // do not fail TEAM11 for a practice vehicle's off-road script.
   if(raceMode){
@@ -1028,8 +1034,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
           const double absolute=elapsed+t;
           const int period=static_cast<int>(absolute/2.);
           const int phase=period%4;
-          sample.lat=seq[phase]+(seq[phase+1]-seq[phase])*
-                     ease((absolute-2.*period)/2.);
+          const double from=(raceMode && period==0)?leadInitialLat:seq[phase];
+        sample.lat=from+(seq[phase+1]-from)*ease((absolute-2.*period)/2.);
         }
         if(raceMode)
           sample.lat=std::clamp(sample.lat,-roadOffsetLimit(sample.s),
@@ -1081,7 +1087,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
  gz::transport::Node node;gz::transport::Node::Publisher ready;
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
- std::ofstream report;double lap=0,lateralOffset=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
+ std::ofstream report;double lap=0,lateralOffset=0,leadInitialLat=0,teamStart=0,begin=0,last=0,lastCsv=0,lastBrake=-10;
  int raceLaps=1,completedTeamLaps=0;
  bool raceMode=false;
  double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9,lastElapsed=0.;
