@@ -579,6 +579,8 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
                <<" lead_v="<<lead.v<<std::endl;
     }
   }
+  // Monaco boost must never bypass the existing 1s emergency-braking cap.
+  vt=std::min(vt,speedCeiling);
   // Phase 1 (Monaco only): a modest 11.5m/s corner-exit burst.
   // Retain the existing 7.5m/s sharp-corner cap, front/rear collision
   // forecasts, road envelope, and physical acceleration limit.
