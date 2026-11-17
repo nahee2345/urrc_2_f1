@@ -152,7 +152,7 @@ class BattleReplay:public gz::sim::System,public gz::sim::ISystemConfigure,publi
   const double currentCurve=fabs(curve(team.s));
   double upcomingCurve=currentCurve;
   double curveSpeedRaw=MAX_TEAM_SPEED;
-  const double sharpTarget=raceMode?7.5:SHARP_SPEED;
+  const double sharpTarget=raceMode?9.0:SHARP_SPEED;
   const double mildTarget=raceMode?10.:MILD_SPEED;
   double sharpDistance=1e6,mildDistance=1e6;
   for(double d=0.;d<=stoppingLookahead;d+=.5){
