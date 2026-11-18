@@ -113,10 +113,11 @@ class Team08Pose_08 final:public gz::sim::System,
    double dt=clamp(now-lastTime,0.,.20);lastTime=now;
    if(dt<=0){publish(speed,0);return;}
    if(!started){started=true;std::cout<<"[TEAM08 POSE] START direct coordinates"<<std::endl;}
-   // Existing BattleReplay speed policy: cruise 10, mild corner 10,
-   // sharp corner 9, accel +3 / brake -5. No virtual traffic.
+   // Match the previously verified BattleReplay08 speed envelope:
+   // straight up to 15 m/s, mild corners 10 m/s, sharp corners 9 m/s.
+   // Keep the existing +3/-5 m/s^2 acceleration/braking ramps.
    const double curveNow=std::abs(curve(s));
-   double cap=10.;
+   double cap=15.;
    const double brakeLook=std::max(16.,speed*speed/10.+8.);
    bool sharpAhead=false;
    for(double d=0;d<=brakeLook;d+=.5){
