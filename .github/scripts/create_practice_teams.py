@@ -79,8 +79,9 @@ class PracticeTraffic__NUM__ final:public gz::sim::System,
   if(delta<.005)return;
   const double dt=std::min(delta,.2);last=now;
   double desired=__SPEED__;
-  // The following practice car is a real entrant, not a scripted model
-  // repositioned by TEAM08. Anticipate the leading race vehicle and brake.
+  // Original BattleReplay08 practice rules: lead cruises at 9 m/s;
+  // rear pursuer cruises at 11 m/s unless another vehicle ahead
+  // requires the original front-gap/TTC following adjustment.
   if(__REAR__){
    double bestGap=1e9;double targetSpeed=desired;
    ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
@@ -93,25 +94,51 @@ class PracticeTraffic__NUM__ final:public gz::sim::System,
       double targetS=0,targetLat=0;
       if(!project(p,targetS,targetLat))return true;
       const double gap=std::remainder(targetS-s,lap);
-      if(gap>0 && gap<20. && gap<bestGap &&
-          std::abs(targetLat-lateral)<.50){
-        bestGap=gap;
-        targetSpeed=std::min(desired,std::max(0.,speed+
-            (gap-2.0)*.7-(speed-9.0)*.35));
+      if(gap>0. && gap<20. && gap<bestGap){
+        const double bumper=std::max(0.,gap-.53);
+        const bool inCorner=std::abs(curve(s))>.18;
+        const double minimum=inCorner?.70:.50;
+        const double ttc=speed>9.05?(bumper-minimum)/(speed-9.):1e6;
+        double cap=desired;
+        if(std::abs(targetLat-lateral)<.34){
+          if(ttc<=1. || bumper<=minimum)
+            cap=std::min(cap,9.+std::max(0.,bumper-minimum)*1.2);
+          else if(inCorner&&bumper<4.)
+            cap=std::min(cap,9.+std::max(0.,bumper-minimum)*.45);
+          else if(ttc<3.)
+            cap=std::min(cap,9.+std::max(0.,bumper-minimum)*.9);
+        }
+        // Original Monaco rear-car anticipatory braking horizon.
+        const bool nearCorner=inCorner||
+          std::abs(curve(s+speed*2.))>.18||
+          std::abs(curve(targetS+18.))>.18;
+        const double desiredGap=(nearCorner?1.:1.)+.55;
+        const double free=gap-.53-desiredGap;
+        const double closing=std::max(0.,speed-9.);
+        const double anticipation=std::max(7.,closing*3.+
+                                closing*closing/(2.*4.)+desiredGap);
+        if(free<anticipation){
+          const double permitted=9.+bound((free-1.4)*.22,-1.,1.2);
+          cap=std::min(cap,std::max(0.,permitted));
+        }
+        bestGap=gap;targetSpeed=cap;
       }
       return true;
     });
    if(bestGap<15.)desired=targetSpeed;
   }
   speed+=bound(desired-speed,-5.*dt,3.*dt);
-  double before=s;s+=(speed*dt);
+  s+=(speed*dt);
   if(!__REAR__){
-   // Exactly the original 2-second fifth-order S-traffic lateral profile.
+   // Original BattleReplay08 S-traffic: start from the administrator's
+   // actual grid lateral offset, then follow its same 2-second quintic
+   // [-offset, 0, +offset, 0, -offset] lane sequence.
    const double elapsed=now-t0,offset=.465;
    const double lanes[5]={-offset,0.,offset,0.,-offset};
    const int phase=static_cast<int>(elapsed/2.)%4;
    const double fraction=ease((elapsed-2.*static_cast<int>(elapsed/2.))/2.);
-   lateral=lanes[phase]+(lanes[phase+1]-lanes[phase])*fraction;
+   const double from=(phase==0 && elapsed<2.)?initialLateral:lanes[phase];
+   lateral=from+(lanes[phase+1]-from)*fraction;
   }
   const auto p=sample(s);
   const double safe=std::max(0.,p.width*.5-.125-.1);
@@ -134,6 +161,10 @@ class PracticeTraffic__NUM__ final:public gz::sim::System,
   if(now-lastPub<.025)return;lastPub=now;
   gz::msgs::Float a;a.set_data(v);speedPub.Publish(a);
   gz::msgs::Float b;b.set_data(steer);steerPub.Publish(b);
+ }
+ double curve(double distance)const{
+   const auto a=sample(distance-1.),b=sample(distance+1.);
+   return wrap(b.yaw-a.yaw)/2.;
  }
  Pt sample(double distance)const{
   double d=std::fmod(distance,lap);if(d<0)d+=lap;
@@ -178,7 +209,7 @@ class PracticeTraffic__NUM__ final:public gz::sim::System,
   route=maps[which].second;
   lap=route.back().s+std::hypot(route.front().x-route.back().x,
                                 route.front().y-route.back().y);
-  s=chosenS;lateral=chosenLat;
+  s=chosenS;lateral=chosenLat;initialLateral=chosenLat;
   const auto p=sample(s);
   xPrev=p.x-lateral*std::sin(p.yaw);
   yPrev=p.y+lateral*std::cos(p.yaw);yawPrev=p.yaw;
@@ -195,7 +226,7 @@ class PracticeTraffic__NUM__ final:public gz::sim::System,
  gz::math::Pose3d initial;
  std::vector<Pt>route;
  std::vector<std::pair<std::string,std::vector<Pt>>> maps;
- double s=0,lap=0,lateral=0,speed=0,last=0,t0=0,lastPub=-1e9,
+ double s=0,lap=0,lateral=0,initialLateral=0,speed=0,last=0,t0=0,lastPub=-1e9,
         xPrev=0,yPrev=0,yawPrev=0;
 };
 }
@@ -294,7 +325,7 @@ for number, role, pace in [(1, "weaving_lead", 9.0), (2, "following_rear", 11.0)
     team = f"team_{short}"
     root = ROOT / "src/team" / team
     if root.exists():
-        shutil.rmtree(root)
+        raise RuntimeError(f"{root} exists: refusing to overwrite a practice team folder")
     for d in ["models/practice_car", f"src/{team}/models/practice_car", "maps",
               "pose_plugin", "launch", f"team{short}_race", "scripts",
               "resource"]:
