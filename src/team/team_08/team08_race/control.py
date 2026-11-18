@@ -1,394 +1,69 @@
-"""TEAM08 independent replay controller: no world spawning, no map edits."""
+"""TEAM08 camera/gate-only start. Motion is native Gazebo SetWorldPoseCmd."""
 from __future__ import annotations
-import math
 import time
-from pathlib import Path
-
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Float32
-from sensor_msgs.msg import Image, LaserScan
-from tf2_msgs.msg import TFMessage
-from nav_msgs.msg import Odometry
-
-from team08_race.planner import Planner, RouteMap
-from team08_race.perception import LaserTracker
-from team08_race.strategy import RaceDirector, Decision
-from team08_race.start_policy import choose_start
+from std_msgs.msg import Bool
+from sensor_msgs.msg import Image
 from team08_race.camera_start import LightTransition, red_evidence
-from team08_race.pose_decode import (
-    extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
-)
-from team08_race.trackdetect import (TRACKS, discover_world, map_assets,
-                                      matching_grid, match_map_from_spawn)
 
-
-def share_directory():
-    try:
-        from ament_index_python.packages import get_package_share_directory
-        return Path(get_package_share_directory("team08_race"))
-    except (ImportError,LookupError):
-        return Path(__file__).resolve().parents[1]
-
-
-def quaternion_yaw(q):
-    return math.atan2(2.*(q.w*q.z+q.x*q.y),
-                      1.-2.*(q.y*q.y+q.z*q.z))
-
-
-class Team08Control(Node):
+class Start(Node):
     def __init__(self):
-        super().__init__("team08_controller_08")
-        for k,v in (
-            ("race_start_mode","camera"),
-            ("race_start_topic","/race/start/team_08"),
-            ("speed_topic","/team08/speed_08"),
-            ("steering_topic","/team08/steering_08"),
-            ("max_speed_mps",15.0)):
-            self.declare_parameter(k,v)
-        self.mode=str(self.get_parameter("race_start_mode").value)
-        if self.mode not in ("signal","camera"):
-            raise ValueError("Invalid race_start_mode")
-        self.allowed=False
-        self.camera_go=False
-        self.camera_gate=LightTransition()
-        self.camera_frames=0
-        self.gate_true_at=0.
-        self.start_source=""
-        self.last_strategy_reason=""
-        self.perception=LaserTracker()
-        self.director=RaceDirector()
-        self.camera_processed=0
-        self.pose_frames=0
-        self.pose_unrecognized=0
-        self.last_tf_wall=0.
-        self.odom_frames=0
-        self.odom_world_valid=False
-        self.odom_rejected=0
-        self.last_odom_probe=0.
-        self.pose_source=""
-        self.pose=None
-        self.pose_wall=0.
-        self.last_tick=0.
-        self.last_discover=0.
-        self.track=None
-        self.grid=None
-        self.planner=None
-        self.announced=False
-        self.camera_announced=False
-        self.last_report=0.
-        self.last_health_report=0.
-        self.unknown_start_at=0.
-        self.front_clearance_m=0.0
-        self.started_at=time.monotonic()
-        self.share=share_directory()
-        self.speed_pub=self.create_publisher(
-            Float32,str(self.get_parameter("speed_topic").value),10)
-        self.steer_pub=self.create_publisher(
-            Float32,str(self.get_parameter("steering_topic").value),10)
-        self.create_subscription(Bool,str(self.get_parameter("race_start_topic").value),
-                                 self.gate_callback,10)
-        self.create_subscription(TFMessage,"/team08/pose_08",
-                                 self.pose_callback,10)
-        # Independent Ackermann odometry, accepted as map/world coordinates
-        # only after matching a unique bundled start grid.
-        self.create_subscription(Odometry,"/team08/odom_08",
-                                 self.odom_callback,10)
-        self.create_subscription(Image,"/team08/start_image_08",
-                                 self.camera_callback,10)
-        self.create_subscription(LaserScan,"/team08/front_scan_08",
-            lambda msg:self.scan_callback(msg,"front"),10)
-        self.create_subscription(LaserScan,"/team08/rear_scan_08",
-            lambda msg:self.scan_callback(msg,"rear"),10)
-        self.create_timer(.05,self.tick)
-        self.get_logger().info("TEAM08 initialized; awaiting own pose, world and race gate")
-
-    def publish(self,speed,steering):
-        self.speed_pub.publish(Float32(data=float(speed)))
-        self.steer_pub.publish(Float32(data=float(steering)))
-
-    def gate_callback(self,msg):
-        previously=self.allowed
-        self.allowed=bool(msg.data)
-        if self.allowed and not previously:
-            self.gate_true_at=time.monotonic()
-        if not self.allowed:
-            self.publish(0.,0.)
-            self.get_logger().info("TEAM08 external race gate FALSE; drive stopped")
-        else:
-            self.get_logger().info(
-                "TEAM08 external race gate TRUE; camera_frames=%s "
-                "red_seen=%s all_off=%s pose_frames=%s own_pose=%s map=%s" %
-                (self.camera_frames,self.camera_gate.saw_red,self.camera_go,
-                 self.pose_frames,self.pose is not None,self.track))
-
-    def pose_callback(self,msg):
-        # Gazebo PosePublisher -> private /team08/pose_08. The Pose_V->TF
-        # converter may name frames as team_08, team_08::base_link or
-        # base_link. Prefer the model world pose over a relative link pose.
-        self.pose_frames+=1
-        result=extract_vehicle_pose(msg)
-        if result is None:
-            self.pose_unrecognized+=1
-            if self.pose_unrecognized in (1,40,200):
-                self.get_logger().warning(
-                    "TEAM08 own pose TF frames unrecognized: %s" %
-                    (pose_frame_examples(msg),))
+        super().__init__("team08_camera_start_08")
+        self.declare_parameter("race_start_topic", "/race/start/team_08")
+        self.declare_parameter("use_sim_time", True)
+        self.gate = False
+        self.gate_at = 0.0
+        self.frames = 0
+        self.transition = LightTransition()
+        self.publisher = self.create_publisher(Bool, "/team08/replay_go_08", 10)
+        self.create_subscription(
+            Bool, str(self.get_parameter("race_start_topic").value), self.on_gate, 10)
+        self.create_subscription(
+            Image, "/team08/start_image_08", self.on_image, 10)
+        self.create_timer(.05, self.tick)
+        self.reported = False
+    def on_gate(self, msg):
+        flag = bool(msg.data)
+        if not flag:
+            self.gate_at = 0.0
+            self.reported = False
+        elif not self.gate:
+            self.gate_at = time.monotonic()
+        self.gate = flag
+        if not flag:
+            self.publisher.publish(Bool(data=False))
+    def on_image(self, msg):
+        self.frames += 1
+        if self.frames % 2:
             return
-        x,y,z,yaw,frame=result
-        if self.pose is None:
-            self.get_logger().info(
-                "TEAM08 own pose ready: frame=%s xyz=(%.3f,%.3f,%.3f) yaw=%.3f" %
-                (frame,x,y,z,yaw))
-        self.pose=(x,y,z,yaw)
-        self.pose_source=frame
-        self.pose_wall=time.monotonic()
-        self.last_tf_wall=self.pose_wall
-
-    def odom_callback(self,msg):
-        self.odom_frames+=1
-        now=time.monotonic()
-        # Prefer the native own-model world pose whenever it is fresh.
-        if now-self.last_tf_wall<0.5:
-            return
-        p=msg.pose.pose.position
-        q=msg.pose.pose.orientation
-        values=(float(p.x),float(p.y),float(p.z),
-                float(yaw_from_quaternion(q)))
-        if not all(math.isfinite(v) for v in values):
-            return
-        if not self.odom_world_valid:
-            if now-self.last_odom_probe<1.0:
-                return
-            self.last_odom_probe=now
-            # An Ackermann odom stream may be local to the wheel origin.
-            # Never treat local (0,0,0) as the global world pose.
-            if match_map_from_spawn(self.share,values) is None:
-                self.odom_rejected+=1
-                if self.odom_rejected in (1,5,20):
-                    self.get_logger().warning(
-                        "TEAM08 odom not world-aligned; ignoring frame=%s "
-                        "xyz=(%.3f,%.3f,%.3f)" %
-                        (msg.header.frame_id,*values[:3]))
-                return
-            self.odom_world_valid=True
-            self.get_logger().info(
-                "TEAM08 independent odom aligned with official start grid; "
-                "using as own pose fallback")
-        self.pose=values
-        self.pose_wall=now
-        self.pose_source="self_odom_world_aligned"
-
-    def scan_callback(self,msg,side):
-        if side=="front":
-            try:
-                self.front_clearance_m=min(
-                    (float(r) for i,r in enumerate(msg.ranges)
-                     if math.isfinite(float(r)) and float(msg.range_min)<float(r)<float(msg.range_max)
-                     and abs(float(msg.angle_min)+i*float(msg.angle_increment))<.30),
-                    default=0.0)
-            except (TypeError,ValueError):
-                self.front_clearance_m=0.0
-        if self.pose is None:
-            return
-        scan_now=time.monotonic()
-        # Gazebo sensors run at 30Hz each; process at most 15Hz per side
-        # to prevent LiDAR callbacks from starving pose and control timers.
-        last=self.perception.last_front if side=="front" else self.perception.last_rear
-        if scan_now-last<.06:
-            return
-        try:
-            self.perception.update(
-                msg.ranges,float(msg.angle_min),float(msg.angle_increment),
-                float(msg.range_min),float(msg.range_max),side,self.pose,
-                self.planner.speed if self.planner is not None else 0.,
-                scan_now)
-        except (TypeError,ValueError,OverflowError) as exc:
-            self.get_logger().warning(
-                "TEAM08 %s LiDAR invalid: %s" % (side,str(exc)))
-
-    def camera_callback(self,msg):
-        self.camera_frames+=1
-        # 20Hz RGB source -> 10Hz high-resolution detection. Four dark
-        # frames still require real successive camera updates.
-        if self.camera_frames%2:
-            return
-        self.camera_processed+=1
-        amount=red_evidence(msg.data,int(msg.width),int(msg.height),
-                            int(msg.step),str(msg.encoding))
-        previous_red=self.camera_gate.saw_red
-        self.camera_go=self.camera_gate.update(amount)
-        if not previous_red and self.camera_gate.saw_red:
-            self.get_logger().info(
-                "TEAM08 camera red confirmed: evidence=%d peak=%d" %
-                (amount,self.camera_gate.peak))
-        if self.camera_go and not self.camera_announced:
-            self.get_logger().info(
-                "TEAM08 camera LIGHTS OUT confirmed (red->dark stable); "
-                "race gate also required")
-            self.camera_announced=True
-
-    def report_wait(self,now,reason):
-        if now-self.last_health_report<3.0:
-            return
-        self.last_health_report=now
-        self.get_logger().warning(
-            "TEAM08 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
-            "camera_processed=%d red_seen=%s evidence=%d peak=%d camera_out=%s "
-            "pose_messages=%d unmatched_pose=%d odom_frames=%d "
-            "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
-            "track=%s grid=%s lidar_frames=%d nearby=%d "
-            "adjacent_moving=%s start_source=%s strategy=%s" %
-            (reason,self.allowed,self.mode,self.camera_frames,
-             self.camera_processed,self.camera_gate.saw_red,self.camera_gate.last_red,
-             self.camera_gate.peak,self.camera_go,self.pose_frames,
-             self.pose_unrecognized,self.odom_frames,
-             self.odom_world_valid,self.pose_source,
-             self.pose is not None and now-self.pose_wall<=1.,
-             self.track,self.grid,self.perception.frames,
-             len(self.perception.visible(now)),
-             self.perception.neighbor_motion(self.pose,now)
-                if self.pose is not None else False,
-             self.start_source,self.last_strategy_reason))
-
-    def prepare_route(self,now):
-        if self.pose is None or self.planner is not None:
-            return
-        if now-self.last_discover<1.0:
-            return
-        self.last_discover=now
-        try:
-            # Spawn pose uniquely identifies all six official start grids.
-            # Match it first: the external 'gz topic -l' subprocess may block
-            # the single-threaded rclpy executor and starve camera/pose input.
-            result=match_map_from_spawn(self.share,self.pose)
-            if result is not None:
-                name,slot=result
-            else:
-                name=discover_world()
-                if name is None:
-                    self.report_wait(now,"MAP_NOT_IDENTIFIED_FROM_SPAWN")
-                    return
-                try:
-                    slot=matching_grid(map_assets(self.share,name),self.pose)
-                except ValueError:
-                    slot=None
-            path=map_assets(self.share,name)
-            route=RouteMap(path)
-            s,error,_=route.nearest(*self.pose[:2])
-            if error>1.5:
-                self.report_wait(now,"ROUTE_TOO_FAR")
-                return
-            center_yaw=route.center[route.last_index][3]
-            heading_error=math.atan2(math.sin(self.pose[3]-center_yaw),
-                                     math.cos(self.pose[3]-center_yaw))
-            if abs(heading_error)>.8:
-                self.report_wait(now,"ROUTE_HEADING_MISMATCH")
-                return
-            lane=min(range(3),key=lambda k:
-                     math.hypot(route.sample(k,s)[0]-self.pose[0],
-                                route.sample(k,s)[1]-self.pose[1]))
-            self.planner=Planner(
-                route,lane,max_speed=float(self.get_parameter("max_speed_mps").value),
-                external_strategy=True)
-            self.track=name
-            self.grid=slot
-            self.get_logger().info(f"TEAM08 map={name} grid={slot} initial_route={lane+1}")
-        except (OSError,ValueError,KeyError) as exc:
-            if now-self.last_report>3.:
-                self.get_logger().warning(f"TEAM08 map identification pending: {exc}")
-                self.last_report=now
-
+        amount = red_evidence(
+            msg.data, int(msg.width), int(msg.height),
+            int(msg.step), str(msg.encoding))
+        self.transition.update(amount)
     def tick(self):
-        now=time.monotonic()
-        if self.pose is None or now-self.pose_wall>1.:
-            self.publish(0.,0.)
-            self.report_wait(now,"NO_OWN_POSE")
-            return
-        if self.planner is None:
-            self.prepare_route(now)
-        permission=choose_start(
-            self.mode,self.allowed,self.camera_gate.started,
-            self.perception.neighbor_motion(self.pose,now),
-            self.perception.neighbor_present(self.pose,now),
-            now-self.gate_true_at if self.gate_true_at else 0.)
-        if permission is None:
-            self.publish(0.,0.)
-            self.last_tick=0.
-            if self.allowed:
-                self.report_wait(now,"CAMERA_OR_NEIGHBOR_NOT_READY")
-            return
-        if not self.start_source:
-            self.start_source=permission
-            self.get_logger().info("TEAM08 START source=%s" % permission)
-        self.camera_go=True
-        if self.planner is None:
-            # Grid unknown: after authorized start, creep straight briefly
-            # while matching one of this package's six saved track maps.
-            if not self.unknown_start_at:
-                self.unknown_start_at=now
-            if (now-self.unknown_start_at<=1.5 and
-                now-self.perception.last_front<.5 and
-                self.front_clearance_m>=2.0):
-                self.publish(2.0,0.0)
-                self.report_wait(now,"GRID_UNKNOWN_STRAIGHT_SEARCH")
-            else:
-                self.publish(0.,0.)
-                self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
-            return
-        dt=.05 if self.last_tick<=0 else min(.20,now-self.last_tick)
-        self.last_tick=now
-        decision=Decision(None,float("inf"),"ROUTE_INITIALIZING")
-        if self.planner.last_s is not None:
-            decision=self.director.choose(
-                self.planner,self.pose,self.perception.visible(now),now)
-            if decision.lane is not None:
-                moved=self.planner.request_lane(decision.lane,decision.reason)
-                if moved:
-                    self.get_logger().info(
-                        "TEAM08 STRATEGY %s lane=%d -> %d threat=%d ttc=%.2f" %
-                        (decision.reason,self.planner.lane+1,
-                         self.planner.target+1,decision.target_id,decision.ttc))
-        self.last_strategy_reason=decision.reason
-        speed,steer,status=self.planner.step(
-            self.pose,dt,traffic_speed_cap=decision.speed_cap)
-        if status not in ("DRIVE","BAD_DT"):
-            self.publish(0.,0.)
-            if not self.announced:
-                self.get_logger().error(f"TEAM08 SAFE STOP reason={status}")
-                self.announced=True
-            return
-        self.publish(speed,steer)
-        if now-self.last_report>1.0:
-            self.get_logger().info(
-                f"map={self.track} route={self.planner.target+1} "
-                f"speed={speed:.2f} steering_right_deg={math.degrees(steer):.1f} "
-                f"physical_distance={self.planner.travel:.1f} "
-                f"laps={self.planner.laps} "
-                f"strategy={self.last_strategy_reason} "
-                f"start={self.start_source} targets={len(self.perception.visible(now))}")
-            self.last_report=now
-
+        # Camera red-to-dark is primary. The official gate is authoritative
+        # after lights-out, so solo test can start even when the camera missed
+        # the red pixels; never move before the organizer releases its gate.
+        fallback = self.gate_at > 0 and time.monotonic()-self.gate_at >= .75
+        start = self.gate and (self.transition.started or fallback)
+        self.publisher.publish(Bool(data=start))
+        if start and not self.reported:
+            self.reported = True
+            reason = "CAMERA_LIGHTS_OUT" if self.transition.started else "OFFICIAL_GATE_SOLO"
+            self.get_logger().info("TEAM08 direct-pose START source="+reason)
 
 def main():
     rclpy.init()
-    node=Team08Control()
+    node=Start()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
     finally:
-        # SIGINT may already have invalidated the ROS context; never publish
-        # into a shutdown context (the v11 log's secondary exception).
         if rclpy.ok():
-            try:
-                node.publish(0.,0.)
-            except Exception:
-                pass
+            node.publisher.publish(Bool(data=False))
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
 
 if __name__=="__main__":
     main()

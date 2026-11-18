@@ -17,7 +17,7 @@ setup(
     ],
     install_requires=['setuptools'], zip_safe=True,
     maintainer='team08', maintainer_email='team08@example.invalid',
-    description='TEAM08 self-contained six-track competition path follower',
+    description='Legacy metadata only: actual build uses CMakeLists.txt / ament_cmake',
     license='MIT',
     entry_points={'console_scripts': [
       'team08_control = team08_race.control:main',
