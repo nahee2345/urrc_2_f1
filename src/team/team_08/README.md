@@ -100,3 +100,22 @@ the separate `pose_plugin/Team08Pose.cc` controller and must not be
 described as having the complete proven strategy until it is ported there
 and independently tested. The renamed rehearsal has not yet been run
 on a real ROS2+Gazebo machine.
+
+## TEAM08 start policy (2026-11-18)
+
+TEAM08 **does not use a camera**, including for start detection.
+The controller subscribes only to the organizer's
+`/race/start/team_08` (ROS 2 Bool) and bridges that value to Gazebo
+`/team08/replay_go_08`. The operator must publish TRUE **only after all
+five start lights have switched off**. There is no timer, neighbor-vehicle,
+or image-triggered release. When FALSE, `Team08Pose_08` continuously
+commands the original spawn pose and publishes zero speed; check actual
+Gazebo prestart displacement in a live test before declaring a zero-motion
+guarantee. The scripted `battle08` baseline uses its independent Gazebo
+lights-out start and remains unchanged.
+
+The current official `urrc_f1_ws` v21/v24 rehearsal enforces a per-team
+camera-frame readiness check even in signal mode. TEAM08 has no camera,
+so **that operator-side readiness policy is incompatible** and must be
+adjusted/approved by the organizer before the official rehearsal can pass.
+Do not re-enable a camera simply to bypass the rule.
