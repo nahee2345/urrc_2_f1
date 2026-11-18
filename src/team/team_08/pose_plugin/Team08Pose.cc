@@ -750,7 +750,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   minimumClearance=std::min(minimumClearance,
       std::min(hasLead?clearance(a,b):1e9,hasRear?clearance(a,c):1e9));
   gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,
-     gz::math::Pose3d(a.x,a.y,a.z+.09,0,0,a.yaw));
+     gz::math::Pose3d(a.x,a.y,a.z+.04,0,0,a.yaw));
    const double rate=wrap(a.yaw-previousTeam.yaw)/std::max(.001,dt);
    publishControls(team.v,std::clamp(std::atan2(rate*.34,std::max(.1,team.v)),-.52,.52));
    if(now-lastCsv>=.1){
