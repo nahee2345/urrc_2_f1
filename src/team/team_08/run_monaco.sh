@@ -27,4 +27,4 @@ from preview_visual_v19 import ensure_assets
 ensure_assets(root,"monaco")
 PY
 echo "[TEAM08] Monaco vehicles grid 1; input READY on terminal after GUI loads"
-exec bash race_v24.sh rehearse vehicles --track monaco --team team_08 --seconds 300 --start-mode camera
+exec bash race_v24.sh rehearse vehicles --track monaco --team team_08 --seconds 300 --start-mode signal
