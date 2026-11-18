@@ -191,6 +191,6 @@
     <update_frequency>40</update_frequency>
     <topic>/team08/pose_08</topic>
   </plugin>
-    <plugin filename="libteam08_pose.so" name="urrc::Team08Pose"/>
+    <plugin filename="libteam08_pose_08.so" name="urrc::Team08Pose_08"/>
   </model>
 </sdf>
