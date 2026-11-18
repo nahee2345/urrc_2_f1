@@ -298,9 +298,9 @@ target_compile_features(team__SHORT___practice PRIVATE cxx_std_17)
 ament_target_dependencies(team__SHORT___practice ament_index_cpp)
 target_link_libraries(team__SHORT___practice gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
 install(TARGETS team__SHORT___practice LIBRARY DESTINATION lib)
-install(PROGRAMS scripts/team__SHORT___control DESTINATION lib/\${PROJECT_NAME})
-install(DIRECTORY launch maps models DESTINATION share/\${PROJECT_NAME})
-install(FILES race_entry.json DESTINATION share/\${PROJECT_NAME})
+install(PROGRAMS scripts/team__SHORT___control DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch maps models DESTINATION share/${PROJECT_NAME})
+install(FILES race_entry.json DESTINATION share/${PROJECT_NAME})
 ament_package()
 '''
 PACKAGE = '''<?xml version="1.0"?>
@@ -308,7 +308,7 @@ PACKAGE = '''<?xml version="1.0"?>
   <name>team__SHORT___race</name>
   <version>0.1.0</version>
   <description>Independent TEAM__SHORT__ practice racing entrant</description>
-  <maintainer email="team08@localhost">URRC Practice</maintainer>
+  <maintainer email="practice@example.com">URRC Practice</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <build_depend>ament_cmake_python</build_depend>
