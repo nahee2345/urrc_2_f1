@@ -7,10 +7,17 @@ cd "$ROOT"
 if [[ ! -d .git ]]; then
   echo "Must run inside urrc_2_f1 Git checkout" >&2; exit 1
 fi
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Working tree has tracked modifications; refusing to overwrite them" >&2
-  exit 1
-fi
+# TEAM08 may have source files restored from origin/main while the local
+# branch is behind; those changes are intentionally preserved.
+# Refuse to overwrite user edits to official-managed paths.
+while IFS= read -r modified; do
+  case "$modified" in
+    race/*|race_v*.sh|src/urrc_track_gazebo/*)
+      echo "Locally modified official file: $modified" >&2
+      echo "Review this change before synchronizing." >&2
+      exit 1 ;;
+  esac
+done < <(git diff --name-only; git diff --cached --name-only)
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 git clone --quiet --depth 1 --branch main https://github.com/nahee2345/urrc_f1_ws.git "$TMP/official"
