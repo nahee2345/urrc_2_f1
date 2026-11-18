@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Official-map qualifying rehearsal for TEAM08. No changes to organizer tooling.
-set -euo pipefail
+set -eo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 source /opt/ros/jazzy/setup.bash
