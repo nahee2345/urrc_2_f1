@@ -8,7 +8,7 @@ lights, race gate and lap timing.
 ## Runtime
 
 - The **active** motion system is `pose_plugin/Team08Pose.cc`, built as
-  `libteam08_pose.so` with ROS 2 ament_cmake + gz-sim8.
+  `libteam08_pose_08.so` with ROS 2 ament_cmake + gz-sim8.
 - The saved prior implementation is `legacy/BattleReplay.cc`. It is a
   **reference archive**, not the active plugin. The active code reuses its
   interpolation, easing, yaw blending and baseline speed rules, but is
