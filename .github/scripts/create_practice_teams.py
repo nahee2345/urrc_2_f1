@@ -269,6 +269,7 @@ if __name__=="__main__":
 LAUNCH = '''
 from launch import LaunchDescription
 from launch_ros.actions import Node
+# Official start gate: /race/start/team___SHORT__
 
 def generate_launch_description():
     return LaunchDescription([
@@ -277,10 +278,12 @@ def generate_launch_description():
                 "/team__SHORT__/replay_go___SHORT__@std_msgs/msg/Bool]gz.msgs.Boolean",
                 "/team__SHORT__/speed___SHORT__@std_msgs/msg/Float32[gz.msgs.Float",
                 "/team__SHORT__/steering___SHORT__@std_msgs/msg/Float32[gz.msgs.Float",
-                "/team__SHORT__/front_scan___SHORT__@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan"
+                "/team__SHORT__/front_scan___SHORT__@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
+                "/team__SHORT__/front_camera___SHORT__/image@sensor_msgs/msg/Image[gz.msgs.Image"
              ],output="screen"),
         Node(package="team__SHORT___race",executable="team__SHORT___control",
-             name="team__SHORT___practice_control",output="screen")
+             name="team__SHORT___practice_control",output="screen",
+             parameters=[{"use_sim_time": True}])
     ])
 '''
 CMAKE = '''
