@@ -1,5 +1,5 @@
-// Three-car Gazebo kinematic scenario: 9m/s S-traffic, team11, 11m/s grid10 pursuer.
-// Uses direct pose commands. SAT-shaped collision checks; no camera or wheel dynamics.
+// Official TEAM08 model plugin using original Monaco-tested BattleReplay08 control core.
+// The validated legacy/BattleReplay08.cc is preserved unmodified.
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
@@ -70,8 +70,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    const double now=std::chrono::duration<double>(info.simTime).count();
    if(!ok&&!init(ecm,now))return;
    if(!startSignal.load()){
-     gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,spawnPose);
-     last=now;publishControls(0,0);return;
+     if(!started)gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,spawnPose);
+     last=now;team.v=0.;publishControls(0,0);return;
    }
    if(!started){started=true;begin=now;last=now;lastCsv=now;
      joinPending=false;
@@ -435,7 +435,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
       comfortSpeed=teamCruise;
     }
   }
-  // Preserve a locally safe acceleration window; the existing 2.5s
+  if(!hasLead&&!hasRear)comfortSpeed=curvatureSpeedLimit;
+   // Preserve a locally safe acceleration window; the existing 2.5s
   // following forecast otherwise repeatedly resets the limit to 9m/s.
   if(passingSpeedWindow>comfortSpeed)comfortSpeed=passingSpeedWindow;
   // Keep lane choice and speed together throughout a committed overtake.
@@ -502,7 +503,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     // The emergency ceiling is not the normal 10m/s cruise target:
     // collision-checked passes must still be able to reach 15m/s.
     speedCeiling=MAX_TEAM_SPEED;
-    if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
+    if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
       for(double trial:{15.,14.,13.,12.,11.,10.5,9.,7.,5.,3.,1.,0.}){
         if(trial>vt+.01)continue;
@@ -595,7 +596,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     // Forward collision speed planning must not include an overtaken car.
     // Rear and side vehicles remain checked in lane-change forecasts.
     const double risk=forecast(dst,elapsed,now,team.changing,vt,horizon,false);
-    if(risk<0.){
+    if((hasLead||hasRear)&&risk<0.){
       bool found=false;
       for(double candidate:{15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.,2.,1.,0.}){
         if(candidate>vt+.01)continue;
@@ -606,7 +607,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
         }
       }
       if(!found){
-        const bool actualFrontCar=lead.s>=team.s-LEN*.5;
+        const bool actualFrontCar=hasLead&&lead.s>=team.s-LEN*.5;
         // A zero-speed target is reserved for a genuine forward hazard.
         // If an S-car has already been passed, do not create a rear impact.
         raceSafeTarget=actualFrontCar?0.:MAX_TEAM_SPEED;
@@ -689,7 +690,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     if(raceMode){
       const std::array<double,3> currentS{{team.s,lead.s,rear.s}};
       for(int i=0;i<3;++i){
-        const double sampleS=previousS[i]+t*(currentS[i]-previousS[i]);
+        if((i==1&&!hasLead)||(i==2&&!hasRear))continue;
+         const double sampleS=previousS[i]+t*(currentS[i]-previousS[i]);
         const double margin=roadMargin(snapshot[i],sampleS);
         minWallMargin=std::min(minWallMargin,margin);
         if(margin<=0.){
@@ -722,8 +724,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
         }
       }
     }
-    const double clearanceLead=clearance(ap,bp);
-    const double clearanceRear=clearance(ap,cp);
+    const double clearanceLead=hasLead?clearance(ap,bp):1e9;
+    const double clearanceRear=hasRear?clearance(ap,cp):1e9;
     minimumClearance=std::min(minimumClearance,
                               std::min(clearanceLead,clearanceRear));
     const double required=fabs(curve(team.s))>.18?CORNER_GAP:STRAIGHT_GAP;
@@ -746,7 +748,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
   }
   minimumClearance=std::min(minimumClearance,
-      std::min(clearance(a,b),clearance(a,c)));
+      std::min(hasLead?clearance(a,b):1e9,hasRear?clearance(a,c):1e9));
   gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,
      gz::math::Pose3d(a.x,a.y,a.z+.09,0,0,a.yaw));
    const double rate=wrap(a.yaw-previousTeam.yaw)/std::max(.001,dt);
