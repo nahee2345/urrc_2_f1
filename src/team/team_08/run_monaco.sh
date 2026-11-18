@@ -15,7 +15,7 @@ bash race_v24.sh prepare
 set +u
 source "$ROOT/race/install/setup.bash"
 set -u
-LIB="$ROOT/race/install/lib/libteam08_pose.so"
+LIB="$ROOT/race/install/lib/libteam08_pose_08.so"
 [ -f "$LIB" ] || { echo "Gazebo TEAM08 plugin missing: $LIB" >&2; exit 2; }
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$ROOT/race/install/lib:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
 python3 - <<'PY'
