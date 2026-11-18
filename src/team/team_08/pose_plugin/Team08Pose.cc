@@ -37,7 +37,7 @@ double ease(double t){t=clamp(t,0.,1.);return t*t*t*(10.+t*(-15.+6.*t));}
 struct Pt{double s,x,y,z,yaw,width;};
 struct Pose{double x=0,y=0,z=0,yaw=0;};
 struct Other {std::string id;bool found=false;Pose pose;double speed=0;double last=0;Pose before;};
-class Team08Pose final:public gz::sim::System,
+class Team08Pose_08 final:public gz::sim::System,
                        public gz::sim::ISystemConfigure,
                        public gz::sim::ISystemPreUpdate {
  public:
@@ -60,7 +60,7 @@ class Team08Pose final:public gz::sim::System,
        if(points.size()>=200)maps.push_back({track,std::move(points)});
      }
    }catch(const std::exception&e){std::cerr<<"[TEAM08 POSE] map load: "<<e.what()<<std::endl;}
-   node.Subscribe("/team08/replay_go_08",&Team08Pose::onStart,this);
+   node.Subscribe("/team08/replay_go_08",&Team08Pose_08::onStart,this);
    speedPub=node.Advertise<gz::msgs::Float>("/team08/speed_08");
    steerPub=node.Advertise<gz::msgs::Float>("/team08/steering_08");
    std::cout<<"[TEAM08 POSE] loaded "<<maps.size()<<" maps; awaits gate/camera"<<std::endl;
@@ -252,5 +252,5 @@ class Team08Pose final:public gz::sim::System,
  Pose lastPose;
 };
 }
-GZ_ADD_PLUGIN(urrc::Team08Pose,gz::sim::System,urrc::Team08Pose::ISystemConfigure,urrc::Team08Pose::ISystemPreUpdate)
-GZ_ADD_PLUGIN_ALIAS(urrc::Team08Pose,"urrc::Team08Pose")
+GZ_ADD_PLUGIN(urrc::Team08Pose_08,gz::sim::System,urrc::Team08Pose_08::ISystemConfigure,urrc::Team08Pose_08::ISystemPreUpdate)
+GZ_ADD_PLUGIN_ALIAS(urrc::Team08Pose_08,"urrc::Team08Pose_08")
