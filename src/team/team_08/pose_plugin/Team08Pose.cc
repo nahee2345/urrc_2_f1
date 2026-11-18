@@ -72,7 +72,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    if(!ok&&!init(ecm,now))return;
    if(!startSignal.load()){
      if(!started)gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,spawnPose);
-     last=now;team.v=0.;publishControls(0,0);return;
+     last=now;team.v=0.;publishControls(0,0,now);return;
    }
    if(!started){started=true;begin=now;last=now;lastCsv=now;
      joinPending=false;
@@ -82,7 +82,13 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   lastElapsed=elapsed;
   // Use actual simulation-time delta. Limiting dt to 50ms dropped distance
   // whenever Gazebo advances in larger steps and caused visible stutter.
-  const double dt=std::clamp(now-last,0.,.2);last=now;
+  // Run the unchanged Monaco controller at 200 Hz maximum. Gazebo can
+  // update physics much faster; running all collision forecasts at every
+  // 1 ms tick starves rendering and ROS pose/clock forwarding.
+  // Keep actual accumulated simulation dt, never discard elapsed time.
+  const double rawDt=now-last;
+  if(rawDt<0.005)return;
+  const double dt=std::clamp(rawDt,0.,.2);last=now;
   if(dt<=0)return;
   // Preserve previous poses BEFORE lateral and longitudinal motion.
   // Needed to orient each car along its actual diagonal travel tangent.
@@ -753,7 +759,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   gz::sim::Model(team.entity).SetWorldPoseCmd(ecm,
      gz::math::Pose3d(a.x,a.y,a.z+.04,0,0,a.yaw));
    const double rate=wrap(a.yaw-previousTeam.yaw)/std::max(.001,dt);
-   publishControls(team.v,std::clamp(std::atan2(rate*.34,std::max(.1,team.v)),-.52,.52));
+   publishControls(team.v,std::clamp(std::atan2(rate*.34,std::max(.1,team.v)),-.52,.52),now);
    if(now-lastCsv>=.1){
     report<<std::fixed<<std::setprecision(4)<<elapsed<<','<<team.s<<','<<team.lat<<','<<team.v<<','
           <<lead.s<<','<<lead.lat<<','<<lead.v<<','<<rear.s<<','<<rear.lat<<','<<rear.v<<','
@@ -817,7 +823,11 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   previousRearTTC=rearTTC;
  }
  private:
- void publishControls(double v,double steer){
+ void publishControls(double v,double steer,double now){
+   // ROS telemetry does not need the 200 Hz pose-controller rate.
+   // 40 Hz reduces Gazebo->ROS bridge and monitor message pressure.
+   if(now-lastTelemetryPublish<.025)return;
+   lastTelemetryPublish=now;
    gz::msgs::Float a;a.set_data(static_cast<float>(v));speedPub.Publish(a);
    gz::msgs::Float b;b.set_data(static_cast<float>(steer));steerPub.Publish(b);
  }
@@ -1142,6 +1152,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
  bool hasLead=false,hasRear=false;
  double leadObservedAt=0,rearObservedAt=0;
+ double lastTelemetryPublish=-1e9;
  gz::transport::Node node;gz::transport::Node::Publisher ready;
  std::atomic<bool> startSignal{false};
  std::vector<Pt>route;Car team,lead,rear;
