@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+# Run through one public command: bash run.sh battle monza
+TRACK="${1:-monza}"
+GRID="${2:-2}"
+LANE="${3:-}"
+MODE="${4:-normal}"
+case "$MODE" in normal|defense|race3) ;; *) echo "Mode must be normal, defense or race3" >&2;exit 2;; esac
+case "$GRID" in 1|2|3) ;; *) echo "Grid must be 1, 2 or 3" >&2;exit 2;; esac
+if [[ -z "$LANE" ]];then
+  if [[ "$GRID" == 2 ]];then LANE=1;else LANE=3;fi
+fi
+case "$LANE" in 1|2|3) ;; *) echo "Lane must be 1, 2 or 3" >&2;exit 2;; esac
+# In the three-lap tournament, starting grid determines lane deterministically.
+if [[ "$MODE" == race3 ]]; then
+  if [[ "$GRID" != 2 && "$GRID" != 3 ]]; then
+    echo "race3 TEAM08 must start at grid 2 or 3 (red car at grid 1)" >&2
+    exit 2
+  fi
+  EXPECTED_LANE=3
+  if [[ "$GRID" == 2 ]]; then EXPECTED_LANE=1; fi
+  if [[ "$LANE" != "$EXPECTED_LANE" ]]; then
+    echo "race3 fixed assignment: TEAM08 grid 2 -> lane 1; grid 3 -> lane 3" >&2
+    exit 2
+  fi
+fi
+case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *)
+  echo "Valid tracks: monza spa monaco cota hungaroring baku" >&2;exit 2 ;;
+esac
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+PKG="$ROOT/src/urrc_track_gazebo"
+LOG="$ROOT/log/battle08/${TRACK}_grid${GRID}_lane${LANE}_${MODE}/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$LOG"
+export GZ_PARTITION="urrc_battle08_$(id -u)_$(date +%s)"
+export PYTHONUNBUFFERED=1
+export GZ_SIM_RESOURCE_PATH="$PKG/models${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}"
+if ! command -v gz >/dev/null || ! command -v cmake >/dev/null;then
+  echo "Gazebo Harmonic and cmake required" >&2;exit 3
+fi
+set +u
+source /opt/ros/jazzy/setup.bash
+set -u
+if ! ros2 pkg prefix ros_gz_sim >/dev/null 2>&1;then
+  echo "ROS2 Jazzy ros_gz_sim required" >&2;exit 3
+fi
+echo "[1/6] Verify six official maps and signal logic"
+if ! /usr/bin/python3 import_6_tracks.py \
+  --official "${URRC_OFFICIAL_WS:-$HOME/urrc_f1_ws}" --verify-only \
+  >"$LOG/import.log" 2>&1;then
+  /usr/bin/python3 import_6_tracks.py \
+    --official "${URRC_OFFICIAL_WS:-$HOME/urrc_f1_ws}" \
+    >>"$LOG/import.log" 2>&1 || { tail -60 "$LOG/import.log";exit 4; }
+fi
+echo "[2/6] Generate three coordinate lanes"
+/usr/bin/python3 generate_routes.py >"$LOG/routes.log" 2>&1 || {
+  tail -60 "$LOG/routes.log";exit 4;
+}
+echo "[3/6] Compile Gazebo three-car race scenario"
+cmake -S "$ROOT/kinematic" -B "$ROOT/kinematic/build" \
+  -DCMAKE_BUILD_TYPE=Release >"$LOG/build.log" 2>&1 || {
+    tail -80 "$LOG/build.log";exit 5;
+  }
+cmake --build "$ROOT/kinematic/build" --parallel 2 >>"$LOG/build.log" 2>&1 || {
+  tail -80 "$LOG/build.log";exit 5;
+}
+PLUGIN="$ROOT/kinematic/build/libteam08_battle_replay.so"
+[[ -f "$PLUGIN" ]] || { echo "Missing battle plugin library" >&2;exit 5; }
+export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}"
+echo "[4/6] Prepare 0.30m walls, TEAM08 grid $GRID, red grid 1 (race3), rear grid 10"
+OUT="$LOG/prepared"
+DEFENSE_ARGS=()
+if [[ "$MODE" == defense ]]; then DEFENSE_ARGS=(--defense); fi
+RACE_ARGS=()
+if [[ "$MODE" == race3 ]]; then RACE_ARGS=(--laps 3); fi
+/usr/bin/python3 "$ROOT/kinematic/prepare_battle08.py" \
+  --track "$TRACK" --grid "$GRID" --lane "$LANE" "${DEFENSE_ARGS[@]}" "${RACE_ARGS[@]}" \
+  --plugin "$PLUGIN" --output "$OUT" >"$LOG/prepare.log" 2>&1 || {
+    tail -80 "$LOG/prepare.log";exit 6;
+}
+export GZ_SIM_RESOURCE_PATH="$OUT/resources/urrc_track_gazebo/models:$GZ_SIM_RESOURCE_PATH"
+WORLD="$OUT/resources/urrc_track_gazebo/worlds/${TRACK}_fixed.sdf"
+LIGHTS="$OUT/resources/urrc_track_gazebo/scripts/traffic_lights_v10.py"
+TOPIC="/team08/battle_start_08"
+WORLD_PID=""
+cleanup() {
+  trap - EXIT INT TERM
+  if [[ -n "$WORLD_PID" ]];then
+    kill -INT "$WORLD_PID" 2>/dev/null || true
+    sleep .7
+    kill -TERM "$WORLD_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+echo "[5/6] Gazebo start and three-vehicle spawn"
+gz sim -r -v 3 --gui-config "$PKG/worlds/${TRACK}_grid.gui.config" "$WORLD" \
+  >"$LOG/gazebo.log" 2>&1 &
+WORLD_PID=$!
+READY=0
+for _ in $(seq 1 100);do
+  if ! kill -0 "$WORLD_PID" 2>/dev/null;then
+    tail -60 "$LOG/gazebo.log";exit 7
+  fi
+  if gz topic -l 2>/dev/null | grep -Fxq "/team08/battle_ready_08";then READY=1;break;fi
+  sleep 1
+done
+if [[ "$READY" -ne 1 ]];then
+  echo "FAIL: battle plugin not ready" >&2
+  tail -70 "$LOG/gazebo.log";exit 7
+fi
+for VEHICLE in team_08 team_01 team_02;do
+  read -r MODEL X Y Z YAW < <(/usr/bin/python3 - "$OUT/battle_manifest.json" "$VEHICLE" <<'PY'
+import json,sys
+data=json.load(open(sys.argv[1]))
+who=sys.argv[2]
+model=data["vehicle_file"] if who=="team_08" else data["lead_model"] if who=="team_01" else data["rear_model"]
+print(model,*data["start_positions"][who])
+PY
+)
+  ros2 run ros_gz_sim create --world "$TRACK" --file "$MODEL" --name "$VEHICLE" \
+    --x "$X" --y "$Y" --z "$Z" -Y "$YAW" \
+    >"$LOG/spawn_$VEHICLE.log" 2>&1 || {
+      tail -70 "$LOG/spawn_$VEHICLE.log";exit 8;
+    }
+  echo "SPAWN: $VEHICLE"
+done
+echo "[6/6] Original five-lamp all-off gate"
+if ! timeout -s INT -k 3 110 /usr/bin/python3 "$LIGHTS" \
+   --track "$TRACK" --timeout 80 >"$LOG/lights.log" 2>&1;then
+  echo "FAIL: signal sequence; battle remains disarmed" >&2
+  tail -60 "$LOG/lights.log";exit 9
+fi
+if ! grep -q '^LIGHTS OUT .*model_remove=single_request' "$LOG/lights.log";then
+  echo "FAIL: all-off signal service not confirmed" >&2;exit 9
+fi
+for _ in 1 2 3;do
+  gz topic -t "$TOPIC" -m gz.msgs.Boolean -p 'data: true' \
+    >"$LOG/start.log" 2>&1 || {
+      tail -40 "$LOG/start.log";exit 10;
+    }
+  sleep .1
+done
+echo "BATTLE START: $TRACK grid $GRID lane $LANE red_grid=$([[ "$MODE" == race3 ]] && echo 1 || echo scenario) mode $MODE laps=$([[ "$MODE" == race3 ]] && echo 3 || echo 1) team08 max 15m/s, lead S 9m/s, rear $([[ "$MODE" == defense ]] && echo 14 || echo 11)m/s"
+echo "Trajectory-aligned headings; real wheel steering is disabled"
+echo "Log: $LOG/prepared/battle_state.csv"
+STARTED=$(date +%s)
+RESULT=""
+MAX_WALL_S=600
+if [[ "$MODE" == race3 ]]; then MAX_WALL_S=3000; fi
+MAX_WALL_S="${URRC_BATTLE_TIMEOUT_S:-$MAX_WALL_S}"
+LAST_LAP=0
+while kill -0 "$WORLD_PID" 2>/dev/null;do
+  if grep -q '\[BATTLE\] RESULT ' "$LOG/gazebo.log";then
+    RESULT=$(grep '\[BATTLE\] RESULT ' "$LOG/gazebo.log" | tail -1)
+    echo "$RESULT"
+    break
+  fi
+  if [[ "$MODE" == race3 ]] && grep -q '\[BATTLE\] LAP_COMPLETED ' "$LOG/gazebo.log"; then
+    LAP_LINE="$(grep '\[BATTLE\] LAP_COMPLETED ' "$LOG/gazebo.log" | tail -1)"
+    LAP_NOW="$(printf '%s\n' "$LAP_LINE" | sed -n 's/.*LAP_COMPLETED \([0-9]*\)\/3.*/\1/p')"
+    if [[ -n "$LAP_NOW" ]] && (( LAP_NOW>LAST_LAP )); then
+      echo "$LAP_LINE"
+      LAST_LAP="$LAP_NOW"
+    fi
+  fi
+  if (( $(date +%s)-STARTED>MAX_WALL_S ));then
+    echo "FAIL: no battle result within configured wall-clock timeout" >&2
+    echo "Diagnostics: $LOG/gazebo.log" >&2
+    echo "=== Gazebo last non-multicast messages ===" >&2
+    grep -v 'Exception sending a multicast message:Network is unreachable' "$LOG/gazebo.log" | tail -35 >&2 || true
+    echo "=== Last recorded simulation state ===" >&2
+    if [[ -f "$OUT/battle_state.csv" ]]; then
+      tail -3 "$OUT/battle_state.csv" >&2
+    else
+      echo "battle_state.csv missing (plugin may not have started)" >&2
+    fi
+    echo "=== Gazebo process ===" >&2
+    ps -p "$WORLD_PID" -o pid,stat,etime,cmd >&2 || true
+    exit 11
+  fi
+  sleep 1
+done
+[[ -n "$RESULT" ]] || { echo "FAIL: Gazebo closed before battle result" >&2;exit 11; }
+grep '\[BATTLE\]' "$LOG/gazebo.log" | tail -35
+if [[ "$RESULT" == *"RESULT PASS_3_LAPS"* ]];then
+  grep '\[BATTLE\] RACE3_RESULT ' "$LOG/gazebo.log" | tail -1
+  echo "PASS RACE3: $TRACK grid $GRID lane $LANE results $LOG"
+elif [[ "$RESULT" == *"RESULT PASS_BATTLE"* ]];then
+  echo "PASS BATTLE: $TRACK grid $GRID lane $LANE results $LOG"
+elif [[ "$RESULT" == *"RESULT PARTIAL_DEFENSE_UNVERIFIED"* ]];then
+  echo "PARTIAL BATTLE: $TRACK grid $GRID lane $LANE defense not verified; results $LOG"
+else
+  echo "FAIL BATTLE: $TRACK grid $GRID lane $LANE results $LOG" >&2
+  exit 12
+fi
