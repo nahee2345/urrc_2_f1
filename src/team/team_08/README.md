@@ -64,3 +64,39 @@ the track appears.
 **No Gazebo build/launch/lap completion has been executed by the assistant.**
 The user must provide actual compilation and rehearsal output before
 claiming PASS.
+
+## TEAM08 verified-baseline three-lap rehearsal (renamed)
+
+The exact C++ `kinematic/BattleReplay.cc` three-car racing strategy has been
+copied to `src/team/team_08/legacy/BattleReplay08.cc` (plugin alias
+`urrc::BattleReplay_08`). The original `team_11` program remains
+unchanged for regression comparison. This TEAM08 variant renames:
+
+| Old | TEAM08 scenario |
+| --- | --- |
+| `team_11` | `team_08` |
+| `practice_s_09` | `team_01` |
+| `practice_rear_11` | `team_02` |
+
+The Gazebo plugin library is `libteam08_battle_replay_08.so`.
+The private start topic is `/team08/battle_start_08` and readiness topic
+is `/team08/battle_ready_08`.
+
+Run in the existing `~/urrc_2_f1` after fetching main:
+
+```bash
+cd ~/urrc_2_f1
+git pull --ff-only origin main
+bash run.sh battle08 monaco 2 1 race3
+# After the previous run finishes:
+bash run.sh battle08 monaco 3 3 race3
+```
+
+This is the original **three scripted vehicle scenario**, now using TEAM08
+identifiers: the entire scenario plugin controls all three models'
+`SetWorldPoseCmd`. The vehicles are **not** separate autonomous entrants
+in this rehearsal. The ROS2 official `race.launch.py` continues to use
+the separate `pose_plugin/Team08Pose.cc` controller and must not be
+described as having the complete proven strategy until it is ported there
+and independently tested. The renamed rehearsal has not yet been run
+on a real ROS2+Gazebo machine.
