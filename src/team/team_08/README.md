@@ -1,63 +1,66 @@
-# TEAM08 independent race package
+# TEAM08 — native coordinate replay (Gazebo Harmonic)
 
-This folder is the ONLY folder to copy to a host URRC workspace:
+TEAM08 now runs its existing **direct-pose coordinate method** rather than
+the Python Ackermann path follower. This change is limited to this team folder.
+The official operator still owns the world, spawning, READY, five-red
+lights, race gate and lap timing.
 
-```
-<workspace>/src/team/team_08/
-```
+## Runtime
 
-Supported source-map names: monza, spa, monaco, cota, hungaroring, baku.
-The six embedded maps each include three lane CSVs, a centerline, start grids
-and track metadata. Do not move only the Python module out of this folder.
+- The **active** motion system is `pose_plugin/Team08Pose.cc`, built as
+  `libteam08_pose.so` with ROS 2 ament_cmake + gz-sim8.
+- The saved prior implementation is `legacy/BattleReplay.cc`. It is a
+  **reference archive**, not the active plugin. The active code reuses its
+  interpolation, easing, yaw blending and baseline speed rules, but is
+  **not an exact copy of its full 1100-line three-car strategy**.
+- `team08_race/control.py` handles camera red-to-dark and the organizer's
+  `/race/start/team_08`; no Python wheel steering, LiDAR path following,
+  or Ackermann drive plugin is used.
+- `team_01` replaces the old reference script's `practice_s_09` role;
+  `team_02` replaces `practice_rear_08`. Both are observed from Gazebo
+  world pose only and **never moved by TEAM08**. Without either opponent,
+  TEAM08 runs solo on saved coordinates.
+- No new workspace is needed. This folder is placed at
+  `<official-workspace>/src/team/team_08`.
 
-## Runtime requirements
+## Motion and heading
 
-Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic and the ROS/Gazebo bridge.
-The host must use compatible team submission and race-start interfaces.
-The organizer owns world startup, light sequencing, operator READY and timing.
-TEAM08 does NOT modify any external world or other team.
+At spawn, the vehicle's real grid pose is projected onto one of the six
+bundled centerlines; the original lateral starting offset is retained.
+Each physics update moves along the stored s/x/y/z/yaw records, interpolating
+between coordinates and applying lateral offsets. Body yaw is blended
+towards the measured displacement tangent each step. This includes the
+diagonal heading of a smooth lane change: the car is **not held at a fixed
+heading while sliding sideways**.
 
-The root `race_entry.json` identifies the package as `team_08`.
-The official intake normalizes the single folder into a ROS package
-under its `src/` directory and builds `team08_race`.
+Based on the original BattleReplay: 10 m/s nominal cruise, 9 m/s tight
+corner target, +3 m/s² acceleration, -5 m/s² braking, 15 m/s overall speed
+limit, 2.5 s fifth-order lateral motion. Observed real front traffic can
+slow the car or cause a gradual lane change. Actual mean speed is measured
+by Gazebo; it is not guaranteed to be exactly 10 m/s.
 
-Private topics are `/team08/*_08`. The organizer-owned gate is
-`/race/start/team_08`; vehicle name is `team_08`.
-See `launch/race.launch.py` for the current bridge and node topology.
+This is **kinematic pose replay**, not physically steered Ackermann
+driving. The original full multi-car scenario replay is not automatically
+validated by the new runtime, and Gazebo physical collisions/tire force
+behaviour cannot be inferred from replay alone.
 
-## Driving and fallback
+## Apply to the existing official workspace
 
-The running controller in `team08_race/` uses the embedded maps and
-the car's own Gazebo pose and LiDAR, not the battle replay plugin.
-It detects the world and start grid, chooses the nearest lane and uses
-the original team's corner-centering, overtaking and rear-defense planners.
-If the grid is unknown but the world is known, it can select a lane
-matching both vehicle position and forward heading. While searching
-for a valid route AFTER the authorized start, it may drive straight
-at 2 m/s for a maximum of 1.5 s, only with fresh forward LiDAR
-and at least 2 m forward clearance. Otherwise it stops.
-No stale pose, opposite-direction route or unknown map is accepted.
-
-The camera-based five-light transition is used with the official
-race gate. The official race gate remains mandatory.
-
-## Existing race3 algorithm retained
-
-`legacy/BattleReplay.cc` is an archived TEAM08-named copy of
-the latest Monaco three-car battle strategy from `urrc_2_f1`
-(commit c1bde58). It preserves the original reference strategy
-but is NOT a ROS controller and is NOT compiled or executed here.
-Its SetWorldPoseCmd 3-lap results are not proof of physical steering
-or successful autonomous 3-lap Gazebo runs.
-
-## Check after git pull
+The official commit and TEAM08 source live in **different GitHub repos**.
+To update TEAM08 without reverting the official workspace files:
 
 ```bash
 cd ~/urrc_2_f1
-python3 -m compileall -q src/team/team_08
-python3 tools/check_team08_portable.py
-# On the official host, use its official intake check and sync commands.
+git fetch origin main
+git restore --source=origin/main --worktree -- src/team/team_08
+bash src/team/team_08/run_monaco.sh
 ```
 
-Real ROS2 + Gazebo multicar driving and interoperability with each
-host deployment are still unverified.
+The run script performs official registration/build, loads the native
+Gazebo plugin search path, creates missing Monaco visual assets, then
+starts Monaco **1st grid** rehearsal. Type READY in the terminal after
+the track appears.
+
+**No Gazebo build/launch/lap completion has been executed by the assistant.**
+The user must provide actual compilation and rehearsal output before
+claiming PASS.
