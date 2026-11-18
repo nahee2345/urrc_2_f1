@@ -11,6 +11,9 @@ import argparse
 from datetime import datetime
 import json
 import os
+import pty
+import select
+import signal
 from pathlib import Path
 import re
 import subprocess
@@ -51,7 +54,8 @@ def check_result(track: str, folder: Path | None, exit_code: int) -> dict:
     )
     # Official ROS launch log is authoritative about which internal
     # circuit TEAM08 chose after the Gazebo world was spawned.
-    logs = sorted(folder.glob("team_08*algorithm*.log"))
+    # A Gazebo system plugin writes to gazebo.log, not the ROS algorithm log.
+    logs = sorted(folder.glob("gazebo.log"))
     chosen = []
     for log in logs:
         chosen.extend(MAP_RE.findall(log.read_text(encoding="utf-8", errors="replace")))
@@ -76,11 +80,64 @@ def check_result(track: str, folder: Path | None, exit_code: int) -> dict:
     return row
 
 
+def run_with_tty(cmd: list[str], cwd: Path, auto_ready: bool) -> int:
+    """Run with a PTY; optional READY only after the official automatic world probe.
+
+    This is an explicitly local, test-only operator simulation. No official
+    source, race results, or TEAM08 launch arguments are changed.
+    """
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(
+        cmd, cwd=cwd, stdin=slave, stdout=slave, stderr=slave,
+        start_new_session=True,
+    )
+    os.close(slave)
+    buffer = b""
+    prompts = 0
+    ready_marker = "[v20 READY] Gazebo 월드 자동 점검 PASS.".encode("utf-8")
+    prompt_marker = "[v20 READY] 화면 확인 완료 -> READY :".encode("utf-8")
+    ready_to_approve = False
+    try:
+        while True:
+            readable, _, _ = select.select([master], [], [], .25)
+            if readable:
+                try:
+                    chunk = os.read(master, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                sys.stdout.buffer.write(chunk)
+                sys.stdout.buffer.flush()
+                buffer = (buffer + chunk)[-2048:]
+                if ready_marker in buffer:
+                    ready_to_approve = True
+                if auto_ready and ready_to_approve and prompt_marker in buffer:
+                    prompts += 1
+                    os.write(master, b"READY\\n")
+                    ready_to_approve = False
+                    buffer = b""
+            elif proc.poll() is not None:
+                break
+        return proc.wait()
+    except KeyboardInterrupt:
+        os.killpg(proc.pid, signal.SIGINT)
+        try:
+            return proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGTERM)
+            return proc.wait()
+    finally:
+        os.close(master)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=Path,
                         default=Path.home() / "urrc_f1_ws")
     parser.add_argument("--seconds", type=int, default=600)
+    parser.add_argument("--auto-ready", action="store_true",
+                        help="test-only: auto-confirm after official Gazebo readiness probe")
     parser.add_argument("--tracks", nargs="+", choices=TRACKS,
                         default=list(TRACKS))
     args = parser.parse_args()
@@ -96,7 +153,8 @@ def main() -> int:
     print("TEAM08 blind-map test: only official operator receives --track.")
     print("Each qualifying rehearsal spawns TEAM08 alone at grid position 1.")
     print("The team gets no command line track name; it reads Gazebo World.")
-    print("Enter READY separately for each requested map.", flush=True)
+    print("Test-only READY after official world probe." if args.auto_ready
+          else "Enter READY separately for each requested map.", flush=True)
     for track in args.tracks:
         print("\n========== " + track.upper() + " ==========", flush=True)
         before = preview_directories(root)
@@ -104,7 +162,7 @@ def main() -> int:
                "--track", track, "--team", "team_08",
                "--seconds", str(args.seconds), "--start-mode", "signal"]
         try:
-            status = subprocess.run(cmd, cwd=root, check=False).returncode
+            status = run_with_tty(cmd, root, args.auto_ready)
         except KeyboardInterrupt:
             status = 130
         created = preview_directories(root) - before
