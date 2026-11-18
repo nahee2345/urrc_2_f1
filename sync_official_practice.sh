@@ -25,7 +25,7 @@ files={p for p in tracked if p}
 # Synchronize tracked files only; preserve untracked race/install,
 # build outputs, previews, logs and the user's working data.
 managed=(Path('race'),Path('src/urrc_track_gazebo'))
-local_tracked=subprocess.check_output(['git','-C',str(root),'ls-files','-z']).decode().split('\\0')
+local_tracked=subprocess.check_output(['git','-C',str(root),'ls-files','-z']).decode().split('\0')
 for rel in local_tracked:
     if not rel or rel in files:continue
     p=Path(rel)
