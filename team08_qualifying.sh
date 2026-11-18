@@ -18,4 +18,4 @@ case "$TRACK" in monza|spa|monaco|cota|hungaroring|baku) ;; *)
 # filenames are unchanged, and the original process exit status is preserved.
 bash race_v24.sh rehearse qualifying --track "$TRACK" --team team_08 \
   --seconds "$SECONDS" --start-mode signal 2>&1 |
-  sed -u -E 's/\\[v[0-9]+ ([^]]+)\\]/[\\1]/g; s/\\[v[0-9]+\\]/[RACE]/g'
+  sed -u -E 's/\[v[0-9]+ ([^]]+)\]/[\1]/g; s/\[v[0-9]+\]/[RACE]/g'
