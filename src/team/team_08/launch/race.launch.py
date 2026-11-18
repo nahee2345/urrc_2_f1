@@ -16,6 +16,7 @@ def generate_launch_description():
     args=[DeclareLaunchArgument(k, default_value=v) for k,v in declared.items()]
     bridge=[
         "/team08/front_scan_08@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
+        "/team08/front_camera_08/image@sensor_msgs/msg/Image[gz.msgs.Image",
         "/team08/replay_go_08@std_msgs/msg/Bool]gz.msgs.Boolean",
         "/team08/speed_08@std_msgs/msg/Float32[gz.msgs.Float",
         "/team08/steering_08@std_msgs/msg/Float32[gz.msgs.Float",
