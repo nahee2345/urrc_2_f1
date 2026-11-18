@@ -22,23 +22,21 @@ import sys
 root, official = (Path(x).resolve() for x in sys.argv[1:])
 tracked=subprocess.check_output(['git','-C',str(official),'ls-files','-z']).decode().split('\0')
 files={p for p in tracked if p}
-# Official-managed folders are exact copies, even if official removed a file.
-managed=[Path('race'),Path('src/urrc_track_gazebo')]
-for folder in managed:
-    destination=root/folder
-    if destination.exists():
-        shutil.rmtree(destination)
-    source=official/folder
-    if source.exists():
-        shutil.copytree(source,destination,symlinks=True)
-# Synchronize official top-level files and auxiliary source files.
+# Synchronize tracked files only; preserve untracked race/install,
+# build outputs, previews, logs and the user's working data.
+managed=(Path('race'),Path('src/urrc_track_gazebo'))
+local_tracked=subprocess.check_output(['git','-C',str(root),'ls-files','-z']).decode().split('\\0')
+for rel in local_tracked:
+    if not rel or rel in files:continue
+    p=Path(rel)
+    if any(p==folder or folder in p.parents for folder in managed):
+        target=root/p
+        if target.is_file() or target.is_symlink():target.unlink()
+# Synchronize the complete upstream tracked official file set.
 for rel in sorted(files):
     p=Path(rel)
-    if any(p==managed_path or managed_path in p.parents for managed_path in managed):
-        continue
     if p.parts[0]=='src' and len(p.parts)>1 and p.parts[1]=='team':
         continue
-    # Additional official src packages (e.g. sample team_11) are copied.
     dest=root/p
     dest.parent.mkdir(parents=True,exist_ok=True)
     shutil.copy2(official/p,dest)
