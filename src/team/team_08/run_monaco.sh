@@ -5,11 +5,11 @@ TEAM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$TEAM_DIR/../../.." && pwd)"
 [ -f "$ROOT/race_v24.sh" ] || { echo "Official URRC workspace required: $ROOT" >&2; exit 2; }
 cd "$ROOT"
-source /opt/ros/jazzy/setup.bash
+set +u\nsource /opt/ros/jazzy/setup.bash\nset -u
 echo "[TEAM08] register and build native replay plugin"
 bash race_v24.sh sync
 rm -rf -- "$ROOT/race/build/team08_race"\nbash race_v24.sh prepare
-source "$ROOT/race/install/setup.bash"
+set +u\nsource "$ROOT/race/install/setup.bash"\nset -u
 LIB="$ROOT/race/install/lib/libteam08_pose.so"
 [ -f "$LIB" ] || { echo "Gazebo TEAM08 plugin missing: $LIB" >&2; exit 2; }
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$ROOT/race/install/lib:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
