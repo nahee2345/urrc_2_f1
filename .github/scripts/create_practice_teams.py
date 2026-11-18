@@ -336,8 +336,11 @@ for number, role, pace in [(1, "weaving_lead", 9.0), (2, "following_rear", 11.0)
         shutil.copy2(SRC / "maps" / track / "centerline.csv", destination / "centerline.csv")
     model = (SRC / "models/team08_car/model.sdf").read_text()
     model = model.replace("team_08", team).replace("team08", f"team{short}")
-    model = model.replace("libteam08_pose_08.so", f"libteam{short}_practice.so")
+    # TEAM08's plugin filename and private topic suffix must also be
+    # remapped; otherwise practice models silently load the wrong plugin.
+    model = model.replace(f"libteam{short}_pose_08.so", f"libteam{short}_practice.so")
     model = model.replace("urrc::Team08Pose_08", f"urrc::PracticeTraffic{short}")
+    model = model.replace("_08", f"_{short}")
     (root / "models/practice_car/model.sdf").write_text(model)
     (root / f"src/{team}/models/practice_car/model.sdf").write_text(model)
     code = CPP.replace("__NUM__", short).replace("__SHORT__", short)
