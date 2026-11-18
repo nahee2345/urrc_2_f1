@@ -64,7 +64,7 @@ cmake -S "$ROOT/kinematic" -B "$ROOT/kinematic/build" \
 cmake --build "$ROOT/kinematic/build" --parallel 2 >>"$LOG/build.log" 2>&1 || {
   tail -80 "$LOG/build.log";exit 5;
 }
-PLUGIN="$ROOT/kinematic/build/libteam08_battle_replay.so"
+PLUGIN="$ROOT/kinematic/build/libteam08_battle_replay_08.so"
 [[ -f "$PLUGIN" ]] || { echo "Missing battle plugin library" >&2;exit 5; }
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$(dirname "$PLUGIN")${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}"
 echo "[4/6] Prepare 0.30m walls, TEAM08 grid $GRID, red grid 1 (race3), rear grid 10"
