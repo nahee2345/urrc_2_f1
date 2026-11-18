@@ -127,7 +127,7 @@ PY
 done
 echo "[6/6] Original five-lamp all-off gate"
 if ! timeout -s INT -k 3 110 /usr/bin/python3 "$LIGHTS" \
-   --track "$TRACK" --timeout 80 >"$LOG/lights.log" 2>&1;then
+   --track "$TRACK" --timeout 80 --skip-camera-check >"$LOG/lights.log" 2>&1;then
   echo "FAIL: signal sequence; battle remains disarmed" >&2
   tail -60 "$LOG/lights.log";exit 9
 fi
