@@ -25,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 namespace urrc {
 constexpr double LEN=.53, WID=.25, STRAIGHT_GAP=.50, CORNER_GAP=.70;
 constexpr double STRAIGHT_TARGET=1.00, CORNER_TARGET=1.00;
@@ -863,28 +864,47 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    return true;
  }
  void refreshOpponents(gz::sim::EntityComponentManager&ecm,double now){
+   // Only actual spawned entrants count. The nearest front and rear car
+   // are selected dynamically; the original two-car forecast remains intact.
    hasLead=false;hasRear=false;
-   ecm.Each<gz::sim::components::Model,gz::sim::components::Name,gz::sim::components::ParentEntity>(
-     [&](const gz::sim::Entity&e,const gz::sim::components::Model*,
-         const gz::sim::components::Name*n,const gz::sim::components::ParentEntity*)->bool{
-       if(e==team.entity)return true;
-       if(n->Data()=="team_01"){lead.entity=e;hasLead=true;}
-       if(n->Data()=="team_02"){rear.entity=e;hasRear=true;}
-       return true;
-     });
-   auto observe=[&](Car&c,bool present,double&lastObserved){
-     if(!present)return;
-     double ss=0,lat=0;
-     if(!project(gz::sim::worldPose(c.entity,ecm),ss,lat))return;
-     ss+=std::round((team.s-ss)/lap)*lap;
-     if(lastObserved>0&&now>lastObserved){
-       const double dt=now-lastObserved;
-       if(dt>.01&&dt<2.)c.v=std::clamp(std::abs(ss-c.s)/dt,0.,30.);
-     }
-     c.s=ss;c.lat=lat;lastObserved=now;
-   };
-   observe(lead,hasLead,leadObservedAt);
-   observe(rear,hasRear,rearObservedAt);
+   double closestFront=1e9,closestRear=1e9;
+   ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
+            gz::sim::components::ParentEntity>(
+      [&](const gz::sim::Entity&e,const gz::sim::components::Model*,
+          const gz::sim::components::Name*n,
+          const gz::sim::components::ParentEntity*)->bool{
+         const std::string name=n->Data();
+         if(e==team.entity || name.size()!=7 || name.substr(0,5)!="team_" ||
+            name[5]<'0'||name[5]>'9'||name[6]<'0'||name[6]>'9' ||
+            name=="team_08")return true;
+         const int number=(name[5]-'0')*10+(name[6]-'0');
+         if(number<1||number>12)return true;
+         double ss=0,lat=0;
+         if(!project(gz::sim::worldPose(e,ecm),ss,lat))return true;
+         const double relative=std::remainder(ss-team.s,lap);
+         if(std::abs(relative)>25.)return true;
+         double measuredSpeed=0.;
+         auto it=trafficHistory.find(name);
+         if(it!=trafficHistory.end()){
+           const double dt=now-it->second.second;
+           if(dt>.01&&dt<2.)
+             measuredSpeed=std::clamp(std::abs(std::remainder(
+                ss-it->second.first,lap))/dt,0.,30.);
+         }
+         trafficHistory[name]={ss,now};
+         Car* target=nullptr;
+         if(relative>=0. && relative<closestFront){
+           closestFront=relative;hasLead=true;target=&lead;
+         }else if(relative<0. && -relative<closestRear){
+           closestRear=-relative;hasRear=true;target=&rear;
+         }
+         if(target){
+           target->name=name;target->entity=e;
+           target->s=team.s+relative;
+           target->lat=lat;target->v=measuredSpeed;
+         }
+         return true;
+      });
  }
  // Conservative outer-lane limit. Reserve physical chassis width and 0.10m
  // yaw/curvature allowance; stronger than center-point-only clipping.
@@ -1119,6 +1139,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  gz::transport::Node::Publisher speedPub,steerPub;
  gz::math::Pose3d spawnPose;
  std::vector<std::pair<std::string,std::vector<Pt>>> maps;
+ std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
  bool hasLead=false,hasRear=false;
  double leadObservedAt=0,rearObservedAt=0;
  gz::transport::Node node;gz::transport::Node::Publisher ready;
