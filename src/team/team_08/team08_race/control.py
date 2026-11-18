@@ -12,7 +12,7 @@ class Start(Node):
     def __init__(self):
         super().__init__("team08_signal_start_08")
         self.declare_parameter("race_start_topic", "/race/start/team_08")
-        self.declare_parameter("use_sim_time", True)
+        # use_sim_time is owned by the ROS 2 time source; do not redeclare it.
         self.gate = False
         self.reported = False
         self.publisher = self.create_publisher(Bool, "/team08/replay_go_08", 10)
