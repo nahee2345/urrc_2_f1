@@ -114,7 +114,7 @@ def run_with_tty(cmd: list[str], cwd: Path, auto_ready: bool) -> int:
                     ready_to_approve = True
                 if auto_ready and ready_to_approve and prompt_marker in buffer:
                     prompts += 1
-                    os.write(master, b"READY\\n")
+                    os.write(master, b"READY\n")
                     ready_to_approve = False
                     buffer = b""
             elif proc.poll() is not None:
