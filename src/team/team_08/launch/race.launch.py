@@ -1,4 +1,4 @@
-"""TEAM08: camera gate + Gazebo-native coordinate replay (no Ackermann adapter)."""
+"""TEAM08: signal gate + Gazebo-native coordinate replay (no Ackermann adapter)."""
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -6,7 +6,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     declared = {
-        "race_start_mode": "camera",
+        "race_start_mode": "signal",
         "race_start_topic": "/race/start/team_08",
         "speed_topic": "/team08/speed_08",
         "steering_topic": "/team08/steering_08",
@@ -15,7 +15,6 @@ def generate_launch_description():
     }
     args=[DeclareLaunchArgument(k, default_value=v) for k,v in declared.items()]
     bridge=[
-        "/team08/start_image_08@sensor_msgs/msg/Image[gz.msgs.Image",
         "/team08/front_scan_08@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
         "/team08/replay_go_08@std_msgs/msg/Bool]gz.msgs.Boolean",
         "/team08/speed_08@std_msgs/msg/Float32[gz.msgs.Float",
