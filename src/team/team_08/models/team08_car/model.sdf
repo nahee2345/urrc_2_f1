@@ -99,8 +99,7 @@
         </inertia></inertial>
     </link>
     <joint name="front_left_steer_joint" type="fixed">
-      <parent>base_link</parent><child>front_left_knuckle</child><axis><xyz>0 0 1</xyz><limit><lower>-0.610865</lower><upper>0.610865</upper>
-          <effort>200</effort><velocity>100</velocity></limit><dynamics /></axis>
+      <parent>base_link</parent><child>front_left_knuckle</child>
     </joint>
     <link name="front_left_wheel">
       <pose>0.17 0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
@@ -115,16 +114,14 @@
       </collision>
     </link>
     <joint name="front_left_spin_joint" type="fixed">
-      <parent>front_left_knuckle</parent><child>front_left_wheel</child><axis><xyz>0 1 0</xyz><limit><lower>-1e16</lower><upper>1e16</upper>
-          <effort>200</effort><velocity>100</velocity></limit><dynamics /></axis>
+      <parent>front_left_knuckle</parent><child>front_left_wheel</child>
     </joint>
     <link name="front_right_knuckle">
       <pose>0.17 -0.107 0 0 0 0</pose><inertial><mass>0.035</mass><inertia><ixx>5e-05</ixx><iyy>5e-05</iyy><izz>5e-05</izz><ixy>0</ixy><ixz>0</ixz>
           <iyz>0</iyz></inertia></inertial>
     </link>
     <joint name="front_right_steer_joint" type="fixed">
-      <parent>base_link</parent><child>front_right_knuckle</child><axis><xyz>0 0 1</xyz><limit><lower>-0.610865</lower><upper>0.610865</upper>
-          <effort>200</effort><velocity>100</velocity></limit><dynamics /></axis>
+      <parent>base_link</parent><child>front_right_knuckle</child>
     </joint>
     <link name="front_right_wheel">
       <pose>0.17 -0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
@@ -139,8 +136,7 @@
       </collision>
     </link>
     <joint name="front_right_spin_joint" type="fixed">
-      <parent>front_right_knuckle</parent><child>front_right_wheel</child><axis><xyz>0 1 0</xyz><limit><lower>-1e16</lower><upper>1e16</upper>
-          <effort>200</effort><velocity>100</velocity></limit><dynamics /></axis>
+      <parent>front_right_knuckle</parent><child>front_right_wheel</child>
     </joint>
     <link name="rear_left_wheel">
       <pose>-0.17 0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
@@ -155,8 +151,7 @@
       </collision>
     </link>
     <joint name="rear_left_spin_joint" type="fixed">
-      <parent>base_link</parent><child>rear_left_wheel</child><axis><xyz>0 1 0</xyz><limit><lower>-1e16</lower><upper>1e16</upper><effort>200</effort>
-          <velocity>100</velocity></limit><dynamics /></axis>
+      <parent>base_link</parent><child>rear_left_wheel</child>
     </joint>
     <link name="rear_right_wheel">
       <pose>-0.17 -0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
@@ -171,8 +166,7 @@
       </collision>
     </link>
     <joint name="rear_right_spin_joint" type="fixed">
-      <parent>base_link</parent><child>rear_right_wheel</child><axis><xyz>0 1 0</xyz><limit><lower>-1e16</lower><upper>1e16</upper><effort>200</effort>
-          <velocity>100</velocity></limit><dynamics /></axis>
+      <parent>base_link</parent><child>rear_right_wheel</child>
     </joint>
     <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
     <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
