@@ -8,11 +8,11 @@ cd "$ROOT"
 source /opt/ros/jazzy/setup.bash
 echo "[TEAM08] register and build native replay plugin"
 bash race_v24.sh sync
-bash race_v24.sh prepare
+rm -rf -- "$ROOT/race/build/team08_race"\nbash race_v24.sh prepare
 source "$ROOT/race/install/setup.bash"
-LIB="$ROOT/race/install/team08_race/lib/libteam08_pose.so"
+LIB="$ROOT/race/install/lib/libteam08_pose.so"
 [ -f "$LIB" ] || { echo "Gazebo TEAM08 plugin missing: $LIB" >&2; exit 2; }
-export GZ_SIM_SYSTEM_PLUGIN_PATH="$ROOT/race/install/team08_race/lib:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
+export GZ_SIM_SYSTEM_PLUGIN_PATH="$ROOT/race/install/lib:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
 python3 - <<'PY'
 from pathlib import Path
 import sys
