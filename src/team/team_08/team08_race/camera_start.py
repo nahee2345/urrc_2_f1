@@ -1,4 +1,4 @@
-"""TEAM11 camera start light measurement without fixed-width five-bin assumptions.
+"""TEAM08 camera start light measurement without fixed-width five-bin assumptions.
 
 The five LEDs occupy only a small fraction of the image. Count actual red
 evidence in the gantry ROI rather than demanding one red lamp in each of

@@ -1,4 +1,4 @@
-"""TEAM11 independent replay controller: no world spawning, no map edits."""
+"""TEAM08 independent replay controller: no world spawning, no map edits."""
 from __future__ import annotations
 import math
 import time
@@ -11,22 +11,22 @@ from sensor_msgs.msg import Image, LaserScan
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry
 
-from team11_race.planner import Planner, RouteMap
-from team11_race.perception import LaserTracker
-from team11_race.strategy import RaceDirector, Decision
-from team11_race.start_policy import choose_start
-from team11_race.camera_start import LightTransition, red_evidence
-from team11_race.pose_decode import (
+from team08_race.planner import Planner, RouteMap
+from team08_race.perception import LaserTracker
+from team08_race.strategy import RaceDirector, Decision
+from team08_race.start_policy import choose_start
+from team08_race.camera_start import LightTransition, red_evidence
+from team08_race.pose_decode import (
     extract_vehicle_pose, pose_frame_examples, yaw_from_quaternion
 )
-from team11_race.trackdetect import (TRACKS, discover_world, map_assets,
+from team08_race.trackdetect import (TRACKS, discover_world, map_assets,
                                       matching_grid, match_map_from_spawn)
 
 
 def share_directory():
     try:
         from ament_index_python.packages import get_package_share_directory
-        return Path(get_package_share_directory("team11_race"))
+        return Path(get_package_share_directory("team08_race"))
     except (ImportError,LookupError):
         return Path(__file__).resolve().parents[1]
 
@@ -36,14 +36,14 @@ def quaternion_yaw(q):
                       1.-2.*(q.y*q.y+q.z*q.z))
 
 
-class Team11Control(Node):
+class Team08Control(Node):
     def __init__(self):
-        super().__init__("team11_controller_11")
+        super().__init__("team08_controller_08")
         for k,v in (
-            ("race_start_mode","signal"),
-            ("race_start_topic","/race/start/team_11"),
-            ("speed_topic","/team11/speed_11"),
-            ("steering_topic","/team11/steering_11"),
+            ("race_start_mode","camera"),
+            ("race_start_topic","/race/start/team_08"),
+            ("speed_topic","/team08/speed_08"),
+            ("steering_topic","/team08/steering_08"),
             ("max_speed_mps",15.0)):
             self.declare_parameter(k,v)
         self.mode=str(self.get_parameter("race_start_mode").value)
@@ -78,6 +78,8 @@ class Team11Control(Node):
         self.camera_announced=False
         self.last_report=0.
         self.last_health_report=0.
+        self.unknown_start_at=0.
+        self.front_clearance_m=0.0
         self.started_at=time.monotonic()
         self.share=share_directory()
         self.speed_pub=self.create_publisher(
@@ -86,20 +88,20 @@ class Team11Control(Node):
             Float32,str(self.get_parameter("steering_topic").value),10)
         self.create_subscription(Bool,str(self.get_parameter("race_start_topic").value),
                                  self.gate_callback,10)
-        self.create_subscription(TFMessage,"/team11/pose_11",
+        self.create_subscription(TFMessage,"/team08/pose_08",
                                  self.pose_callback,10)
         # Independent Ackermann odometry, accepted as map/world coordinates
         # only after matching a unique bundled start grid.
-        self.create_subscription(Odometry,"/team11/odom_11",
+        self.create_subscription(Odometry,"/team08/odom_08",
                                  self.odom_callback,10)
-        self.create_subscription(Image,"/team11/start_image_11",
+        self.create_subscription(Image,"/team08/start_image_08",
                                  self.camera_callback,10)
-        self.create_subscription(LaserScan,"/team11/front_scan_11",
+        self.create_subscription(LaserScan,"/team08/front_scan_08",
             lambda msg:self.scan_callback(msg,"front"),10)
-        self.create_subscription(LaserScan,"/team11/rear_scan_11",
+        self.create_subscription(LaserScan,"/team08/rear_scan_08",
             lambda msg:self.scan_callback(msg,"rear"),10)
         self.create_timer(.05,self.tick)
-        self.get_logger().info("TEAM11 initialized; awaiting own pose, world and race gate")
+        self.get_logger().info("TEAM08 initialized; awaiting own pose, world and race gate")
 
     def publish(self,speed,steering):
         self.speed_pub.publish(Float32(data=float(speed)))
@@ -112,17 +114,17 @@ class Team11Control(Node):
             self.gate_true_at=time.monotonic()
         if not self.allowed:
             self.publish(0.,0.)
-            self.get_logger().info("TEAM11 external race gate FALSE; drive stopped")
+            self.get_logger().info("TEAM08 external race gate FALSE; drive stopped")
         else:
             self.get_logger().info(
-                "TEAM11 external race gate TRUE; camera_frames=%s "
+                "TEAM08 external race gate TRUE; camera_frames=%s "
                 "red_seen=%s all_off=%s pose_frames=%s own_pose=%s map=%s" %
                 (self.camera_frames,self.camera_gate.saw_red,self.camera_go,
                  self.pose_frames,self.pose is not None,self.track))
 
     def pose_callback(self,msg):
-        # Gazebo PosePublisher -> private /team11/pose_11. The Pose_V->TF
-        # converter may name frames as team_11, team_11::base_link or
+        # Gazebo PosePublisher -> private /team08/pose_08. The Pose_V->TF
+        # converter may name frames as team_08, team_08::base_link or
         # base_link. Prefer the model world pose over a relative link pose.
         self.pose_frames+=1
         result=extract_vehicle_pose(msg)
@@ -130,13 +132,13 @@ class Team11Control(Node):
             self.pose_unrecognized+=1
             if self.pose_unrecognized in (1,40,200):
                 self.get_logger().warning(
-                    "TEAM11 own pose TF frames unrecognized: %s" %
+                    "TEAM08 own pose TF frames unrecognized: %s" %
                     (pose_frame_examples(msg),))
             return
         x,y,z,yaw,frame=result
         if self.pose is None:
             self.get_logger().info(
-                "TEAM11 own pose ready: frame=%s xyz=(%.3f,%.3f,%.3f) yaw=%.3f" %
+                "TEAM08 own pose ready: frame=%s xyz=(%.3f,%.3f,%.3f) yaw=%.3f" %
                 (frame,x,y,z,yaw))
         self.pose=(x,y,z,yaw)
         self.pose_source=frame
@@ -165,19 +167,28 @@ class Team11Control(Node):
                 self.odom_rejected+=1
                 if self.odom_rejected in (1,5,20):
                     self.get_logger().warning(
-                        "TEAM11 odom not world-aligned; ignoring frame=%s "
+                        "TEAM08 odom not world-aligned; ignoring frame=%s "
                         "xyz=(%.3f,%.3f,%.3f)" %
                         (msg.header.frame_id,*values[:3]))
                 return
             self.odom_world_valid=True
             self.get_logger().info(
-                "TEAM11 independent odom aligned with official start grid; "
+                "TEAM08 independent odom aligned with official start grid; "
                 "using as own pose fallback")
         self.pose=values
         self.pose_wall=now
         self.pose_source="self_odom_world_aligned"
 
     def scan_callback(self,msg,side):
+        if side=="front":
+            try:
+                self.front_clearance_m=min(
+                    (float(r) for i,r in enumerate(msg.ranges)
+                     if math.isfinite(float(r)) and float(msg.range_min)<float(r)<float(msg.range_max)
+                     and abs(float(msg.angle_min)+i*float(msg.angle_increment))<.30),
+                    default=0.0)
+            except (TypeError,ValueError):
+                self.front_clearance_m=0.0
         if self.pose is None:
             return
         scan_now=time.monotonic()
@@ -194,7 +205,7 @@ class Team11Control(Node):
                 scan_now)
         except (TypeError,ValueError,OverflowError) as exc:
             self.get_logger().warning(
-                "TEAM11 %s LiDAR invalid: %s" % (side,str(exc)))
+                "TEAM08 %s LiDAR invalid: %s" % (side,str(exc)))
 
     def camera_callback(self,msg):
         self.camera_frames+=1
@@ -209,11 +220,11 @@ class Team11Control(Node):
         self.camera_go=self.camera_gate.update(amount)
         if not previous_red and self.camera_gate.saw_red:
             self.get_logger().info(
-                "TEAM11 camera red confirmed: evidence=%d peak=%d" %
+                "TEAM08 camera red confirmed: evidence=%d peak=%d" %
                 (amount,self.camera_gate.peak))
         if self.camera_go and not self.camera_announced:
             self.get_logger().info(
-                "TEAM11 camera LIGHTS OUT confirmed (red->dark stable); "
+                "TEAM08 camera LIGHTS OUT confirmed (red->dark stable); "
                 "race gate also required")
             self.camera_announced=True
 
@@ -222,7 +233,7 @@ class Team11Control(Node):
             return
         self.last_health_report=now
         self.get_logger().warning(
-            "TEAM11 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
+            "TEAM08 WAIT %s gate=%s camera_mode=%s camera_frames=%d "
             "camera_processed=%d red_seen=%s evidence=%d peak=%d camera_out=%s "
             "pose_messages=%d unmatched_pose=%d odom_frames=%d "
             "odom_world_aligned=%s pose_source=%s pose_fresh=%s "
@@ -258,10 +269,22 @@ class Team11Control(Node):
                 if name is None:
                     self.report_wait(now,"MAP_NOT_IDENTIFIED_FROM_SPAWN")
                     return
-                slot=matching_grid(map_assets(self.share,name),self.pose)
+                try:
+                    slot=matching_grid(map_assets(self.share,name),self.pose)
+                except ValueError:
+                    slot=None
             path=map_assets(self.share,name)
             route=RouteMap(path)
-            s,_,_=route.nearest(*self.pose[:2])
+            s,error,_=route.nearest(*self.pose[:2])
+            if error>1.5:
+                self.report_wait(now,"ROUTE_TOO_FAR")
+                return
+            center_yaw=route.center[route.last_index][3]
+            heading_error=math.atan2(math.sin(self.pose[3]-center_yaw),
+                                     math.cos(self.pose[3]-center_yaw))
+            if abs(heading_error)>.8:
+                self.report_wait(now,"ROUTE_HEADING_MISMATCH")
+                return
             lane=min(range(3),key=lambda k:
                      math.hypot(route.sample(k,s)[0]-self.pose[0],
                                 route.sample(k,s)[1]-self.pose[1]))
@@ -270,10 +293,10 @@ class Team11Control(Node):
                 external_strategy=True)
             self.track=name
             self.grid=slot
-            self.get_logger().info(f"TEAM11 map={name} grid={slot} initial_route={lane+1}")
+            self.get_logger().info(f"TEAM08 map={name} grid={slot} initial_route={lane+1}")
         except (OSError,ValueError,KeyError) as exc:
             if now-self.last_report>3.:
-                self.get_logger().warning(f"TEAM11 map identification pending: {exc}")
+                self.get_logger().warning(f"TEAM08 map identification pending: {exc}")
                 self.last_report=now
 
     def tick(self):
@@ -297,11 +320,21 @@ class Team11Control(Node):
             return
         if not self.start_source:
             self.start_source=permission
-            self.get_logger().info("TEAM11 START source=%s" % permission)
+            self.get_logger().info("TEAM08 START source=%s" % permission)
         self.camera_go=True
         if self.planner is None:
-            self.publish(0.,0.)
-            self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
+            # Grid unknown: after authorized start, creep straight briefly
+            # while matching one of this package's six saved track maps.
+            if not self.unknown_start_at:
+                self.unknown_start_at=now
+            if (now-self.unknown_start_at<=1.5 and
+                now-self.perception.last_front<.5 and
+                self.front_clearance_m>=2.0):
+                self.publish(2.0,0.0)
+                self.report_wait(now,"GRID_UNKNOWN_STRAIGHT_SEARCH")
+            else:
+                self.publish(0.,0.)
+                self.report_wait(now,"MAP_OR_ROUTE_NOT_READY")
             return
         dt=.05 if self.last_tick<=0 else min(.20,now-self.last_tick)
         self.last_tick=now
@@ -313,7 +346,7 @@ class Team11Control(Node):
                 moved=self.planner.request_lane(decision.lane,decision.reason)
                 if moved:
                     self.get_logger().info(
-                        "TEAM11 STRATEGY %s lane=%d -> %d threat=%d ttc=%.2f" %
+                        "TEAM08 STRATEGY %s lane=%d -> %d threat=%d ttc=%.2f" %
                         (decision.reason,self.planner.lane+1,
                          self.planner.target+1,decision.target_id,decision.ttc))
         self.last_strategy_reason=decision.reason
@@ -322,7 +355,7 @@ class Team11Control(Node):
         if status not in ("DRIVE","BAD_DT"):
             self.publish(0.,0.)
             if not self.announced:
-                self.get_logger().error(f"TEAM11 SAFE STOP reason={status}")
+                self.get_logger().error(f"TEAM08 SAFE STOP reason={status}")
                 self.announced=True
             return
         self.publish(speed,steer)
@@ -339,7 +372,7 @@ class Team11Control(Node):
 
 def main():
     rclpy.init()
-    node=Team11Control()
+    node=Team08Control()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

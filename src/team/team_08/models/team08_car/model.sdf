@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <sdf version="1.9">
-  <model name="team_11">
+  <model name="team_08">
     <static>false</static><self_collide>false</self_collide><allow_auto_disable>false</allow_auto_disable>
     <link name="base_link">
       <!-- The base_link frame is now at the organizer-reported collision AABB center.
@@ -39,14 +39,14 @@
       <collision name="rear_wing_collision">
         <pose>-0.235 0 0.083 0 0 0</pose><geometry><box><size>0.080 0.220 0.014</size></box></geometry>
       </collision>
-      <sensor name="team11_imu" type="imu">
+      <sensor name="team08_imu" type="imu">
         <pose>0 0 0.025 0 0 0</pose><always_on>true</always_on>
-        <update_rate>100</update_rate><topic>/team11/imu_11</topic>
+        <update_rate>100</update_rate><topic>/team08/imu_08</topic>
       </sensor>
       
       
       <sensor name="front_rgb" type="camera">
-        <pose>0.232 0 0.058 0 -0.42 0</pose><always_on>true</always_on><update_rate>20</update_rate><topic>/team11/start_image_11</topic><camera>
+        <pose>0.232 0 0.058 0 -0.42 0</pose><always_on>true</always_on><update_rate>20</update_rate><topic>/team08/start_image_08</topic><camera>
           <horizontal_fov>1.55</horizontal_fov><image><width>960</width><height>540</height><format>R8G8B8</format></image><clip><near>0.10</near>
             <far>80</far></clip></camera>
       </sensor>
@@ -58,12 +58,12 @@
         <pose>0.225 0 0.055 0 0 0</pose><geometry><box><size>0.024 0.038 0.026</size></box></geometry>
       </collision>
       <sensor name="front_lidar" type="gpu_lidar">
-        <pose>0.187 0 0.059 0 0 0</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team11/front_scan_11</topic><lidar><scan><horizontal>
+        <pose>0.187 0 0.059 0 0 0</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team08/front_scan_08</topic><lidar><scan><horizontal>
               <samples>361</samples><resolution>1</resolution><min_angle>-2.18</min_angle><max_angle>2.18</max_angle></horizontal></scan><range><min>0.1</min>
             <max>16.0</max><resolution>0.02</resolution></range></lidar>
       </sensor>
       <sensor name="rear_lidar" type="gpu_lidar">
-        <pose>-0.208 0 0.059 0 0 3.14159265359</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team11/rear_scan_11</topic><lidar><scan>
+        <pose>-0.208 0 0.059 0 0 3.14159265359</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team08/rear_scan_08</topic><lidar><scan>
             <horizontal><samples>361</samples><resolution>1</resolution><min_angle>-1.57</min_angle><max_angle>1.57</max_angle></horizontal></scan><range>
             <min>0.1</min><max>16.0</max><resolution>0.02</resolution></range></lidar>
       </sensor>
@@ -180,7 +180,7 @@
     </joint>
     <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
     <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
-      <topic>/team11/joint_states_11</topic><update_rate>50</update_rate>
+      <topic>/team08/joint_states_08</topic><update_rate>50</update_rate>
       <joint_name>front_left_steer_joint</joint_name><joint_name>front_right_steer_joint</joint_name>
     </plugin>
     <plugin filename="gz-sim-ackermann-steering-system" name="gz::sim::systems::AckermannSteering">
@@ -189,8 +189,8 @@
       <right_steering_joint>front_right_steer_joint</right_steering_joint><wheel_separation>.214</wheel_separation><kingpin_width>.214</kingpin_width>
       <wheel_base>.34</wheel_base><wheel_radius>.040</wheel_radius><steering_limit>.520</steering_limit><min_velocity>-12</min_velocity>
       <!-- gazebo-sim8: angular yaw must permit negative yaw for right turns; adapter blocks reversing --><max_velocity>15</max_velocity>
-      <min_acceleration>-5</min_acceleration><max_acceleration>2</max_acceleration><topic>/team11/cmd_vel_11</topic><odom_topic>/team11/odom_11</odom_topic>
-      <tf_topic>/team11/gz_tf_11</tf_topic><odom_publish_frequency>25</odom_publish_frequency>
+      <min_acceleration>-5</min_acceleration><max_acceleration>2</max_acceleration><topic>/team08/cmd_vel_08</topic><odom_topic>/team08/odom_08</odom_topic>
+      <tf_topic>/team08/gz_tf_08</tf_topic><odom_publish_frequency>25</odom_publish_frequency>
     </plugin>
     <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
     <publish_link_pose>false</publish_link_pose>
@@ -198,7 +198,7 @@
     <publish_nested_model_pose>false</publish_nested_model_pose>
     <use_pose_vector_msg>true</use_pose_vector_msg>
     <update_frequency>40</update_frequency>
-    <topic>/team11/pose_11</topic>
+    <topic>/team08/pose_08</topic>
   </plugin>
   </model>
 </sdf>

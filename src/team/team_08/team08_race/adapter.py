@@ -1,4 +1,4 @@
-"""Separate race-gate safety bridge from TEAM11 Float32 to Gazebo Twist."""
+"""Separate race-gate safety bridge from TEAM08 Float32 to Gazebo Twist."""
 from __future__ import annotations
 import math
 import time
@@ -11,20 +11,20 @@ WHEELBASE=.34
 LIMIT=.52
 WATCHDOG=.55
 
-class Team11Adapter(Node):
+class Team08Adapter(Node):
     def __init__(self):
-        super().__init__("team11_adapter_11")
+        super().__init__("team08_adapter_08")
         for name,default in (
-            ("race_start_topic","/race/start/team_11"),
-            ("speed_topic","/team11/speed_11"),
-            ("steering_topic","/team11/steering_11")):
+            ("race_start_topic","/race/start/team_08"),
+            ("speed_topic","/team08/speed_08"),
+            ("steering_topic","/team08/steering_08")):
             self.declare_parameter(name,default)
         self.enabled=False
         self.speed=0.
         self.steer=0.
         self.ts=0.
         self.tt=0.
-        self.out=self.create_publisher(Twist,"/team11/cmd_vel_11",10)
+        self.out=self.create_publisher(Twist,"/team08/cmd_vel_08",10)
         self.create_subscription(
             Bool,str(self.get_parameter("race_start_topic").value),self.gate,10)
         self.create_subscription(
@@ -62,7 +62,7 @@ class Team11Adapter(Node):
 
 def main():
     rclpy.init()
-    node=Team11Adapter()
+    node=Team08Adapter()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
