@@ -14,6 +14,7 @@ import os
 import pty
 import select
 import signal
+import secrets
 from pathlib import Path
 import re
 import subprocess
@@ -80,7 +81,7 @@ def check_result(track: str, folder: Path | None, exit_code: int) -> dict:
     return row
 
 
-def run_with_tty(cmd: list[str], cwd: Path, auto_ready: bool) -> int:
+def run_with_tty(cmd: list[str], cwd: Path, auto_ready: bool, env: dict[str, str]) -> int:
     """Run with a PTY; optional READY only after the official automatic world probe.
 
     This is an explicitly local, test-only operator simulation. No official
@@ -89,7 +90,7 @@ def run_with_tty(cmd: list[str], cwd: Path, auto_ready: bool) -> int:
     master, slave = pty.openpty()
     proc = subprocess.Popen(
         cmd, cwd=cwd, stdin=slave, stdout=slave, stderr=slave,
-        start_new_session=True,
+        env=env, start_new_session=True,
     )
     os.close(slave)
     buffer = b""
@@ -136,6 +137,8 @@ def main() -> int:
     parser.add_argument("--workspace", type=Path,
                         default=Path.home() / "urrc_f1_ws")
     parser.add_argument("--seconds", type=int, default=600)
+    parser.add_argument("--ros-domain-id", type=int, default=None,
+                        help="dedicated ROS domain (0-101); default random per map for clock isolation")
     parser.add_argument("--auto-ready", action="store_true",
                         help="test-only: auto-confirm after official Gazebo readiness probe")
     parser.add_argument("--tracks", nargs="+", choices=TRACKS,
@@ -146,6 +149,8 @@ def main() -> int:
         parser.error("official race_v24.sh missing in " + str(root))
     if not (root / "race/install/setup.bash").is_file():
         parser.error("run bash race_v24.sh sync && bash race_v24.sh prepare first")
+    if args.ros_domain_id is not None and not 0 <= args.ros_domain_id <= 101:
+        parser.error("--ros-domain-id must be 0-101")
     result_rows = []
     result_path = root / "race" / "results" / (
         "team08_blind_6track_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
@@ -157,17 +162,26 @@ def main() -> int:
           else "Enter READY separately for each requested map.", flush=True)
     for track in args.tracks:
         print("\n========== " + track.upper() + " ==========", flush=True)
+        # Keep this rehearsal's /clock separate from any orphaned Gazebo or
+        # ROS bridge process from prior runs. Each map gets an isolated DDS
+        # domain without modifying the official operator / race rules.
+        # GUI/Gazebo partition isolation remains operator-controlled.
+        domain_id = args.ros_domain_id if args.ros_domain_id is not None else secrets.randbelow(70) + 30
+        child_env = os.environ.copy()
+        child_env["ROS_DOMAIN_ID"] = str(domain_id)
+        print(f"[BLIND-TEST] isolated ROS_DOMAIN_ID={domain_id}",flush=True)
         before = preview_directories(root)
         cmd = ["bash", "race_v24.sh", "rehearse", "qualifying",
                "--track", track, "--team", "team_08",
                "--seconds", str(args.seconds), "--start-mode", "signal"]
         try:
-            status = run_with_tty(cmd, root, args.auto_ready)
+            status = run_with_tty(cmd, root, args.auto_ready, child_env)
         except KeyboardInterrupt:
             status = 130
         created = preview_directories(root) - before
         folder = max(created, key=lambda p: p.stat().st_mtime) if len(created) == 1 else None
         row = check_result(track, folder, status)
+        row["ros_domain_id"] = domain_id
         result_rows.append(row)
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_path.write_text(json.dumps(result_rows, ensure_ascii=False, indent=2) + "\n",
