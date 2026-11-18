@@ -8,6 +8,7 @@
 #include <gz/sim/EntityComponentManager.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
+#include <gz/sim/components/World.hh>
 #include <gz/sim/components/ParentEntity.hh>
 #include <gz/transport/Node.hh>
 #include <gz/msgs/boolean.pb.h>
@@ -847,8 +848,20 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    if(team.entity==gz::sim::kNullEntity||maps.empty())return false;
    spawnPose=gz::sim::worldPose(team.entity,ecm);
    const double x=spawnPose.Pos().X(),y=spawnPose.Pos().Y(),yaw=spawnPose.Rot().Yaw();
+   // Nearest-XY matching picks Monaco on the official Monza grid 1:
+   // that also causes the wrong map's Z elevation to be commanded.
+   std::string activeWorld;
+   ecm.Each<gz::sim::components::World,gz::sim::components::Name>(
+     [&](const gz::sim::Entity& world,
+         const gz::sim::components::World*,
+         const gz::sim::components::Name* name)->bool {
+       activeWorld=name->Data();worldEntity=world;return false;
+     });
+   if(activeWorld.empty())return false;
    double best=1e30,ss=0,lat=0;int selected=-1;
-   for(size_t m=0;m<maps.size();++m)for(size_t i=0;i+1<maps[m].second.size();++i){
+   for(size_t m=0;m<maps.size();++m) {
+     if(maps[m].first!=activeWorld)continue;
+     for(size_t i=0;i+1<maps[m].second.size();++i){
      const auto&a=maps[m].second[i],&b=maps[m].second[i+1];
      const double dx=b.x-a.x,dy=b.y-a.y;
      const double t=std::clamp(((x-a.x)*dx+(y-a.y)*dy)/std::max(1e-9,dx*dx+dy*dy),0.,1.);
@@ -857,7 +870,16 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
      if(score<best){best=score;selected=static_cast<int>(m);ss=a.s+t*(b.s-a.s);
        lat=(x-px)*(-std::sin(a.yaw))+(y-py)*std::cos(a.yaw);}
    }
-   if(selected<0||best>1.5)return false;
+     }
+   if(selected<0 || best>1.5){
+     if(!worldMismatchReported){
+       std::cerr<<"[TEAM08] World/track mismatch: world="<<activeWorld
+                <<" projection_error_m="<<best
+                <<" (fail closed; no route selected)"<<std::endl;
+       worldMismatchReported=true;
+     }
+     return false;
+   }
    trackName=maps[selected].first;route=maps[selected].second;
    lap=route.back().s+std::hypot(route.front().x-route.back().x,route.front().y-route.back().y);
    team.name="team_08";team.s=ss;team.lat=lat;teamStart=ss;
@@ -1150,7 +1172,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  gz::math::Pose3d spawnPose;
  std::vector<std::pair<std::string,std::vector<Pt>>> maps;
  std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
- bool hasLead=false,hasRear=false;
+ bool hasLead=false,hasRear=false,worldMismatchReported=false;
  double leadObservedAt=0,rearObservedAt=0;
  double lastTelemetryPublish=-1e9;
  gz::transport::Node node;gz::transport::Node::Publisher ready;
