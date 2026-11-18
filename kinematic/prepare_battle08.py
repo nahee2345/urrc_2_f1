@@ -96,7 +96,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
     root=world.getroot().find("world")
     for p in list(root.findall("plugin")):
         if p.get("name")=="urrc::FixedRouteReplay":root.remove(p)
-    plug=ET.SubElement(root,"plugin",name="urrc::BattleReplay08",filename=str(Path(lib).resolve()))
+    plug=ET.SubElement(root,"plugin",name="urrc::BattleReplay_08",filename=str(Path(lib).resolve()))
     values={
       "start_topic":"/team08/battle_start_08",
       "centerline_file":str(center_file.resolve()),
@@ -124,7 +124,7 @@ def build(track,lib,output,grid_position=1,lane=None,defense=False,laps=1):
     def colour(source,target,rgba):
         tree=ET.parse(source)
         for el in tree.getroot().iter("visual"):
-            if el.get("name")=="chassis_yellow":
+            if el.get("name") in ("chassis_yellow","chassis_visual"):
                 for attr in ("ambient","diffuse"):
                     node=el.find("material/"+attr)
                     if node is not None:node.text=rgba
