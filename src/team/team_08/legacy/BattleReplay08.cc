@@ -40,13 +40,13 @@ struct Car {
  double s=0,v=0,lat=0,from=0,to=0,changeStart=0,changeDuration=2.5;
  bool changing=false;
 };
-class BattleReplay08:public gz::sim::System,public gz::sim::ISystemConfigure,public gz::sim::ISystemPreUpdate {
+class BattleReplay_08:public gz::sim::System,public gz::sim::ISystemConfigure,public gz::sim::ISystemPreUpdate {
  public:
  void Configure(const gz::sim::Entity& world,const std::shared_ptr<const sdf::Element> &cfg,
                 gz::sim::EntityComponentManager&,gz::sim::EventManager&) override {
   worldEntity=world;
   const std::string topic=cfg->Get<std::string>("start_topic");
-  node.Subscribe(topic,&BattleReplay08::Start,this);
+  node.Subscribe(topic,&BattleReplay_08::Start,this);
   ready=node.Advertise<gz::msgs::Boolean>("/team08/battle_ready_08");
   gz::msgs::Boolean readyMsg;readyMsg.set_data(true);ready.Publish(readyMsg);
   std::ifstream src(cfg->Get<std::string>("centerline_file"));
@@ -1127,5 +1127,5 @@ class BattleReplay08:public gz::sim::System,public gz::sim::ISystemConfigure,pub
  bool ok=false,started=false,ended=false,passed=false,defended=false,attempted=false,braked=false;
 };
 }
-GZ_ADD_PLUGIN(urrc::BattleReplay08,gz::sim::System,urrc::BattleReplay08::ISystemConfigure,urrc::BattleReplay08::ISystemPreUpdate)
-GZ_ADD_PLUGIN_ALIAS(urrc::BattleReplay08,"urrc::BattleReplay08")
+GZ_ADD_PLUGIN(urrc::BattleReplay_08,gz::sim::System,urrc::BattleReplay_08::ISystemConfigure,urrc::BattleReplay_08::ISystemPreUpdate)
+GZ_ADD_PLUGIN_ALIAS(urrc::BattleReplay_08,"urrc::BattleReplay_08")
