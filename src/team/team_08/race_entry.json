@@ -1,14 +1,14 @@
 {
-  "entry_id": "team_11",
+  "entry_id": "team_08",
   "display_name": "TEAM 11 Path Following",
-  "ros_package": "team11_race",
+  "ros_package": "team08_race",
   "algorithm_launch_file": "race.launch.py",
-  "vehicle_model_file": "src/team_11/models/team11_car/model.sdf",
+  "vehicle_model_file": "src/team_08/models/team08_car/model.sdf",
   "vehicle_model_format": "sdf",
   "base_link_name": "base_link",
   "spawn_z_offset_m": 0.04,
-  "speed_topic": "/team11/speed_11",
-  "steering_topic": "/team11/steering_11",
-  "lidar_topic": "/team11/front_scan_11",
+  "speed_topic": "/team08/speed_08",
+  "steering_topic": "/team08/steering_08",
+  "lidar_topic": "/team08/front_scan_08",
   "launch_arguments": {}
 }
