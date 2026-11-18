@@ -1,6 +1,6 @@
 """Self-contained six-map three-lane path follower; uses only own world pose.
 
-World pose is obtained from the TEAM11 vehicle's own PosePublisher plugin.
+World pose is obtained from the TEAM08 vehicle's own PosePublisher plugin.
 Precomputed map following is for an authorized map-replay competition format.
 """
 from __future__ import annotations

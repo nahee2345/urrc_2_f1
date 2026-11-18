@@ -1,4 +1,4 @@
-"""Competition ROS race policy ported from TEAM11's three_lane C++ practice logic.
+"""Competition ROS race policy ported from TEAM08's three_lane C++ practice logic.
 
 Decision priority: front imminent TTC<=3s, corner center merge, rear TTC<=5s,
 otherwise keep the lane. Every maneuver requires a clear predicted trajectory;

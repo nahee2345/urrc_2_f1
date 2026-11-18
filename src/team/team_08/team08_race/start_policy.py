@@ -1,7 +1,7 @@
 """Official race-gate-backed start policy shared by practice and race.
 
 Camera lighting is primary, real side-car motion is secondary. A positive
-official /race/start/team_11 gate is ALWAYS required; no wall-clock auto-start
+official /race/start/team_08 gate is ALWAYS required; no wall-clock auto-start
 before gate. Solo-grid fallback is needed in qualifying with no adjacent car.
 """
 from __future__ import annotations

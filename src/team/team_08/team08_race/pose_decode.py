@@ -1,4 +1,4 @@
-"""Extract TEAM11 world poses from an isolated vehicle Pose_V -> TF bridge."""
+"""Extract TEAM08 world poses from an isolated vehicle Pose_V -> TF bridge."""
 from __future__ import annotations
 import math
 
@@ -10,7 +10,7 @@ def extract_vehicle_pose(msg):
 
     A Pose_V can contain more than one transform, not necessarily sorted.
     Prefer the model's world pose over a link pose that might be relative to
-    the model. The source topic is TEAM11-private; never use the timer topic.
+    the model. The source topic is TEAM08-private; never use the timer topic.
     """
     candidates=[]
     for tf in msg.transforms:
@@ -18,11 +18,11 @@ def extract_vehicle_pose(msg):
         parts=name.split("/")
         last=parts[-1] if parts else ""
         parent=str(tf.header.frame_id or "").lower()
-        if last=="team_11":
+        if last=="team_08":
             rank=0
-        elif last=="team11":
+        elif last=="team08":
             rank=1
-        elif last=="base_link" and ("team_11" in parts or "team11" in parts):
+        elif last=="base_link" and ("team_08" in parts or "team08" in parts):
             rank=2
         elif last=="base_link" and (parent in ("world","map") or parent.startswith("world/")):
             rank=3

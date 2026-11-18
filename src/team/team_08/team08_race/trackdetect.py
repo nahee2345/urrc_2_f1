@@ -54,10 +54,10 @@ def matching_grid(assets: Path, xyz_yaw, max_distance=.75, max_yaw=.35):
         if distance<=max_distance and delta<=max_yaw and height<=.45:
             matches.append((distance+delta+height,g["position"]))
     if not matches:
-        raise ValueError("TEAM11 spawn not located at an expected painted grid")
+        raise ValueError("TEAM08 spawn not located at an expected painted grid")
     matches.sort()
     if len(matches)>1 and matches[1][0]-matches[0][0]<.03:
-        raise ValueError("Ambiguous TEAM11 spawn grid")
+        raise ValueError("Ambiguous TEAM08 spawn grid")
     return matches[0][1]
 
 
