@@ -97,11 +97,17 @@ class Team08Pose_08 final:public gz::sim::System,
      const auto&v=maps[mapIndex].second;
      lap=v.back().s+std::hypot(v.front().x-v.back().x,v.front().y-v.back().y);
      lastPose={x,y,current.Pos().Z(),yaw};
+     spawnPose=current;
      initialized=true;lastTime=now;
      std::cout<<"[TEAM08 POSE] track="<<maps[mapIndex].first<<" start_s="<<s
               <<" lateral="<<offset<<" map_offset_error="<<best<<std::endl;
    }
    if(!go.load()){
+     // The original battle replay holds every car at the spawn pose before
+     // lights-out. Keep TEAM08 anchored even when Gazebo physics is active.
+     gz::sim::Model(model).SetWorldPoseCmd(ecm,spawnPose);
+     lastPose={spawnPose.Pos().X(),spawnPose.Pos().Y(),
+               spawnPose.Pos().Z(),spawnPose.Rot().Yaw()};
      lastTime=now;speed=0;publish(0,0);return;
    }
    double dt=clamp(now-lastTime,0.,.20);lastTime=now;
@@ -250,6 +256,7 @@ class Team08Pose_08 final:public gz::sim::System,
  double s=0,offset=0,goalOffset=0,fromOffset=0,lap=0;
  double zOffset=.04, speed=0,lastTime=0,changeAt=0,lastChange=-1e6,lastReport=0;
  Pose lastPose;
+ gz::math::Pose3d spawnPose;
 };
 }
 GZ_ADD_PLUGIN(urrc::Team08Pose_08,gz::sim::System,urrc::Team08Pose_08::ISystemConfigure,urrc::Team08Pose_08::ISystemPreUpdate)
