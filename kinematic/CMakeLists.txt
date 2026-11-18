@@ -12,6 +12,6 @@ set_target_properties(team11_battle_replay PROPERTIES CXX_STANDARD 17 CXX_STANDA
 target_link_libraries(team11_battle_replay PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
 
 # TEAM08: complete proven three-lap BattleReplay source, isolated from TEAM11.
-add_library(team08_battle_replay SHARED ../src/team/team_08/legacy/BattleReplay08.cc)
-set_target_properties(team08_battle_replay PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(team08_battle_replay PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
+add_library(team08_battle_replay_08 SHARED ../src/team/team_08/legacy/BattleReplay08.cc)
+set_target_properties(team08_battle_replay_08 PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(team08_battle_replay_08 PRIVATE gz-sim8::gz-sim8 gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
