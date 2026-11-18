@@ -1,6 +1,6 @@
 {
   "entry_id": "team_08",
-  "display_name": "TEAM 11 Path Following",
+  "display_name": "TEAM 08 Autonomous Racing",
   "ros_package": "team08_race",
   "algorithm_launch_file": "race.launch.py",
   "vehicle_model_file": "src/team_08/models/team08_car/model.sdf",

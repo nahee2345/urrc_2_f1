@@ -36,7 +36,7 @@ def generate_launch_description():
     }
     args.append(Node(package="team08_race",executable="team08_control",
         name="team08_control_08",output="screen",
-        parameters=[dict(shared,race_start_mode=LaunchConfiguration("race_start_mode"))]))
+        parameters=[dict(shared,race_start_mode="camera")]))
     args.append(Node(package="team08_race",executable="team08_adapter",
         name="team08_adapter_08",output="screen",parameters=[shared]))
     return LaunchDescription(args)

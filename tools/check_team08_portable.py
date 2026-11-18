@@ -25,6 +25,8 @@ def main():
     check((TEAM/"launch/race.launch.py").is_file(),"missing launch")
     check((TEAM/"package.xml").is_file(),"missing package.xml")
     check((TEAM/"models/team08_car/model.sdf").is_file(),"missing model.sdf")
+    check((TEAM/"src/team_08/models/team08_car/model.sdf").is_file(),"missing source-local model for official preflight")
+    check((TEAM/entry.get("vehicle_model_file","")).is_file(),"race_entry model path missing at team root")
     check((TEAM/"team08_race/control.py").is_file(),"missing controller")
     check((TEAM/"team08_race/strategy.py").is_file(),"missing race strategy")
     check((TEAM/"legacy/BattleReplay.cc").is_file(),"missing replay reference")
