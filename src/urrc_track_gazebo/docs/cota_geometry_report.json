@@ -1,0 +1,44 @@
+{
+  "track": "cota",
+  "target_length_m": 1102.6000000000001,
+  "length_xy_m": 1104.955114405838,
+  "length_3d_m": 1105.3888846974091,
+  "length_error_xy_pct": 0.21359644529637123,
+  "scale": 0.2,
+  "length_normalization_applied": false,
+  "centerline_simple": true,
+  "road_single_hole": true,
+  "road_valid": true,
+  "width_min_m": 2.4000000000000004,
+  "width_max_m": 3.1999999996977424,
+  "elevation_range_m": 6.241765642268091,
+  "grid_count": 20,
+  "meshes": {
+    "road": {
+      "vertices": 34720,
+      "triangles": 69440,
+      "watertight": true
+    },
+    "wall_outer": {
+      "vertices": 63038,
+      "triangles": 126076,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    },
+    "wall_inner": {
+      "vertices": 54080,
+      "triangles": 108160,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    }
+  },
+  "source_shape_deviation_m": 0.725671773992111,
+  "official_survey_accuracy": "UNVERIFIED: public outline, estimated widths, DEM-based elevation",
+  "gazebo_harmonic_runtime": "NOT_RUN",
+  "gazebo_jetty_runtime": "NOT_RUN",
+  "offsets": {
+    "left_raw_offset_simple": false,
+    "right_raw_offset_simple": true,
+    "offset_trim_area_m2": null
+  }
+}

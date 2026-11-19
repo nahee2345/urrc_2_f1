@@ -1,0 +1,44 @@
+{
+  "track": "hungaroring",
+  "target_length_m": 876.2,
+  "length_xy_m": 877.1263870098655,
+  "length_3d_m": 877.3957316831481,
+  "length_error_xy_pct": 0.10572780299766826,
+  "scale": 0.2,
+  "length_normalization_applied": false,
+  "centerline_simple": true,
+  "road_single_hole": true,
+  "road_valid": true,
+  "width_min_m": 2.000001556626825,
+  "width_max_m": 3.0,
+  "elevation_range_m": 6.944161931074474,
+  "grid_count": 20,
+  "meshes": {
+    "road": {
+      "vertices": 25442,
+      "triangles": 50884,
+      "watertight": true
+    },
+    "wall_outer": {
+      "vertices": 54356,
+      "triangles": 108712,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    },
+    "wall_inner": {
+      "vertices": 44624,
+      "triangles": 89248,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    }
+  },
+  "source_shape_deviation_m": 0.6215226937482375,
+  "official_survey_accuracy": "UNVERIFIED: public outline, estimated widths, DEM-based elevation",
+  "gazebo_harmonic_runtime": "NOT_RUN",
+  "gazebo_jetty_runtime": "NOT_RUN",
+  "offsets": {
+    "left_raw_offset_simple": true,
+    "right_raw_offset_simple": true,
+    "offset_trim_area_m2": 0.0
+  }
+}

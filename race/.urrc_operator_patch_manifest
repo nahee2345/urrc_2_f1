@@ -1,0 +1,6 @@
+race/scripts/admin_control.py
+race/scripts/event_ops.py
+race/scripts/host_monitor.py
+race/scripts/preflight_security.py
+race/tests/test_admin_control.py
+race/tests/test_event_ops.py
