@@ -79,11 +79,10 @@ def route(root:Path,args:list[str])->list[str]:
         if (root/'race/results/qualifying_individual/manifest.json').exists():
             raise ValueError('팀별 예선이 시작되었습니다. qualifying --team team_XX 로 이어서 진행하십시오.')
     if mode == 'official' and verb == 'refresh-maps':
-        results = root/'race/results'
-        if any((results/name).exists() for name in
-               ('qualifying.json', 'semi_a.json', 'semi_b.json', 'final.json',
-                'qualifying_individual/manifest.json')):
-            raise ValueError('기존 경기 기록이 있습니다. 맵 재추첨 전에 공식 기록을 별도 보관하고 새 이벤트를 시작하십시오.')
+        if extra not in ([], ['--yes']):
+            raise ValueError('refresh-maps 옵션은 --yes만 허용합니다')
+        return ['python3', str(root/'race/scripts/reset_event_v28.py'),
+                '--root', str(root), *extra]
     if verb in {'inspect-all','final-approve'}:
         if mode!='official':
             raise ValueError('이 명령은 urrc_22 공식 환경에서만 지원합니다')
