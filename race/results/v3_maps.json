@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "updated_unix": 1795083573.9048574,
+  "maps": {
+    "qualifying": "hungaroring",
+    "semi_a": "cota",
+    "semi_b": "baku",
+    "final": "monaco"
+  },
+  "rules": "unique stages; qualifying != monaco; final != monza; cota/baku paired semifinals"
+}

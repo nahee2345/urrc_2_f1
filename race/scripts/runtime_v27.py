@@ -11,12 +11,7 @@ def single(source, old, new, label):
 
 
 def adapt_run_v27(source:str)->str:
-    # Qualifying: the white start/finish line is first crossed BEFORE lap 1,
-    # then crossing #2 completes lap 1; crossing #4 completes lap 3.
-    source=single(source,
-       "    laps=2 if mode=='qualifying' else (final_laps if final_laps is not None else int(cfg['final_laps']))",
-       "    laps=3 if mode=='qualifying' else (final_laps if final_laps is not None else int(cfg['final_laps']))",
-       '예선 3랩')
+    # Use official two-lap qualifying; retain v27 DQ and live monitoring.
     source=single(source,
        "        row=result_row(e,monitor.snapshot(e['entry_id']),reason,position)\n        out.append(row)",
        "        row=result_row(e,monitor.snapshot(e['entry_id']),reason,position)\n"

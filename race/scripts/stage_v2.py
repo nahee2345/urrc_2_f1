@@ -144,7 +144,7 @@ def run(args):
     scope=dict(mgr.__dict__);scope.update(validate=selected_validate,save_results=stage_save,get_event=lambda *a,**k:event,stage=stage,v8_health=health,PoseLapMonitor=monitored(mgr.PoseLapMonitor))
     exec(compile(source,str(root/'race/scripts/race_manager.py'),'exec'),scope)
     internal_mode='qualifying' if stage=='qualifying' else 'final'
-    laps=3 if stage=='qualifying' else 3 if stage.startswith('semi_') else 5
+    laps=2 if stage=='qualifying' else 3 if stage.startswith('semi_') else 5
     print(f'[v12] 본선 2~6대 / 결승 2~7대 / {stage} / {track} / {expected}대 / {laps}랩 / 카메라 신호 출발')
     scope['run_mode'](root,internal_mode,None if stage=='qualifying' else laps,'camera')
     # Semifinal stages are intentionally independent; no event-wide map lock.

@@ -271,7 +271,7 @@ def render(reports, live=None):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description='URRC v16 차량 정적/실시간 통신 검수')
-    parser.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    parser.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     parser.add_argument('--team',choices=TEAM_IDS)
     parser.add_argument('--live',action='store_true',help='실행 중 대회 Gazebo 데이터 수신 검사')
     parser.add_argument('--track',choices=TRACKS,default='monza')

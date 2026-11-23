@@ -68,7 +68,7 @@ def complete_rows(root:Path,stage:str)->tuple[dict,list[dict]]:
     payload=load_json(root/'race/results'/f'{stage}.json')
     if payload.get('valid') is not True or payload.get('state')!='complete' or payload.get('provisional'):
         raise ValueError(f'{stage}: 확정된 공식 결과가 아닙니다')
-    required_laps=5 if stage=='final' else 3
+    required_laps=5 if stage=='final' else (2 if stage=='qualifying' else 3)
     if payload.get('laps')!=required_laps:
         raise ValueError(f'{stage}: {required_laps}랩 공식 기록이 아닙니다')
     rows=payload.get('results')
@@ -152,7 +152,7 @@ def ranked_qualifying(root:Path,payload:dict)->Path:
         if old.name not in expected:old.unlink()
     for r in rows:
         atomic_json(folder/f'{r["rank"]:02d}_{r["entry_id"]}.json',r)
-    text=['URRC F1 예선 3랩 순위','상태: '+str(payload.get('state'))+' (전체 참가팀 완료 전 잠정)',
+    text=['URRC F1 예선 2랩 순위','상태: '+str(payload.get('state'))+' (전체 참가팀 완료 전 잠정)',
           '순위 | 팀 | 상태 | 완료 랩 | 총시간(초)']
     for r in rows:
         seconds=r.get('time_seconds')

@@ -427,7 +427,7 @@ def write_reports(root:Path,selection,teams:dict,maps:dict,errors:list,live:dict
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description='URRC F1 v23 팀 토픽·6맵 호환성 검사')
-    parser.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    parser.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     parser.add_argument('--team',choices=TEAM_IDS,help='단일팀 지정')
     parser.add_argument('--teams',help='복수팀 동시주행 대상 team_01,team_02')
     parser.add_argument('--tracks',default='all',help='all, practice, monza,spa,...')

@@ -45,9 +45,19 @@ def profile(root):
     wanted=['monza','hungaroring','monaco'] if data['mode']=='practice' else ['monza','hungaroring','monaco','spa','cota','baku']
     if data.get('tracks')!=wanted:
         raise ValueError('지원 맵 목록이 v24 프로필과 다릅니다')
-    folder='urrc_2' if data['mode']=='practice' else 'urrc_22'
-    if root.name!=folder:
-        raise ValueError(f'작업 폴더 이름은 {folder}이어야 합니다: {root}')
+    if data['mode']=='official':
+        required = (
+            'race_v24.sh',
+            'race/scripts/race_manager.py',
+            'race/v24_profile.json',
+            'src/urrc_track_gazebo',
+            'src/team',
+        )
+        missing = [name for name in required if not (root/name).exists()]
+        if missing:
+            raise ValueError(f'대회장 필수 파일 누락: {missing}')
+    elif root.name != 'urrc_2':
+        raise ValueError(f'연습용 작업 폴더 이름은 urrc_2이어야 합니다: {root}')
     return data['mode'],wanted
 
 

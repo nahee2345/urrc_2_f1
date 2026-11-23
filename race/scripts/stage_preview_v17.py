@@ -20,7 +20,7 @@ import uuid
 STAGES=('vehicles','qualifying','semi_a','semi_b','final')
 TRACKS=('monza','spa','monaco','cota','hungaroring','baku')
 TEAM_RE=re.compile(r'team_(?:0[1-9]|1[0-2])\Z')
-LAPS={'vehicles':2,'qualifying':3,'semi_a':3,'semi_b':3,'final':5}
+LAPS={'vehicles':2,'qualifying':2,'semi_a':3,'semi_b':3,'final':5}
 # Defaults only for first-time previews without an official map assignment.
 MAP_FALLBACK={'vehicles':'monza','qualifying':'spa','semi_a':'cota',
               'semi_b':'baku','final':'monaco'}
@@ -344,7 +344,7 @@ def save_report(path:Path,data:dict)->None:
 def main(argv=None):
     parser=argparse.ArgumentParser(description='URRC F1 v17 대회 운영자의 맵/모의주행 사전점검')
     parser.add_argument('mode',choices=('preview','rehearse'))
-    parser.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    parser.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     parser.add_argument('stage',choices=STAGES)
     parser.add_argument('--track',choices=TRACKS)
     parser.add_argument('--team',help='선택 참가팀: team_01')

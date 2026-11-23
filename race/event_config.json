@@ -8,7 +8,7 @@
     "baku"
   ],
   "qualifying_laps": 2,
-  "final_laps": 10,
+  "final_laps": 5,
   "start_mode": "signal",
   "checkpoint_spacing_m": 10.0,
   "max_pose_gap_seconds": 0.05,

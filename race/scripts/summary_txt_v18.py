@@ -18,7 +18,7 @@ STAGES = ('vehicles','qualifying','semi_a','semi_b','final')
 LABEL = {'vehicles':'차량검수', 'qualifying':'예선', 'semi_a':'본선A',
          'semi_b':'본선B', 'final':'결승'}
 TEAM_RE = re.compile(r'^team_(?:0[1-9]|1[0-2])$')
-LAPS = {'qualifying':3,'semi_a':3,'semi_b':3,'final':5}
+LAPS = {'qualifying':2,'semi_a':3,'semi_b':3,'final':5}
 RESULT_DIR = Path('race/results/summary_txt')
 INSPECTION_DIR = Path('race/results/inspections')
 
@@ -273,7 +273,7 @@ def generate(root):
 
 def main(argv=None):
     p=argparse.ArgumentParser(description='URRC F1 차량검수·경기·모의주행 초간단 TXT 결과')
-    p.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    p.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     a=p.parse_args(argv)
     try:generate(a.root)
     except (ValueError,OSError) as exc:

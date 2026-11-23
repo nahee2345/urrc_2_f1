@@ -182,7 +182,7 @@ def perform(root:Path,downloads:Path,import_now:bool):
 
 def main():
     p=argparse.ArgumentParser(description='URRC v12: ~/Downloads 팀 1,2만 안전 등록')
-    p.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    p.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     p.add_argument('--downloads',type=Path,default=Path.home()/'Downloads')
     action=p.add_mutually_exclusive_group()
     action.add_argument('--check',action='store_true',help='기본 동작: 사전 검증만')

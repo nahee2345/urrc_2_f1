@@ -437,7 +437,7 @@ def main(argv=None):
     p=argparse.ArgumentParser(description='URRC practice/race environment diagnostic; read-only')
     sub=p.add_subparsers(dest='cmd',required=True)
     c=sub.add_parser('capture',help='Read ROS2/Gazebo during a running practice or race')
-    c.add_argument('--root',type=Path,default=Path.home()/'urrc_f1_ws')
+    c.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2])
     c.add_argument('--team',action='append',choices=[f'team_{i:02d}' for i in range(1,13)])
     c.add_argument('--track',choices=('monza','spa','monaco','cota','hungaroring','baku'),default='monza')
     c.add_argument('--seconds',type=float,default=40)
