@@ -55,6 +55,23 @@ python3 race/scripts/stage_team_gate.py final
 
 `STATIC_PASS` 또는 `REVIEW`는 **Gazebo 완주 합격이 아닙니다**. `REVIEW`의 base_link 회전·복수 링크 형상 등은 운영자가 별도로 확인합니다.
 
+## 맵 재추첨 및 모든 경기 기록 초기화
+
+`refresh-maps`는 기존 맵 배정과 함께 **모의주행, 차량검수 출력, 예선, 본선 A/B, 결승 및 순위·승인 기록**을 삭제하고 새 맵을 배정합니다. 초기화 전에 삭제 대상 목록을 표시하며 터미널에서 정확히 `RESET`을 입력해야 실행됩니다. **초기화는 되돌릴 수 없습니다.**
+
+```bash
+bash race_v24.sh refresh-maps
+# [v28 RESET] ... 입력 요구 시:
+# RESET
+bash race_v24.sh show-maps
+```
+
+비대화형 자동화에서 명시적으로 전체 기록을 초기화하려는 경우에만 `bash race_v24.sh refresh-maps --yes`를 사용합니다.
+
+초기화 대상: `race/results/`, `race/previews/`, `race/test_reports/` 안에 생성된 모든 파일·하위 폴더. `race/results/v3_maps.json`은 기존 배정을 삭제하고 새 배정으로 다시 만듭니다. `src/team/`, `race/entrants/`, `src/urrc_track_gazebo/`, 참가팀 소스 및 빌드 파일은 보존합니다. 실행 중인 Gazebo/경기는 먼저 정상 종료한 뒤 초기화하십시오.
+
+**주의:** Git으로 추적 중인 `race/results/v3_maps.json`도 변경되므로 `git status`에는 파일 수정이 표시될 수 있습니다. 실제 대회 결과는 초기화 전에 외부 저장소에 보관하십시오.
+
 ## 공식 경기 운영
 
 **현재 맵 배정**(`race/results/v3_maps.json`):
@@ -66,7 +83,7 @@ python3 race/scripts/stage_team_gate.py final
 | 본선 B | Baku | 3 |
 | 결승 | Monaco | 5 |
 
-맵 배정은 `refresh-maps` 실행 시 변경됩니다. 실제 경기 기록이 생긴 뒤에는 재추첨하지 마십시오.
+맵 재추첨 시 모든 이전 경기·모의주행 기록이 초기화됩니다. 이전 결과가 필요하면 먼저 별도 보관하십시오.
 
 ```bash
 bash race_v24.sh show-maps
