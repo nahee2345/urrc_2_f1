@@ -93,13 +93,15 @@ def main(argv=None):
     p.add_argument('--root',default=str(Path(__file__).resolve().parents[2]))
     p.add_argument('--track',choices=POOL,help='이 실행에만 지정; 저장된 맵 배정은 변경하지 않음')
     p.add_argument('--preview',action='store_true',help='참가자가 있어도 맵만 표시')
+    p.add_argument('--yes',action='store_true',help='맵 재배정 시 측정 기록 초기화 확인 생략')
     args=p.parse_args(argv)
     root=Path(args.root).expanduser().resolve()
     path=root/'race/results/v3_maps.json'
     try:
         if args.command=='refresh-maps':
             if args.track or args.preview: p.error('refresh-maps에는 --track/--preview를 사용하지 않습니다.')
-            data=refresh(path)
+            from reset_event_v28 import reset
+            data=reset(root,yes=args.yes)
         else:
             if not path.is_file():
                 if args.command=='show-maps':raise ValueError('맵 배정이 없습니다. refresh-maps를 먼저 실행하십시오.')
