@@ -1,0 +1,14 @@
+{
+  "entry_id": "team_03",
+  "display_name": "TEAM 03 Autonomous Racing",
+  "ros_package": "team03_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team03_race/models/team03_car/vehicle.urdf",
+  "vehicle_model_format": "urdf",
+  "base_link_name": "base_link",
+  "spawn_z_offset_m": 0.02,
+  "speed_topic": "/team03/speed_03",
+  "steering_topic": "/team03/steering_03",
+  "lidar_topic": "/team03/scan_03",
+  "launch_arguments": {}
+}
