@@ -1,0 +1,14 @@
+{
+  "entry_id": "team_05",
+  "display_name": "URRC TEAM 05",
+  "ros_package": "team05_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team05_race/models/car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "base_link_name": "base_link",
+  "spawn_z_offset_m": 0.055,
+  "speed_topic": "/team_05/speed",
+  "steering_topic": "/team_05/steering",
+  "lidar_topic": "/team_05/scan",
+  "launch_arguments": {}
+}

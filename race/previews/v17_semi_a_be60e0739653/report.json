@@ -1,0 +1,42 @@
+{
+  "mode": "REHEARSAL_NOT_OFFICIAL",
+  "stage": "semi_a",
+  "track": "monza",
+  "teams": [
+    "team_01",
+    "team_08"
+  ],
+  "required_laps": 3,
+  "status": "ERROR",
+  "details": {
+    "team_01": {
+      "required_laps": 3,
+      "laps": 0,
+      "finish_time": null,
+      "max_displacement_m": 11.222396583916387,
+      "speed_messages_after_release": 5000,
+      "max_abs_speed_command": 5.9039998054504395,
+      "status": "INCOMPLETE",
+      "reason": "모의주행 미완주; 출발선 통과 후 랩 미완료(laps=0, 다음 체크포인트=1)"
+    },
+    "team_08": {
+      "required_laps": 3,
+      "laps": 0,
+      "finish_time": null,
+      "max_displacement_m": 3.854475278402162e-07,
+      "speed_messages_after_release": 0,
+      "max_abs_speed_command": 0.0,
+      "status": "INCOMPLETE",
+      "reason": "모의주행 미완주; ROS 제어 명령 미수신(speed=0, steering=0); launch/토픽/제어기 확인"
+    }
+  },
+  "official_results_untouched": true,
+  "report_file": "/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_be60e0739653/report.json",
+  "error": "운영자 Ctrl+C 종료",
+  "sensor_status": "NOT_CAPTURED (see sensors.log)",
+  "cleanup_errors": [
+    "team_01 stop: ",
+    "team_08 stop: ",
+    "team_08 remove: Gazebo remove 요청 실패:  Service call timed out\n"
+  ]
+}

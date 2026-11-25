@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URRC F1 | 자유 관전 · Follow</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;--bg:#0c121a;--panel:#151e29;--line:#314255;--muted:#9baec2;--accent:#7fe2bf;--text:#edf3fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+header strong{font-size:18px;letter-spacing:.02em}header small{display:block;color:var(--muted);font-size:12px;margin-top:4px}.status{font-size:12px;color:var(--accent)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 295px;min-height:calc(100vh - 98px)}
+.view{position:relative;min-height:70vh;background:#192631;overflow:hidden;isolation:isolate}canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}canvas.dragging{cursor:grabbing}
+.hud{position:absolute;top:13px;left:13px;max-width:min(73%,390px);padding:9px 12px;border-radius:9px;background:#101a24dc;border:1px solid #39506a;pointer-events:none}
+.hud small{color:#afc2d5}.hud strong{display:block;font-size:16px;margin:3px 0}.hud p{font-size:12px;color:#b5c5d5;margin:0;line-height:1.5}
+.tools{position:absolute;bottom:16px;left:16px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100% - 32px)}.tools button{background:#182735ea;border:1px solid #49647c;color:#edf5fb;cursor:pointer;padding:9px 11px;border-radius:8px;font-size:12px}.tools button:hover{border-color:#8cbbdc}.tools button.active{border-color:var(--accent);color:var(--accent)}
+aside{display:flex;flex-direction:column;gap:17px;padding:17px;border-left:1px solid var(--line);background:var(--panel)}label{display:block;margin:0 0 6px;color:#c4d3e3;font-size:12px;font-weight:700}
+select,aside button{width:100%;padding:10px 9px;background:#1d2b3a;border:1px solid #4b6278;border-radius:7px;color:var(--text);font:inherit;font-size:13px}
+select:focus-visible,button:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+aside h3{font-size:14px;margin:0 0 8px}.muted{font-size:12px;line-height:1.75;color:var(--muted)}.team{display:grid;grid-template-columns:37px 1fr auto;gap:8px;align-items:center;padding:9px 5px;border-bottom:1px solid #334458;cursor:pointer;font-size:12px}.team:hover{background:#253443}.team span{color:#9db5cb}.team b{font-weight:600}.team em{font-style:normal;color:#a4b7ca;font-size:11px}.team.active b{color:var(--accent)}
+.notice{padding:11px;border:1px solid #34495d;border-radius:8px;color:#bfd0df;font-size:12px;line-height:1.75}
+footer{padding:9px 18px;background:#111a23;color:#879db4;font-size:11px;border-top:1px solid #2b3d50}
+@media(max-width:900px){main{display:block}.view{height:65vh;min-height:400px}aside{border-left:0;border-top:1px solid var(--line)}.hud{max-width:75%}}
+</style>
+</head>
+<body>
+<header><div><strong>URRC F1 · 관전</strong><small>자유 맵 탐색 / 전체 차량 Follow / 읽기 전용</small></div><div id="conn" class="status">연결 확인 중</div></header>
+<main>
+  <div class="view" id="view"><canvas id="scene" tabindex="0" aria-label="마우스로 이동, 확대 또는 축소 가능한 트랙 지도"></canvas>
+    <div class="hud"><small id="stage">맵을 불러오는 중</small><strong id="target">전체 맵 자유 관전</strong><p id="detail">차량을 선택하기 전에는 카메라가 고정되지 않습니다.</p></div>
+    <div class="tools">
+      <button type="button" id="fit">전체 맵</button>
+      <button type="button" id="free" class="active">자유 관전</button>
+      <button type="button" id="zoomIn">확대 +</button>
+      <button type="button" id="zoomOut">축소 −</button>
+      <button type="button" id="rotateReset">북쪽 위</button>
+    </div>
+  </div>
+  <aside>
+    <section><label for="track">관전 맵</label><select id="track">
+      <option value="monza">Monza</option><option value="hungaroring">Hungaroring</option><option value="monaco">Monaco</option><option value="spa">Spa</option><option value="cota">COTA</option><option value="baku">Baku</option>
+    </select><div class="muted" id="trackHint">경기 중에는 현재 경기 맵을 자동 표시합니다.</div></section>
+    <section><label for="team">관전 차량 선택 (모든 참가팀)</label><select id="team"><option value="">자유 관전 (Follow 안 함)</option></select>
+      <div class="muted">차량을 선택하거나 지도에서 차량을 클릭하면 Follow를 시작합니다.</div></section>
+    <section><label for="angle">Follow 시점</label><select id="angle"><option value="chase">후방 Follow</option><option value="top">상공 Follow</option></select></section>
+    <section><h3>현재 경기 잠정 순위</h3><div id="leaderboard" class="muted">경기 시작 전입니다.</div></section>
+    <div class="notice"><b>마우스 조작</b><div>왼쪽 드래그: 맵 이동 · 휠: 확대/축소</div><div>오른쪽 드래그: 지도 회전 · 차량 클릭: Follow</div><div>Follow 중 드래그: 자유 관전 전환</div><div>전체 맵: 자유 관전 및 화면 맞춤</div><div>관전 중인 차량이 DNF로 제거되면 현재 1위로 자동 변경됩니다.</div></div>
+    <div class="muted">맵은 트랙 중심선·도로 폭을 이용한 경량 관전 화면입니다. 실제 Gazebo의 3D 모델, 벽, 텍스처와 동일하지 않습니다. 운영자만 맵·차량을 조작할 수 있습니다.</div>
+  </aside>
+</main>
+<footer>URRC spectator · 읽기 전용 · 스폰 / DNF / 모델 이동 / 맵 편집 불가</footer>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const key=new URLSearchParams(location.search).get('key')||'';
+const cv=$('scene'),ctx=cv.getContext('2d');
+const teamSelect=$('team'),trackSelect=$('track'),angle=$('angle');
+const TRACKS=['monza','hungaroring','monaco','spa','cota','baku'];
+let latest=null,route=[],loadedTrack='',selected=null,mode='free',error='',pollStarted=false,carHits=[];
+let bounds=null,center={x:0,y:0},zoom=1,rotation=0,viewWidth=0,viewHeight=0;
+let pointer=null,loadedRequest=0,serverWasActive=false;
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function activeCar(team){return (latest?.teams||[]).find(t=>t.team===team && t.available && t.pose)}
+function isActive(){return latest?.state==='running'||latest?.state==='waiting_vehicles'}
+function refreshMode(){ $('free').classList.toggle('active',mode==='free'); $('target').textContent=mode==='follow'&&selected?'FOLLOW '+selected:'전체 맵 자유 관전';
+  $('detail').textContent=mode==='follow'&&selected?'선택 차량 추적 중 · 지도 드래그로 자유 관전 전환':'맵 어디든 마우스로 이동·확대·축소할 수 있습니다.';
+  if(mode==='free'){teamSelect.value=''}else{teamSelect.value=selected||''}}
+function toFree(keepTarget=true){if(mode==='follow'&&keepTarget){const car=activeCar(selected);if(car){center={x:car.pose.x,y:car.pose.y};zoom=Math.max(zoom,3)}}mode='free';selected=null;refreshMode()}
+function follow(team){const car=activeCar(team);if(!car)return false;mode='follow';selected=team;refreshMode();return true}
+function fit(){mode='free';selected=null;zoom=1;rotation=0;center=bounds?{x:bounds.cx,y:bounds.cy}:{x:0,y:0};refreshMode()}
+function ensureBounds(){if(!route.length)return;const xs=route.map(x=>x[0]),ys=route.map(x=>x[1]);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);bounds={cx:(x0+x1)/2,cy:(y0+y1)/2,sx:Math.max(5,x1-x0),sy:Math.max(5,y1-y0)};fit()}
+async function getJson(path,params={}){const url=new URL(path,location.href);url.searchParams.set('key',key);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);const r=await fetch(url,{cache:'no-store',credentials:'omit'});if(!r.ok)throw Error('HTTP '+r.status+' · '+path);return r.json()}
+async function loadTrack(name,force=false){if(!TRACKS.includes(name))return;if(name===loadedTrack&&route.length&&!force)return;const generation=++loadedRequest;try{const data=await getJson('/api/track',{track:name});if(generation!==loadedRequest||data.track!==name)return;
+    route=Array.isArray(data.centerline)?data.centerline.filter(p=>Array.isArray(p)&&p.length>=4&&p.every(Number.isFinite)):[];
+    loadedTrack=name;trackSelect.value=name;error='';ensureBounds();$('stage').textContent=isActive()?`${latest.stage} / ${name}`:`경기 대기 · ${name}`;
+  }catch(e){if(generation!==loadedRequest)return;error=String(e);$('conn').textContent='맵 수신 오류: '+error}}
+function refreshSelect(){const old=teamSelect.value;teamSelect.replaceChildren(new Option('자유 관전 (Follow 안 함)',''));
+  for(const row of latest?.teams||[]){const opt=new Option(row.team+(row.rank?` · 잠정 ${row.rank}위`:'')+(row.available?'':' · 미출전/제거'),row.team);opt.disabled=!row.available;teamSelect.add(opt)}
+  teamSelect.value=mode==='follow'?selected||'':'';if(!teamSelect.value)teamSelect.value='';}
+function refreshRank(){const area=$('leaderboard');area.replaceChildren();const rows=(latest?.teams||[]).filter(t=>t.available&&t.rank).sort((a,b)=>a.rank-b.rank);if(!rows.length){area.textContent='현재 주행 중인 차량 없음';return}
+  for(const r of rows){const div=document.createElement('div');div.className='team'+(mode==='follow'&&r.team===selected?' active':'');div.title=r.team+' Follow';const s=document.createElement('span');s.textContent=r.rank+'위';const b=document.createElement('b');b.textContent=r.team;const e=document.createElement('em');e.textContent=r.status;div.append(s,b,e);div.addEventListener('click',()=>follow(r.team));area.append(div)}}
+async function poll(){try{const data=await getJson('/api/state');error='';const prevStage=latest?.stage,prevTrack=latest?.track;latest=data;
+    const playing=isActive();serverWasActive=playing;
+    $('conn').textContent=playing?'경기 정보 수신 중':'관전 서버 연결됨 · 경기 대기';
+    $('stage').textContent=playing?`${data.stage} / ${data.track}`:`경기 대기 · ${loadedTrack||trackSelect.value}`;
+    trackSelect.disabled=playing;$('trackHint').textContent=playing?'현재 경기 맵을 자동 표시합니다.':'경기 전에는 다른 맵도 미리 볼 수 있습니다.';
+    if(playing&&data.track!==loadedTrack)await loadTrack(data.track);
+    if(playing&&prevStage&&prevStage!==data.stage){toFree(false);fit()}
+    if(mode==='follow'&&!activeCar(selected)){
+      // Only an explicitly followed vehicle disappearing triggers leader fallback.
+      if(data.leader&&activeCar(data.leader))follow(data.leader);else toFree(false);
+    }
+    // No auto-follow on initial connection or while freely exploring.
+    if(!playing&&mode==='follow')toFree(false);
+    refreshSelect();refreshRank();refreshMode();
+  }catch(e){error=String(e);$('conn').textContent='관전 서버 연결 실패 · '+error}
+  setTimeout(poll,1000)}
+trackSelect.addEventListener('change',()=>{if(!isActive())loadTrack(trackSelect.value)});
+teamSelect.addEventListener('change',()=>{if(!teamSelect.value)toFree(false);else follow(teamSelect.value)});
+$('fit').addEventListener('click',fit);$('free').addEventListener('click',()=>toFree());$('rotateReset').addEventListener('click',()=>{toFree();rotation=0});
+function viewSize(){const r=cv.getBoundingClientRect();viewWidth=r.width;viewHeight=r.height;const dpr=clamp(devicePixelRatio||1,1,2);cv.width=Math.max(1,Math.round(viewWidth*dpr));cv.height=Math.max(1,Math.round(viewHeight*dpr));ctx.setTransform(dpr,0,0,dpr,0,0)}
+function getScale(){if(!bounds)return 1;return Math.max(.00001,Math.min((viewWidth-90)/bounds.sx,(viewHeight-110)/bounds.sy))*zoom}
+function mapToScreen(x,y){const a=x-center.x,b=y-center.y,c=Math.cos(rotation),s=Math.sin(rotation),k=getScale();return [viewWidth/2+(a*c-b*s)*k,viewHeight/2-(a*s+b*c)*k]}
+function screenToMap(px,py){const dx=(px-viewWidth/2)/getScale(),dy=-(py-viewHeight/2)/getScale(),c=Math.cos(rotation),s=Math.sin(rotation);return {x:center.x+dx*c+dy*s,y:center.y-dx*s+dy*c}}
+function zoomAt(x,y,factor){const before=screenToMap(x,y);zoom=clamp(zoom*factor,.15,100);const after=screenToMap(x,y);center.x+=before.x-after.x;center.y+=before.y-after.y}
+$('zoomIn').addEventListener('click',()=>{toFree();zoomAt(viewWidth/2,viewHeight/2,1.5)});
+$('zoomOut').addEventListener('click',()=>{toFree();zoomAt(viewWidth/2,viewHeight/2,1/1.5)});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();toFree();const b=cv.getBoundingClientRect();zoomAt(e.clientX-b.left,e.clientY-b.top,Math.exp(-e.deltaY*.0013))},{passive:false});
+cv.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;pointer={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,button:e.button,moved:false};cv.setPointerCapture(e.pointerId);cv.classList.add('dragging')});
+cv.addEventListener('pointermove',e=>{if(!pointer||e.pointerId!==pointer.id)return;const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;pointer.x=e.clientX;pointer.y=e.clientY;
+  if(!pointer.moved&&Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)<3)return;
+  if(!pointer.moved){toFree();pointer.moved=true}
+  if(pointer.button===2){rotation+=dx*.007;return}
+  const c=Math.cos(rotation),s=Math.sin(rotation),k=getScale();center.x+=(-dx*c+dy*s)/k;center.y+=(dx*s+dy*c)/k});
+function clickCar(px,py){let pick=null,dist=20;for(const item of carHits){const d=Math.hypot(item.x-px,item.y-py);if(d<dist){dist=d;pick=item}}return pick?.team||null}
+function pointerUp(e){if(!pointer||e.pointerId!==pointer.id)return;const wasClick=!pointer.moved&&pointer.button===0;pointer=null;cv.classList.remove('dragging');if(wasClick&&mode==='free'){const r=cv.getBoundingClientRect(),team=clickCar(e.clientX-r.left,e.clientY-r.top);if(team)follow(team)}}
+cv.addEventListener('pointerup',pointerUp);cv.addEventListener('pointercancel',()=>{pointer=null;cv.classList.remove('dragging')});
+cv.addEventListener('keydown',e=>{if(e.key==='Escape'){toFree();e.preventDefault()}else if(e.key.toLowerCase()==='f'){fit();e.preventDefault()}});
+function heading(p){if(Number.isFinite(p.heading))return p.heading;if(!route.length)return 0;let idx=0,best=Infinity;for(let i=0;i<route.length;i+=4){const r=route[i],d=(r[0]-p.x)**2+(r[1]-p.y)**2;if(d<best){best=d;idx=i}}const p0=route[idx],p1=route[(idx+5)%route.length];return Math.atan2(p1[1]-p0[1],p1[0]-p0[0])}
+function background(w,h){const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#162637');g.addColorStop(1,'#1b332d');ctx.fillStyle=g;ctx.fillRect(0,0,w,h)}
+function textCenter(s,w,h){ctx.fillStyle='#c1d0df';ctx.textAlign='center';ctx.font='14px system-ui';ctx.fillText(s,w/2,h/2)}
+function drawFree(w,h){carHits=[];if(!route.length){textCenter(error||'트랙 데이터를 불러오는 중입니다',w,h);return}
+  const scale=getScale();if(!Number.isFinite(scale)||scale<=0)return;
+  ctx.strokeStyle='#293e46';ctx.lineWidth=1;
+  if(scale>1.2){const step=50;const box=[screenToMap(0,0),screenToMap(w,h),screenToMap(w,0),screenToMap(0,h)];const minx=Math.min(...box.map(x=>x.x))-50,maxx=Math.max(...box.map(x=>x.x))+50,miny=Math.min(...box.map(x=>x.y))-50,maxy=Math.max(...box.map(x=>x.y))+50;
+    const limit=0;for(let x=Math.floor(minx/step)*step,i=0;x<=maxx&&i<250;x+=step,i++){const p=mapToScreen(x,miny),q=mapToScreen(x,maxy);ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(...q);ctx.stroke()}for(let y=Math.floor(miny/step)*step,i=0;y<=maxy&&i<250;y+=step,i++){const p=mapToScreen(minx,y),q=mapToScreen(maxx,y);ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(...q);ctx.stroke()}}
+  ctx.beginPath();route.forEach((p,i)=>{const [sx,sy]=mapToScreen(p[0],p[1]);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath();
+  const width=clamp((route[0][3]||2.4)*scale,3,120);
+  ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=width+Math.max(2,scale*.6);ctx.strokeStyle='#bfced9';ctx.stroke();
+  ctx.lineWidth=width;ctx.strokeStyle='#596670';ctx.stroke();
+  if(scale>2){ctx.setLineDash([Math.max(3,scale*2),Math.max(4,scale*3)]);ctx.lineWidth=clamp(scale*.055,.6,1.5);ctx.strokeStyle='#cad3b5';ctx.stroke();ctx.setLineDash([])}
+  for(const car of (latest?.teams||[])){
+    if(!car.available||!car.pose||(!isActive())||loadedTrack!==latest.track)continue;
+    const [px,py]=mapToScreen(car.pose.x,car.pose.y);if(px<-50||px>w+50||py<-50||py>h+50)continue;
+    carHits.push({team:car.team,x:px,y:py});const direction=heading(car.pose)+rotation;
+    ctx.save();ctx.translate(px,py);ctx.rotate(-direction);ctx.fillStyle='#7fe2bf';ctx.strokeStyle='#0a1a24';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-8,-7);ctx.lineTo(-8,7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+    ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.strokeStyle='#101c25';ctx.lineWidth=3;ctx.strokeText(car.team,px,py-16);ctx.fillStyle='#f3f7fa';ctx.fillText(car.team,px,py-16);
+  }
+  ctx.fillStyle='#d4e4ec';ctx.textAlign='left';ctx.font='12px system-ui';ctx.fillText('자유 관전 · 확대 '+zoom.toFixed(1)+'배 · '+loadedTrack+' · 화면 조작만 허용',13,h-15);
+}
+function drawFollow(w,h){carHits=[];const t=activeCar(selected);if(!t||!route.length){textCenter('Follow 차량 위치를 기다리는 중입니다',w,h);return}
+  const p=t.pose,theta=heading(p),fx=Math.cos(theta),fy=Math.sin(theta),top=angle.value==='top';
+  const cam={x:p.x-fx*(top?2:12),y:p.y-fy*(top?2:12),z:p.z+(top?35:7)},aim={x:p.x+fx*(top?1:17),y:p.y+fy*(top?1:17),z:p.z};
+  let f=[aim.x-cam.x,aim.y-cam.y,aim.z-cam.z],fl=Math.hypot(...f);f=f.map(v=>v/fl);
+  let right=[f[1],-f[0],0],rl=Math.hypot(...right);right=right.map(v=>v/rl);const up=[right[1]*f[2],-right[0]*f[2],right[0]*f[1]-right[1]*f[0]];
+  const scale=(top?.95:1.1)*Math.min(w,h),cx=w/2,cy=h*(top?.51:.6);
+  function project(v){const x=v[0]-cam.x,y=v[1]-cam.y,z=v[2]-cam.z,depth=x*f[0]+y*f[1]+z*f[2];if(depth<.3)return null;return [cx+scale*(x*right[0]+y*right[1]+z*right[2])/depth,cy-scale*(x*up[0]+y*up[1]+z*up[2])/depth,depth]}
+  const road=[];for(let i=0;i<route.length;i++){const a=route[i],b=route[(i+1)%route.length],dx=b[0]-a[0],dy=b[1]-a[1],n=Math.hypot(dx,dy)||1,hw=a[3]/2,px=-dy/n*hw,py=dx/n*hw;road.push({L:project([a[0]+px,a[1]+py,a[2]]),R:project([a[0]-px,a[1]-py,a[2]])})}
+  const patches=[];for(let i=0;i<road.length-1;i++){const a=road[i],b=road[i+1];if(!a.L||!a.R||!b.L||!b.R)continue;patches.push({poly:[a.L,a.R,b.R,b.L],depth:(a.L[2]+b.L[2])/2})}
+  patches.sort((a,b)=>b.depth-a.depth);for(const patch of patches){const q=patch.poly;ctx.beginPath();ctx.moveTo(q[0][0],q[0][1]);for(let j=1;j<4;j++)ctx.lineTo(q[j][0],q[j][1]);ctx.closePath();ctx.fillStyle='#56616b';ctx.fill();ctx.strokeStyle='#c6d0d8';ctx.lineWidth=.7;ctx.stroke()}
+  const cars=(latest.teams||[]).filter(row=>row.available&&row.pose).map(row=>({row,pos:project([row.pose.x,row.pose.y,row.pose.z+.32])})).filter(q=>q.pos).sort((a,b)=>b.pos[2]-a.pos[2]);
+  for(const {row,pos} of cars){const [x,y,z]=pos,r=clamp(70/z,7,40);if(x<-50||x>w+50||y<-50||y>h+50)continue;
+    ctx.fillStyle=row.team===selected?'#7fe2bf':'#8bbff2';ctx.beginPath();ctx.roundRect(x-r/1.65,y-r/2,r*1.3,r,3);ctx.fill();ctx.strokeStyle='#0b1b25';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#f5faff';ctx.textAlign='center';ctx.font='600 12px system-ui';ctx.fillText(row.team,x,y-r*.7-5);ctx.fillText((row.rank||'-')+'위',x,y+2*r+2)}
+  ctx.fillStyle='#dfedfa';ctx.textAlign='left';ctx.font='12px system-ui';ctx.fillText((top?'상공':'후방')+' Follow · 자유 탐색은 마우스를 드래그하십시오',13,h-15)
+}
+function draw(){const w=viewWidth,h=viewHeight;if(!w||!h)return;ctx.clearRect(0,0,w,h);background(w,h);if(mode==='follow'&&activeCar(selected))drawFollow(w,h);else drawFree(w,h)}
+function render(){draw();requestAnimationFrame(render)}
+window.addEventListener('resize',viewSize);viewSize();refreshMode();loadTrack(trackSelect.value);poll();requestAnimationFrame(render);
+</script>
+</body></html>

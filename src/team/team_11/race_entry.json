@@ -1,0 +1,15 @@
+{
+  "entry_id": "team_11",
+  "display_name": "Team 11",
+  "ros_package": "team11_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team11_race/models/team11_car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "spawn_z_offset_m": 0.105,
+  "speed_topic": "/team_11/speed",
+  "steering_topic": "/team_11/steering",
+  "lidar_topic": "/team_11/scan",
+  "launch_arguments": {},
+  "division": "B",
+  "base_link_name": "base_link"
+}

@@ -1,0 +1,17 @@
+{
+  "role": "competition",
+  "tracks": [
+    "monza",
+    "spa",
+    "monaco",
+    "cota",
+    "hungaroring",
+    "baku"
+  ],
+  "vehicle_max_m": [
+    0.55,
+    0.25,
+    0.18
+  ],
+  "contract_version": 2
+}

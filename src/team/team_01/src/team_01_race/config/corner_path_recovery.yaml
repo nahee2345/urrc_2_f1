@@ -1,0 +1,13 @@
+# Only the bounded fallback adds a speed (1.2 m/s). Normal policies are unchanged.
+/**:
+  ros__parameters:
+    corner_path_recovery:
+      enabled: true
+      corner_path_hold_sec: 0.5
+      corner_path_hold_speed_mps: 1.2
+      path_loss_confirm_frames: 3
+      reacquire_confirm_frames: 3
+      memory_min_confidence: 0.6
+      commit_min_confidence: 0.75
+      enable_single_wall_fallback: true
+      enable_previous_trajectory_fallback: true

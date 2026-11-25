@@ -1,0 +1,41 @@
+/**:
+  ros__parameters:
+    primary_steering_source: lidar
+    path_manager:
+      enable_lidar_path: true
+      enable_camera_lidar_fusion: true
+      lidar_only_max_speed_mps: 2.0  # Fallback only: single wall / low confidence / unconfirmed, never NORMAL primary.
+      fused_max_speed_mps: 2.5
+      previous_path_max_speed_mps: 1.2
+      source_switch_confirm_frames: 3
+      camera_recovery_confirm_frames: 3
+      camera_recovery_min_duration_sec: 0.20
+      camera_degradation_confirm_frames: 3
+      minimum_source_hold_time: 0.30
+      source_switch_confidence_margin: 0.05
+      source_geometry_agreement_threshold: 0.25
+      max_curvature_difference: 0.15
+      max_lateral_difference_m: 0.25
+      max_heading_difference_deg: 15.0
+      max_width_difference_m: 0.30
+      max_source_stamp_skew_sec: 0.15
+    lidar_track:
+      enabled: true
+      min_wall_points: 12
+      min_wall_span_m: 1.0
+      max_fit_error_m: 0.12
+      min_forward_observed_m: 1.0
+      max_near_gap_m: 2.5
+      cluster_gap_m: 0.18
+      single_wall_enabled: true
+      width_memory_sec: 2.0
+      width_relative_tolerance: 0.30
+    obstacle_pass:
+      enabled: true
+      obstacle_pass_speed_mps: 2.0
+      pass_side_hysteresis: true
+      merge_center_enabled: true
+      clear_confirm_frames: 3
+      merge_confirm_frames: 3
+    corner_path_recovery:
+      allow_general_path_hold: true

@@ -1,0 +1,15 @@
+# Original pre-regulation mount; RESEARCH ONLY, oversize.
+/**:
+  ros__parameters:
+    camera_mount:
+      x_m: 0.195
+      y_m: 0.0
+      z_m: 0.135
+      roll_deg: 0.0
+      pitch_deg: 5.729577951308233
+      yaw_deg: 0.0
+      use_camera_mast: false
+      mast_height_m: 0.04
+      camera_forward_offset_m: 0.195
+      camera_pitch_deg: 9.0
+      allow_oversize_for_validation: true

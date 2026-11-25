@@ -1,0 +1,38 @@
+[INFO] [1795430188.641335583] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[INFO] [1795430188.643246906] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/model/team_01/urrc_timing (gz.msgs.Pose_V) -> /model/team_01/urrc_timing (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[INFO] [1795430188.647338309] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/model/team_08/urrc_timing (gz.msgs.Pose_V) -> /model/team_08/urrc_timing (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="body_imu"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_be60e0739653/runtime_models/team_01_quwnhb5p.sdf:L119]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="lidar"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_be60e0739653/runtime_models/team_01_quwnhb5p.sdf:L147]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="camera"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_be60e0739653/runtime_models/team_01_quwnhb5p.sdf:L167]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="start_camera"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_be60e0739653/runtime_models/team_01_quwnhb5p.sdf:L187]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="body_imu"]/gz_frame_id:<data-string>:L124]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="lidar"]/gz_frame_id:<data-string>:L152]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="camera"]/gz_frame_id:<data-string>:L172]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="start_camera"]/gz_frame_id:<data-string>:L192]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;31m[Err] [SystemLoader.cc:92] [0m[1;31mFailed to load system plugin [[0m[1;31mlibteam08_pose_08.so[0m[1;31m] : Could not find shared library.[0m[1;31m[0m
+[1;31m[Err] [UserCommands.cc:1119] [0m[1;31mEntity named [[0m[1;31murrc_start_signal_active[0m[1;31m] of type [[0m[1;31m2[0m[1;31m] not found, so not removed.[0m[1;31m[0m
+[1;31m[Err] [Contact.cc:270] [0m[1;31mInternal error, missing Contact sensor for entity [[0m[1;31m49[0m[1;31m][0m[1;31m[0m
+[1;31m[Err] [Contact.cc:270] [0m[1;31mInternal error, missing Contact sensor for entity [[0m[1;31m58[0m[1;31m][0m[1;31m[0m
+[1;31m[Err] [Contact.cc:270] [0m[1;31mInternal error, missing Contact sensor for entity [[0m[1;31m63[0m[1;31m][0m[1;31m[0m
+[1;31m[Err] [Contact.cc:270] [0m[1;31mInternal error, missing Contact sensor for entity [[0m[1;31m67[0m[1;31m][0m[1;31m[0m
+[1;31m[Err] [Contact.cc:270] [0m[1;31mInternal error, missing Contact sensor for entity [[0m[1;31m71[0m[1;31m][0m[1;31m[0m
+Stack trace (most recent call last) in thread 35584:
+#16   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#15   Object "/lib/x86_64-linux-gnu/libc.so.6", at 0x712e21929ecb, in 
+#14   Object "/lib/x86_64-linux-gnu/libc.so.6", at 0x712e2189cb83, in 
+#13   Object "/lib/x86_64-linux-gnu/libstdc++.so.6", at 0x712e1c6ecdb3, in 
+#12   Object "/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/libgz-sim-sensors-system.so", at 0x712dfbebb737, in gz::sim::v8::systems::SensorsPrivate::RenderThread()
+#11   Object "/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/libgz-sim-sensors-system.so", at 0x712dfbeb9ed4, in gz::sim::v8::systems::SensorsPrivate::RunOnce()
+#10   Object "/opt/ros/jazzy/opt/gz_sensors_vendor/lib/libgz-sensors8.so.8", at 0x712dfa70803e, in gz::sensors::v8::Manager::RunOnce(std::chrono::duration<long, std::ratio<1l, 1000000000l> > const&, bool)
+#9    Object "/opt/ros/jazzy/opt/gz_sensors_vendor/lib/libgz-sensors8.so.8", at 0x712dfa707f5b, in gz::sensors::v8::Sensor::Update(std::chrono::duration<long, std::ratio<1l, 1000000000l> > const&, bool)
+#8    Object "/opt/ros/jazzy/opt/gz_sensors_vendor/lib/libgz-sensors8-camera.so.8", at 0x712dfab66e19, in gz::sensors::v8::CameraSensor::Update(std::chrono::duration<long, std::ratio<1l, 1000000000l> > const&)
+#7    Object "/opt/ros/jazzy/opt/gz_sensors_vendor/lib/libgz-sensors8-rendering.so.8", at 0x712dfab4bac5, in gz::sensors::v8::RenderingSensor::Render()
+#6    Object "/opt/ros/jazzy/opt/gz_rendering_vendor/lib/gz-rendering-8/engine-plugins/libgz-rendering-ogre2.so", at 0x712deaa0e00d, in gz::rendering::v8::Ogre2RenderTarget::Render()
+#5    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea64c4c3, in Ogre::CompositorWorkspace::_update(bool)
+#4    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea63cb35, in Ogre::CompositorNode::_update(Ogre::Camera const*, Ogre::SceneManager*)
+#3    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea656b95, in Ogre::CompositorPassQuad::execute(Ogre::Camera const*)
+#2    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea527dd6, in Ogre::Renderable::setMaterial(Ogre::SharedPtr<Ogre::Material> const&)
+#1    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea527736, in Ogre::Renderable::setDatablock(Ogre::HlmsDatablock*)
+#0    Object "/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib/libOgreNextMain.so.2.3.3", at 0x712dea433b54, in Ogre::HlmsDatablock::_unlinkRenderable(Ogre::Renderable*)
+Segmentation fault (Signal sent by the kernel [(nil)])
+[INFO] [1795430280.397786673] [rclcpp]: signal_handler(SIGINT/SIGTERM)

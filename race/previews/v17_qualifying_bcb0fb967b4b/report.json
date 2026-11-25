@@ -1,0 +1,13 @@
+{
+  "mode": "REHEARSAL_NOT_OFFICIAL",
+  "stage": "qualifying",
+  "track": "monaco",
+  "teams": [
+    "team_01"
+  ],
+  "required_laps": 2,
+  "status": "STARTING",
+  "details": {},
+  "official_results_untouched": true,
+  "report_file": "/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_bcb0fb967b4b/report.json"
+}

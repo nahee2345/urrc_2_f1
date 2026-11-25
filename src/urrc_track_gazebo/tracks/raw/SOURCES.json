@@ -1,0 +1,26 @@
+{
+  "monza": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/it-1922.geojson",
+    "sha256": "8b0758ef5a52bb9360c7673d45e0fbea6f29f7349486c5acbb2fe9aa340cb495"
+  },
+  "spa": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/be-1925.geojson",
+    "sha256": "b867de9cc8364cc9b545a044377a56a697b8db77823c849c1a1c03760a943381"
+  },
+  "monaco": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/mc-1929.geojson",
+    "sha256": "daf184fc7d0948cadd10ce9428ba87b5462d9df6e33daec7b6f9aad235dc879e"
+  },
+  "cota": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/us-2012.geojson",
+    "sha256": "199621d61cf0b50429fc9fcf1a8dabf016df453e33bf64299a651e1acad7e158"
+  },
+  "hungaroring": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/hu-1986.geojson",
+    "sha256": "f822ff317874776d37d15970723f6007b463ab04c25ef5ce8ecb651c5478ee0d"
+  },
+  "baku": {
+    "url": "https://raw.githubusercontent.com/bacinger/f1-circuits/394d8fbe70ef2c0b0c8d23ff7bee61fa09606055/circuits/az-2016.geojson",
+    "sha256": "778230a47bee57c5eebb9d5b48143eadceff92603fd6035551e57f165862fd4b"
+  }
+}

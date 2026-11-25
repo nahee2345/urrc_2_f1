@@ -1,0 +1,29 @@
+{
+  "mode": "REHEARSAL_NOT_OFFICIAL",
+  "stage": "qualifying",
+  "track": "monaco",
+  "teams": [
+    "team_05"
+  ],
+  "required_laps": 2,
+  "status": "ERROR",
+  "details": {
+    "team_05": {
+      "required_laps": 2,
+      "laps": 0,
+      "finish_time": null,
+      "max_displacement_m": 4.093564074051148,
+      "speed_messages_after_release": 0,
+      "max_abs_speed_command": 0.0,
+      "status": "INCOMPLETE",
+      "reason": "모의주행 미완주; ROS 제어 명령 미수신(speed=0, steering=0); launch/토픽/제어기 확인"
+    }
+  },
+  "official_results_untouched": true,
+  "report_file": "/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_75c207b277e8/report.json",
+  "error": "운영자 Ctrl+C 종료",
+  "sensor_status": "NOT_CAPTURED (see sensors.log)",
+  "cleanup_errors": [
+    "team_05 stop: "
+  ]
+}

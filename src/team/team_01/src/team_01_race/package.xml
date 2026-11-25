@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>team_01_race</name><version>0.2.0</version>
+  <description>LiDAR center/pass paths and Pure Pursuit steering, metric RGB-D corner speed with relative odometry tracking, visual red lights-out gate and IMU ramp safety.</description>
+  <maintainer email="team_01@example.com">Team 01</maintainer><license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend><buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend><exec_depend>sensor_msgs</exec_depend><exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend><exec_depend>nav_msgs</exec_depend><exec_depend>std_msgs</exec_depend><exec_depend>vision_msgs</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>python3-yaml</exec_depend><exec_depend>python3-opencv</exec_depend><exec_depend>python3-numpy</exec_depend>
+  <exec_depend>tf2_ros</exec_depend><exec_depend>ament_index_python</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend><exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>gz_msgs_vendor</exec_depend><exec_depend>python3-protobuf</exec_depend>
+  <exec_depend>gz_sim_vendor</exec_depend><exec_depend>gz_sensors_vendor</exec_depend>
+  <exec_depend>launch</exec_depend><exec_depend>launch_ros</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend><test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend><test_depend>launch_testing</test_depend><exec_depend>tf2_msgs</exec_depend><test_depend>rosgraph_msgs</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

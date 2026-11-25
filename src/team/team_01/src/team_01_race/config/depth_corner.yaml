@@ -1,0 +1,24 @@
+# Real metric RGB-D preview; speed ceilings remain in corner_control.yaml.
+/**:
+  ros__parameters:
+    depth_corner:
+      enabled: true
+      horizon_m: 32.0
+      station_m: 0.5
+      min_boundary_points: 3
+      min_wall_height_m: 0.04
+      max_wall_height_m: 0.32
+      min_width_m: 0.55
+      max_width_m: 4.0
+      min_support_length_m: 3.0
+      min_curve_length_m: 2.0
+      min_curve_heading_deg: 5.0
+      min_confidence: 0.75
+      timeout_sec: 0.35
+      corner_confirm_frames: 3
+      straight_confirm_frames: 4
+      latch_timeout_sec: 2.0
+      odom_timeout_sec: 0.25
+      association_distance_m: 2.0
+      correction_gain: 0.25
+      fallback_speed_mps: 3.5

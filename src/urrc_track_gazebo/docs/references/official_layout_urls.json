@@ -1,0 +1,32 @@
+{
+  "monza": {
+    "official_page": "https://www.formula1.com/en/racing/2026/italy",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackmonzadetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  },
+  "spa": {
+    "official_page": "https://www.formula1.com/en/racing/2026/belgium",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackspafrancorchampsdetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  },
+  "monaco": {
+    "official_page": "https://www.formula1.com/en/racing/2026/monaco",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackmontecarlodetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  },
+  "cota": {
+    "official_page": "https://www.formula1.com/en/racing/2026/united-states",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackaustindetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  },
+  "hungaroring": {
+    "official_page": "https://www.formula1.com/en/racing/2026/hungary",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackhungaroringdetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  },
+  "baku": {
+    "official_page": "https://www.formula1.com/en/racing/2026/azerbaijan",
+    "reference_image_url": "https://media.formula1.com/image/upload/c_fit,h_704/q_auto/v1740000001/common/f1/2026/track/2026trackbakudetailed.webp",
+    "note": "Visual reference only; official images are not redistributed in the workspace."
+  }
+}

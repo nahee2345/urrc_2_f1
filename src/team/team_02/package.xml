@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>team02_race</name>
+  <version>0.2.0</version>
+  <description>TEAM02 direct-pose racing with camera start and Gazebo native plugin</description>
+  <maintainer email="team02@example.invalid">team02</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>ament_cmake_python</build_depend>
+  <depend>ament_index_cpp</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

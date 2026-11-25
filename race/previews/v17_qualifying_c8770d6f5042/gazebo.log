@@ -1,0 +1,36 @@
+[INFO] [1795428903.324110853] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[INFO] [1795428903.424670581] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/model/team_01/urrc_timing (gz.msgs.Pose_V) -> /model/team_01/urrc_timing (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="body_imu"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_c8770d6f5042/runtime_models/team_01_v23axfnk.sdf:L119]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="lidar"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_c8770d6f5042/runtime_models/team_01_v23axfnk.sdf:L147]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="camera"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_c8770d6f5042/runtime_models/team_01_v23axfnk.sdf:L167]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="start_camera"]/gz_frame_id:/home/ww/urrc_2_f1_next/race/previews/v17_qualifying_c8770d6f5042/runtime_models/team_01_v23axfnk.sdf:L187]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="body_imu"]/gz_frame_id:<data-string>:L124]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="lidar"]/gz_frame_id:<data-string>:L152]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="camera"]/gz_frame_id:<data-string>:L172]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;33mWarning [Utils.cc:132][0m [/sdf/model[@name="team_01"]/link[@name="base_link"]/sensor[@name="start_camera"]/gz_frame_id:<data-string>:L192]: XML Element[gz_frame_id], child of element[sensor], not defined in SDF. Copying[gz_frame_id] as children of [sensor].
+[1;31m[Err] [UserCommands.cc:1119] [0m[1;31mEntity named [[0m[1;31murrc_start_signal_active[0m[1;31m] of type [[0m[1;31m2[0m[1;31m] not found, so not removed.[0m[1;31m[0m
+Escalating to SIGKILL on [Gazebo Sim Server]
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachableException sending a multicast message:Network is unreachable
+
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable
+Exception sending a multicast message:Network is unreachable

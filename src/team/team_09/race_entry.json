@@ -1,0 +1,16 @@
+{
+  "entry_id": "team_09",
+  "display_name": "URRC AWD v24",
+  "ros_package": "team09_awd",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team09_awd/models/car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "base_link_name": "base_link",
+  "spawn_z_offset_m": 0.08000000000000002,
+  "speed_topic": "/team_09/speed",
+  "steering_topic": "/team_09/steering",
+  "lidar_topic": "/team_09/lidar/points",
+  "camera_topic": "/team_09/camera/image",
+  "start_camera_topic": "/team_09/start_camera/image",
+  "launch_arguments": {}
+}

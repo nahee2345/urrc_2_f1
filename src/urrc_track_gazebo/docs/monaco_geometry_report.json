@@ -1,0 +1,44 @@
+{
+  "track": "monaco",
+  "target_length_m": 667.4000000000001,
+  "length_xy_m": 666.591909738648,
+  "length_3d_m": 667.1645293285774,
+  "length_error_xy_pct": -0.12108035081690449,
+  "scale": 0.2,
+  "length_normalization_applied": false,
+  "centerline_simple": true,
+  "road_single_hole": true,
+  "road_valid": true,
+  "width_min_m": 1.4000000000000001,
+  "width_max_m": 2.0,
+  "elevation_range_m": 8.40735025312231,
+  "grid_count": 20,
+  "meshes": {
+    "road": {
+      "vertices": 15884,
+      "triangles": 31768,
+      "watertight": true
+    },
+    "wall_outer": {
+      "vertices": 50820,
+      "triangles": 101640,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    },
+    "wall_inner": {
+      "vertices": 37354,
+      "triangles": 74708,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    }
+  },
+  "source_shape_deviation_m": 0.3326778046657301,
+  "official_survey_accuracy": "UNVERIFIED: public outline, estimated widths, DEM-based elevation",
+  "gazebo_harmonic_runtime": "NOT_RUN",
+  "gazebo_jetty_runtime": "NOT_RUN",
+  "offsets": {
+    "left_raw_offset_simple": true,
+    "right_raw_offset_simple": true,
+    "offset_trim_area_m2": 0.0
+  }
+}

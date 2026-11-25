@@ -1,0 +1,40 @@
+# Camera center-path severity; shared Decision/Control configuration.
+/**:
+  ros__parameters:
+    corner_control:
+      enabled: true
+      preview_distance_m: 5.0
+      near_distance_m: 1.0
+      mild_curvature_enter: 0.08
+      medium_curvature_enter: 0.18
+      sharp_curvature_enter: 0.3
+      mild_curvature_exit: 0.06
+      medium_curvature_exit: 0.14
+      sharp_curvature_exit: 0.24
+      mild_heading_enter_deg: 8.0
+      medium_heading_enter_deg: 18.0
+      sharp_heading_enter_deg: 30.0
+      mild_heading_exit_deg: 6.0
+      medium_heading_exit_deg: 14.0
+      sharp_heading_exit_deg: 24.0
+      straight_max_speed_mps: 10.0
+      mild_max_speed_mps: 7.0
+      medium_max_speed_mps: 5.5
+      sharp_max_speed_mps: 4.5
+      straight_max_steering_deg: 8.0
+      mild_max_steering_deg: 14.0
+      medium_max_steering_deg: 20.0
+      sharp_max_steering_deg: 25.0
+      physical_max_steering_deg: 30.0
+      sharp_fast_curvature: 0.45
+      sharp_fast_heading_deg: 45.0
+      corner_enter_confirm_frames: 2
+      corner_exit_confirm_frames: 3
+      corner_approach_decel_mps2: 4.0
+      corner_brake_margin_m: 0.75
+      reaction_time_sec: 0.1
+      corner_entry_distance_m: 0.75
+      exit_path_stability_m: 0.12
+      exit_min_confidence: 0.75
+      curvature_median_points: 5
+      camera_history_sec: 0.25

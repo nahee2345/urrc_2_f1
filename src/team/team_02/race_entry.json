@@ -1,0 +1,14 @@
+{
+  "entry_id": "team_02",
+  "display_name": "TEAM 08 Autonomous Racing",
+  "ros_package": "team02_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team_02/models/team02_car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "base_link_name": "base_link",
+  "spawn_z_offset_m": 0.04,
+  "speed_topic": "/team02/speed_02",
+  "steering_topic": "/team02/steering_02",
+  "lidar_topic": "/team02/front_scan_02",
+  "launch_arguments": {}
+}

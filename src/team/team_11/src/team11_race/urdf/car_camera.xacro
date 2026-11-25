@@ -1,0 +1,62 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.035 0.05 0.03"/>
+      </geometry>
+      <material name="dark">
+        <color rgba="0.08 0.08 0.08 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <geometry>
+        <box size="0.035 0.05 0.03"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.04"/>
+      <inertia
+        ixx="0.000012"
+        iyy="0.000008"
+        izz="0.000013"
+        ixy="0"
+        ixz="0"
+        iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.14 0 0.065" rpy="0 -0.30 0"/>
+  </joint>
+
+  <gazebo reference="camera_link">
+    <sensor name="front_camera" type="camera">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <topic>/team_11/camera/image</topic>
+      <gz_frame_id>team_11/camera_link</gz_frame_id>
+
+      <camera>
+        <horizontal_fov>1.0472</horizontal_fov>
+
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+
+        <clip>
+          <near>0.05</near>
+          <far>30</far>
+        </clip>
+      </camera>
+    </sensor>
+  </gazebo>
+
+</robot>

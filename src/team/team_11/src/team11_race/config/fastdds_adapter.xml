@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <data_reader profile_name="default_sub" is_default_profile="true">
+    <times>
+      <initialAcknackDelay>
+        <sec>0</sec>
+        <nanosec>1000000</nanosec>
+      </initialAcknackDelay>
+      <heartbeatResponseDelay>
+        <sec>0</sec>
+        <nanosec>0</nanosec>
+      </heartbeatResponseDelay>
+    </times>
+  </data_reader>
+</profiles>

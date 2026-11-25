@@ -1,0 +1,62 @@
+{
+  "black_background_xml_validation": "PASS: six practice worlds + six race worlds; 12 GUI configs; track meshes unchanged; Gazebo render NOT_RUN",
+  "competition_framework": "PASS static contract; 0\u201312 participant ZIP intake, unique topic validation, saved random event track, grid spawning, timed lap counting and scoreboard implemented",
+  "start_light_worlds": "PASS: six practice worlds without lamps and six race worlds with five off-state red lamps each; 1.5m offset, 2m height, 15deg tilt",
+  "competition_native_runtime": "NOT_RUN: ROS 2/Gazebo and entrant packages unavailable in build environment",
+  "created_date": "2026-09-26",
+  "static_geometry_validation": "PASS: six tracks; collision normals and reduced meshes",
+  "unit_tests": "35 PASSED (26 track contracts + 9 competition runner contracts)",
+  "python_shell_syntax": "PASS",
+  "assimp_import_without_generated_normals": "PASS: 18 collision meshes, imported vertex and normal counts match",
+  "standalone_cmake_install": "PASS",
+  "installed_resource_validation": "PASS: six tracks",
+  "ros_colcon_build": "NOT_RUN: ROS 2 not installed",
+  "ubuntu_24_04_gazebo_harmonic": "OLD RELEASE FAILED in user runtime log; corrected release RETEST_REQUIRED",
+  "ubuntu_26_04_gazebo_jetty": "NOT_RUN: target OS/runtime unavailable",
+  "gui_and_dynamic_collision": "RETEST_REQUIRED after native DART/ODE crash fix",
+  "fidelity": "Public-coordinate outline; width/grid placement and DEM-based elevation are approximate, not a survey-grade replica",
+  "lengths": [
+    {
+      "track": "monza",
+      "target_m": 1158.6000000000001,
+      "xy_m": 1158.4733028142848,
+      "xyz_m": 1158.513638160086,
+      "xy_error_percent": -0.010935369041542575
+    },
+    {
+      "track": "spa",
+      "target_m": 1400.8000000000002,
+      "xy_m": 1398.9048176305305,
+      "xyz_m": 1400.2875297288656,
+      "xy_error_percent": -0.1352928590426683
+    },
+    {
+      "track": "monaco",
+      "target_m": 667.4000000000001,
+      "xy_m": 666.591909738648,
+      "xyz_m": 667.1645293285774,
+      "xy_error_percent": -0.12108035081690449
+    },
+    {
+      "track": "cota",
+      "target_m": 1102.6000000000001,
+      "xy_m": 1104.955114405838,
+      "xyz_m": 1105.3888846974091,
+      "xy_error_percent": 0.21359644529637123
+    },
+    {
+      "track": "hungaroring",
+      "target_m": 876.2,
+      "xy_m": 877.1263870098655,
+      "xyz_m": 877.3957316831481,
+      "xy_error_percent": 0.10572780299766826
+    },
+    {
+      "track": "baku",
+      "target_m": 1200.6000000000001,
+      "xy_m": 1191.6678645152488,
+      "xyz_m": 1191.9324181179106,
+      "xy_error_percent": -0.7439726374105726
+    }
+  ]
+}

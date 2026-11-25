@@ -1,0 +1,164 @@
+[
+  {
+    "ros_topic_name": "/team_09/lidar/points",
+    "gz_topic_name": "/team_09/lidar/points",
+    "ros_type_name": "sensor_msgs/msg/PointCloud2",
+    "gz_type_name": "gz.msgs.PointCloudPacked",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/imu",
+    "gz_topic_name": "/team_09/imu",
+    "ros_type_name": "sensor_msgs/msg/Imu",
+    "gz_type_name": "gz.msgs.IMU",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/joint_states",
+    "gz_topic_name": "/team_09/joint_states",
+    "ros_type_name": "sensor_msgs/msg/JointState",
+    "gz_type_name": "gz.msgs.Model",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/camera/image",
+    "gz_topic_name": "/team_09/camera/image",
+    "ros_type_name": "sensor_msgs/msg/Image",
+    "gz_type_name": "gz.msgs.Image",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/camera/depth_image",
+    "gz_topic_name": "/team_09/camera/depth_image",
+    "ros_type_name": "sensor_msgs/msg/Image",
+    "gz_type_name": "gz.msgs.Image",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/start_camera/image",
+    "gz_topic_name": "/team_09/start_camera/image",
+    "ros_type_name": "sensor_msgs/msg/Image",
+    "gz_type_name": "gz.msgs.Image",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/camera/camera_info",
+    "gz_topic_name": "/team_09/camera/camera_info",
+    "ros_type_name": "sensor_msgs/msg/CameraInfo",
+    "gz_type_name": "gz.msgs.CameraInfo",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/start_camera/camera_info",
+    "gz_topic_name": "/team_09/start_camera/camera_info",
+    "ros_type_name": "sensor_msgs/msg/CameraInfo",
+    "gz_type_name": "gz.msgs.CameraInfo",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/contacts/base_link",
+    "gz_topic_name": "/team_09/contacts/base_link",
+    "ros_type_name": "ros_gz_interfaces/msg/Contacts",
+    "gz_type_name": "gz.msgs.Contacts",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/contacts/front_left_wheel",
+    "gz_topic_name": "/team_09/contacts/front_left_wheel",
+    "ros_type_name": "ros_gz_interfaces/msg/Contacts",
+    "gz_type_name": "gz.msgs.Contacts",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/contacts/front_right_wheel",
+    "gz_topic_name": "/team_09/contacts/front_right_wheel",
+    "ros_type_name": "ros_gz_interfaces/msg/Contacts",
+    "gz_type_name": "gz.msgs.Contacts",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/contacts/rear_left_wheel",
+    "gz_topic_name": "/team_09/contacts/rear_left_wheel",
+    "ros_type_name": "ros_gz_interfaces/msg/Contacts",
+    "gz_type_name": "gz.msgs.Contacts",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/contacts/rear_right_wheel",
+    "gz_topic_name": "/team_09/contacts/rear_right_wheel",
+    "ros_type_name": "ros_gz_interfaces/msg/Contacts",
+    "gz_type_name": "gz.msgs.Contacts",
+    "direction": "GZ_TO_ROS",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/drive/steer_angle",
+    "gz_topic_name": "/team_09/drive/steer_angle",
+    "ros_type_name": "std_msgs/msg/Float64",
+    "gz_type_name": "gz.msgs.Double",
+    "direction": "ROS_TO_GZ",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/drive/front_left",
+    "gz_topic_name": "/team_09/drive/front_left",
+    "ros_type_name": "std_msgs/msg/Float64",
+    "gz_type_name": "gz.msgs.Double",
+    "direction": "ROS_TO_GZ",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/drive/front_right",
+    "gz_topic_name": "/team_09/drive/front_right",
+    "ros_type_name": "std_msgs/msg/Float64",
+    "gz_type_name": "gz.msgs.Double",
+    "direction": "ROS_TO_GZ",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/drive/rear_left",
+    "gz_topic_name": "/team_09/drive/rear_left",
+    "ros_type_name": "std_msgs/msg/Float64",
+    "gz_type_name": "gz.msgs.Double",
+    "direction": "ROS_TO_GZ",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  },
+  {
+    "ros_topic_name": "/team_09/drive/rear_right",
+    "gz_topic_name": "/team_09/drive/rear_right",
+    "ros_type_name": "std_msgs/msg/Float64",
+    "gz_type_name": "gz.msgs.Double",
+    "direction": "ROS_TO_GZ",
+    "publisher_queue": 1,
+    "subscriber_queue": 1
+  }
+]

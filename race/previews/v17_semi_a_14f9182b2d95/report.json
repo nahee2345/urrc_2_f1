@@ -1,0 +1,135 @@
+{
+  "mode": "REHEARSAL_NOT_OFFICIAL",
+  "stage": "semi_a",
+  "track": "monza",
+  "teams": [
+    "team_01",
+    "team_08"
+  ],
+  "required_laps": 3,
+  "status": "ERROR",
+  "details": {
+    "team_01": {
+      "required_laps": 3,
+      "laps": 0,
+      "finish_time": null,
+      "max_displacement_m": 166.81362093615985,
+      "speed_messages_after_release": 120292,
+      "max_abs_speed_command": 8.49899959564209,
+      "status": "INCOMPLETE",
+      "reason": "모의주행 미완주; 출발선 통과 후 랩 미완료(laps=0, 다음 체크포인트=18)"
+    },
+    "team_08": {
+      "required_laps": 3,
+      "laps": 1,
+      "finish_time": null,
+      "max_displacement_m": 362.625764834628,
+      "speed_messages_after_release": 3326,
+      "max_abs_speed_command": 15.0,
+      "status": "INCOMPLETE",
+      "reason": "모의주행 미완주; 출발선 통과 후 랩 미완료(laps=1, 다음 체크포인트=14)"
+    }
+  },
+  "official_results_untouched": true,
+  "report_file": "/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_14f9182b2d95/report.json",
+  "sensor_report": "/home/ww/urrc_2_f1_next/race/previews/v17_semi_a_14f9182b2d95/sensor_diagnostic.json",
+  "sensor_status": "CAPTURED",
+  "sensor_world_match": true,
+  "sensor_summary": {
+    "clock_samples": 78102,
+    "teams": {
+      "team_01": [
+        {
+          "area": "gate",
+          "status": "PASS",
+          "detail": "출발 신호 관측=2, 마지막 값=True (수신 확인과 앱 적용은 별개)"
+        },
+        {
+          "area": "camera",
+          "status": "PASS",
+          "detail": "ROS 수신=6736 프레임, 토픽=/team_01/camera/depth_image, /team_01/camera/image, /team_01/start_camera/image, /team_01/start_camera/debug_image"
+        },
+        {
+          "area": "lidar",
+          "status": "PASS",
+          "detail": "ROS 수신=3006 프레임, 토픽=/team_01/lidar/points"
+        },
+        {
+          "area": "imu",
+          "status": "PASS",
+          "detail": "ROS 수신=19835 프레임, 토픽=/team_01/imu"
+        },
+        {
+          "area": "timing_pose",
+          "status": "PASS",
+          "detail": "중앙 계측 포즈 수신=19990"
+        },
+        {
+          "area": "speed_steering",
+          "status": "PASS",
+          "detail": "속도=100388회 (최대=8.49899959564209), 조향=100311회"
+        },
+        {
+          "area": "cause_hint",
+          "status": "CHECK",
+          "detail": "속도 명령은 있지만 Gazebo 구동 명령 수신이 관측되지 않았습니다. 어댑터·브리지를 확인하십시오."
+        }
+      ],
+      "team_08": [
+        {
+          "area": "gate",
+          "status": "PASS",
+          "detail": "출발 신호 관측=2, 마지막 값=True (수신 확인과 앱 적용은 별개)"
+        },
+        {
+          "area": "camera",
+          "status": "PASS",
+          "detail": "ROS 수신=493 프레임, 토픽=/team08/front_camera_08/image"
+        },
+        {
+          "area": "camera_consumer",
+          "status": "CHECK",
+          "detail": "ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오."
+        },
+        {
+          "area": "lidar",
+          "status": "PASS",
+          "detail": "ROS 수신=5982 프레임, 토픽=/team08/front_scan_08, /team08/rear_scan_08"
+        },
+        {
+          "area": "lidar_consumer",
+          "status": "CHECK",
+          "detail": "ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오."
+        },
+        {
+          "area": "imu",
+          "status": "PASS",
+          "detail": "ROS 수신=19741 프레임, 토픽=/team08/imu_08"
+        },
+        {
+          "area": "imu_consumer",
+          "status": "CHECK",
+          "detail": "ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오."
+        },
+        {
+          "area": "timing_pose",
+          "status": "PASS",
+          "detail": "중앙 계측 포즈 수신=19991"
+        },
+        {
+          "area": "speed_steering",
+          "status": "PASS",
+          "detail": "속도=3417회 (최대=15.0), 조향=3417회"
+        },
+        {
+          "area": "cause_hint",
+          "status": "CHECK",
+          "detail": "속도 명령은 있지만 Gazebo 구동 명령 수신이 관측되지 않았습니다. 어댑터·브리지를 확인하십시오."
+        }
+      ]
+    }
+  },
+  "cleanup_errors": [
+    "team_08 remove: Gazebo remove 요청 실패:  Service call timed out\n"
+  ]
+}

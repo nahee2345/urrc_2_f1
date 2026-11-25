@@ -1,0 +1,16 @@
+{
+  "entry_id": "team_07",
+  "display_name": "TEAM07 HYBRID RACER",
+  "ros_package": "team07_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team07_race/models/car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "base_link_name": "base_link_07",
+  "spawn_z_offset_m": 0.04,
+  "speed_topic": "/team07/hybrid/speed",
+  "steering_topic": "/team07/hybrid/steering",
+  "lidar_topic": "/team07/hybrid/scan",
+  "camera_topic": "/team07/hybrid/camera/image",
+  "race_start_topic": "/race/start/team_07",
+  "launch_arguments": {}
+}

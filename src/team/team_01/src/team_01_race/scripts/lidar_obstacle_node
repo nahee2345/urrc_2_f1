@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+from team_01_race.ros_support import run
+from team_01_race.lidar_node import LidarObstacleNode
+
+if __name__ == "__main__":
+    run(LidarObstacleNode)

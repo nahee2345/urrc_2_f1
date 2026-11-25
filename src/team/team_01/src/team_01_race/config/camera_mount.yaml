@@ -1,0 +1,15 @@
+# Competition: all protrusions incl. camera housing and steering sweep <= .55 x .25 x .18 m.
+/**:
+  ros__parameters:
+    camera_mount:
+      x_m: 0.23
+      y_m: 0.0
+      z_m: 0.08
+      roll_deg: 0.0
+      pitch_deg: 12.0
+      yaw_deg: 0.0
+      use_camera_mast: false
+      mast_height_m: 0.0
+      camera_forward_offset_m: 0.23
+      camera_pitch_deg: 12.0
+      allow_oversize_for_validation: false

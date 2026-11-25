@@ -1,0 +1,44 @@
+{
+  "track": "baku",
+  "target_length_m": 1200.6000000000001,
+  "length_xy_m": 1191.6678645152488,
+  "length_3d_m": 1191.9324181179106,
+  "length_error_xy_pct": -0.7439726374105726,
+  "scale": 0.2,
+  "length_normalization_applied": false,
+  "centerline_simple": true,
+  "road_single_hole": true,
+  "road_valid": true,
+  "width_min_m": 1.52,
+  "width_max_m": 2.6,
+  "elevation_range_m": 5.370459185784691,
+  "grid_count": 20,
+  "meshes": {
+    "road": {
+      "vertices": 33752,
+      "triangles": 67504,
+      "watertight": true
+    },
+    "wall_outer": {
+      "vertices": 89240,
+      "triangles": 178480,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    },
+    "wall_inner": {
+      "vertices": 55230,
+      "triangles": 110460,
+      "watertight": true,
+      "height_above_road_m": 0.8
+    }
+  },
+  "source_shape_deviation_m": 1.3020309810170834,
+  "official_survey_accuracy": "UNVERIFIED: public outline, estimated widths, DEM-based elevation",
+  "gazebo_harmonic_runtime": "NOT_RUN",
+  "gazebo_jetty_runtime": "NOT_RUN",
+  "offsets": {
+    "left_raw_offset_simple": true,
+    "right_raw_offset_simple": true,
+    "offset_trim_area_m2": 0.0
+  }
+}
