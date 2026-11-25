@@ -146,7 +146,27 @@ def execute(root: Path, team: str) -> int:
         env['URRC_QUALIFYING_ONLY'] = team
         # Preserve the official stage launcher and its validation/signal/timing.
         cmd = ['bash', str(root / 'race_v23.sh'), 'qualifying', '--track', session['track']]
-        run = subprocess.run(cmd, cwd=root, env=env, check=False)
+        # Optional spectator: isolated from the official qualifier and timing.
+        spectator = None
+        watcher = root / 'race/scripts/spectator_autostart.py'
+        if watcher.is_file() and (root / 'race/spectator_3d/run_official.sh').is_file():
+            try:
+                spectator = subprocess.Popen(
+                    [sys.executable, str(watcher), '--root', str(root),
+                     '--parent-pid', str(os.getpid()), '--team', team],
+                    cwd=root, env=env, stdin=subprocess.DEVNULL)
+            except OSError as exc:
+                print('[관전] 실행 실패 (예선은 계속 진행):', exc, flush=True)
+        try:
+            run = subprocess.run(cmd, cwd=root, env=env, check=False)
+        finally:
+            if spectator is not None and spectator.poll() is None:
+                spectator.terminate()
+                try:
+                    spectator.wait(timeout=6)
+                except subprocess.TimeoutExpired:
+                    spectator.kill()
+                    spectator.wait()
         if run.returncode != 0:
             print(f'[예선 단독] {team} 실행 실패 (종료 코드 {run.returncode}). 공식 집계에 포함하지 않습니다.', file=sys.stderr)
             # If previous teams have qualified, restore their cumulative summary.
