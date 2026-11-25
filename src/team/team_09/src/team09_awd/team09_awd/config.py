@@ -17,7 +17,7 @@ DEFAULT = {
         "wheel_z_m": -0.04,
         "body_size_m": [0.49, 0.16, 0.05], "body_z_m": 0.0,
         "body_mass_kg": 1.2, "wheel_mass_kg": 0.06,
-        "knuckle_mass_kg": 0.09, "max_wheel_angle_deg": 30.0,
+        "knuckle_mass_kg": 0.01, "max_wheel_angle_deg": 30.0,
         "footprint_padding_m": 0.002, "tyre_friction": 1.0,
         "steer_p_gain": 8.0, "steer_effort_nm": 10.0,
         "steer_joint_rate_radps": 4.0, "drive_effort_nm": 5.0,
@@ -36,7 +36,7 @@ DEFAULT = {
         "lidar_horizontal_samples": 720, "lidar_vertical_samples_3d": 16,
         "lidar_vertical_fov_deg": 30.0, "lidar_min_m": 0.08, "lidar_max_m": 60.0,
         "lidar_hz": 30.0, "camera_hz": 30.0, "imu_hz": 100.0,
-        "camera_width": 640, "camera_height": 480,
+        "rgbd_width": 480, "rgbd_height": 360, "rgbd_hz": 12, "camera_width": 640, "camera_height": 480,
         "camera_hfov_rad": 1.5707963, "start_camera_hfov_rad": 1.1,
         "camera_near_m": 0.03, "camera_far_m": 100.0,
         "cloud_min_ground_height_m": 0.035, "cloud_max_ground_height_m": 0.65,
@@ -80,6 +80,14 @@ DEFAULT = {
         "band_min_m": 0.18, "band_max_m": 0.45,
         "relief_gain": 1.0, "relief_max_m": 0.14, "relief_length_m": 2.8,
         "vision_weight": 0.20, "vision_heading_agreement_rad": 0.20
+    },
+    "pace": {
+        "gentle_full_curvature_1pm": 0.035, "gentle_end_curvature_1pm": 0.065,
+        "lateral_scale": 1.14, "accel_scale": 1.4,
+        "full_clearance_m": 0.30, "paired_span_m": 3.0, "wall_agreement_rad": 0.12,
+        "heading_error_rad": 0.15, "turn_curvature_1pm": 0.16,
+        "turn_full_speed_mps": 2.8, "turn_end_speed_mps": 4.0,
+        "turn_lookahead_reduction": 0.22,
     },
     "start_signal": {
         "on_frames": 3, "off_frames": 3,
@@ -158,6 +166,17 @@ def validate(cfg):
         raise ValueError("right_wall margins must increase from sweep to corner to straight")
     if not 0. < wall["corner_fraction"] <= 1. or not wall["lookahead_base_m"] <= wall["lookahead_max_m"] < wall["horizon_m"]:
         raise ValueError("Invalid right-wall corner fraction or lookahead")
+    pace = cfg["pace"]
+    if not (0 < pace["gentle_full_curvature_1pm"] < pace["gentle_end_curvature_1pm"] < pace["turn_curvature_1pm"]
+            and 0 < pace["turn_full_speed_mps"] < pace["turn_end_speed_mps"]
+            and 0 <= pace["turn_lookahead_reduction"] < .5):
+        raise ValueError("Invalid pace curvature, turn speed or lookahead range")
+    if not (1 <= pace["lateral_scale"] <= 1.2 and 1 <= pace["accel_scale"] <= 2
+            and c["accel_mps2"] * pace["accel_scale"] <= a["max_accel_mps2"]
+            and cfg["road_heading"]["band_min_m"] < pace["full_clearance_m"]
+            and 0 < pace["paired_span_m"] < wall["horizon_m"]
+            and 0 < pace["heading_error_rad"] < .5 and 0 < pace["wall_agreement_rad"] < .5):
+        raise ValueError("Invalid pace authority or observation range")
     road = cfg["road_heading"]
     if not 0 < wall["sweep_margin_m"] < road["band_min_m"] < road["band_max_m"]:
         raise ValueError("Invalid road_heading side band")

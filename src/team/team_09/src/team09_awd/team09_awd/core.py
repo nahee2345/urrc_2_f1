@@ -136,7 +136,7 @@ class WallTracker:
 
 def rollout(k, previous, speed, horizon=32.):
     # Resolve short recovery manoeuvres densely; add sampling-error padding below.
-    s=np.r_[0.,np.arange(.08,3.,.08),np.arange(3.,horizon+.09,.20)]
+    s=np.r_[0.,np.arange(.08,3.,.08),np.arange(3.,horizon+.01,.20)]
     ds=np.diff(s,prepend=0.)
     previous=float(np.clip(previous,-G.max_curvature,G.max_curvature));k=float(np.clip(k,-G.max_curvature,G.max_curvature))
     start=math.atan(G.wheelbase*previous);goal=math.atan(G.wheelbase*reachable_curvature(k,speed))

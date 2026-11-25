@@ -17,7 +17,7 @@ def govern_speed(r,command,k,speed,rate,dt,maximum,lateral,brake,accel,latency,r
     if getattr(r, "road_guided", False):
         # Geometry of the road, not the controller's short alignment correction.
         limits = {
-            "FREE_BRAKE": speed_limit(0., free=r.free, confidence=r.confidence,
+            "FREE_BRAKE": speed_limit(0., free=getattr(r, "braking_free", r.free), confidence=r.confidence,
                                       maximum=maximum, lateral=lateral, brake=brake, latency=latency),
             "ROAD_PREVIEW": r.preview_limit,
         }
@@ -34,6 +34,8 @@ def govern_speed(r,command,k,speed,rate,dt,maximum,lateral,brake,accel,latency,r
     if abs(rate-speed*k)>SETTINGS['control']['yaw_residual_limit_radps']:limits['YAW_RESPONSE']=SETTINGS['control']['yaw_residual_speed_mps']
     if abs(rate*speed)>lateral*1.2:limits['MEASURED_LATERAL']=speed*.85
     limiter=min(limits,key=limits.get);target=max(0.,float(limits[limiter]))
+    if reason == "RUN" and limiter in ("FREE_BRAKE", "ROAD_PREVIEW"):
+        accel *= 1. + getattr(r, "pace_weight", 0.) * (SETTINGS["pace"]["accel_scale"] - 1.)
     command+=float(np.clip(target-command,-brake*dt,accel*dt))
     # Preserve v6 acceleration/deceleration with its measured overspeed correction.
     if r.mode=='RECOVER_CRAWL' or speed>target+.5:command=min(command,target)

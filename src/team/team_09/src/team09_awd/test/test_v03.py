@@ -15,7 +15,7 @@ def walls(offset=0.,heading=0.,noise=0.):
 class StraightControl(unittest.TestCase):
     def test_heading_separate_from_offset(self):
         e,h,q=corridor_state(walls(.35,.10,.015))
-        self.assertAlmostEqual(e,.35,delta=.03);self.assertAlmostEqual(h,.10,delta=.09);self.assertGreater(q,.7)
+        self.assertAlmostEqual(e,.35,delta=.03);self.assertAlmostEqual(h,.10,delta=.01);self.assertGreater(q,.7)
     def test_both_error_signs(self):
         for sign in (-1,1):
             self.assertGreater(sign*tracking_curvature(sign*.4,sign*.12,8.),0)
@@ -35,7 +35,7 @@ class StraightControl(unittest.TestCase):
             desired=8.*k
             rate+=.3*(desired-rate)
             heading+=rate*.05;y+=8.*math.sin(heading)*.05;history.append(y)
-        self.assertLess(abs(y),.45);self.assertLess(abs(heading),.09)
+        self.assertLess(abs(y),.45);self.assertLess(abs(heading),.01)
         # v04 deliberately settles slowly toward a +/-15cm central band.
         for _ in range(600):
             k=tracking_curvature(-y/math.cos(heading),-heading,8.,rate)
@@ -43,7 +43,7 @@ class StraightControl(unittest.TestCase):
         self.assertLess(abs(y),.17)
         self.assertLess(max(abs(v) for v in history),1.05)
     def test_continuous_command_under_noise(self):
-        ks=[plan_local(walls(.1,noise=n),speed=8.).curvature for n in (0.,.005,.09,.015)]
+        ks=[plan_local(walls(.1,noise=n),speed=8.).curvature for n in (0.,.005,.01,.015)]
         self.assertLess(max(ks)-min(ks),.005)
     def test_corridor_path_still_checks_obstacle(self):
         p=np.vstack([walls(),np.column_stack([np.full(100,3.),np.linspace(-1.5,1.5,100)])])

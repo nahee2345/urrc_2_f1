@@ -101,15 +101,15 @@ def build_sdf():
     angle=0 if n==1 else math.radians(s["lidar_vertical_fov_deg"])/2
     for k,x in {"samples":n,"resolution":1,"min_angle":-angle,"max_angle":angle}.items():add(v,k,x)
     r=add(l,"range")
-    for k,x in {"min":s["lidar_min_m"],"max":s["lidar_max_m"],"resolution":.09}.items():add(r,k,x)
+    for k,x in {"min":s["lidar_min_m"],"max":s["lidar_max_m"],"resolution":.01}.items():add(r,k,x)
     for prefix,kind,key in (("camera","rgbd_camera","camera_pose"),("start_camera","camera","start_camera_pose")):
         sensor=add(body,"sensor",name=prefix,type=kind)
         add(sensor,"pose",s[key]);add(sensor,"topic",topic(prefix if prefix=="camera" else prefix+"/image"))
-        add(sensor,"always_on","true");add(sensor,"update_rate",s["camera_hz"]);add(sensor,"gz_frame_id",frame(prefix+"_optical"))
+        add(sensor,"always_on","true");add(sensor,"update_rate",(s["camera_hz"] if prefix=="start_camera" else s["rgbd_hz"]));add(sensor,"gz_frame_id",frame(prefix+"_optical"))
         camera=add(sensor,"camera");add(camera,"camera_info_topic",topic(prefix+"/camera_info"))
         add(camera,"horizontal_fov",s["camera_hfov_rad"] if prefix=="camera" else s["start_camera_hfov_rad"])
         im=add(camera,"image")
-        for k,x in {"width":s["camera_width"],"height":s["camera_height"],"format":"R8G8B8"}.items():add(im,k,x)
+        for k,x in {"width":s["camera_width"] if prefix=="start_camera" else s["rgbd_width"],"height":s["camera_height"] if prefix=="start_camera" else s["rgbd_height"],"format":"R8G8B8"}.items():add(im,k,x)
         clip=add(camera,"clip");add(clip,"near",s["camera_near_m"]);add(clip,"far",s["camera_far_m"])
     for name in WHEELS:
         front=name.startswith("front");left=name.endswith("left")

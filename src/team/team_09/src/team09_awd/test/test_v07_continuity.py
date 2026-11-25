@@ -11,7 +11,7 @@ class Continuity(unittest.TestCase):
         h.append((1.06,.08,0,0));self.assertEqual(b.select(h,1.07)[0],1.04)
     def test_no_extrapolation_and_no_stale_reuse(self):
         b=ScanBuffer();b.add(1.,[],1.)
-        self.assertIsNone(b.select([(.9,0,0,0)],1.09))
+        self.assertIsNone(b.select([(.9,0,0,0)],1.01))
         self.assertIsNone(b.select([(.9,0,0,0),(1.1,0,0,0)],1.25))
     def test_time_reset_discards_old_scans(self):
         b=ScanBuffer();b.add(100.,[],1.);b.add(1.,[],2.);self.assertEqual(len(b.frames),1)

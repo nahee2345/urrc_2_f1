@@ -11,7 +11,7 @@ from .recovery import escape_plan
 def trace_wall(points, side, horizon):
     """Trace contiguous returns in forward slabs, starting from the measured side."""
     rows = []
-    for x in np.arange(.30, horizon + .09, .40):
+    for x in np.arange(.30, horizon + .01, .40):
         # Angular scans become sparse along a parallel wall as range grows.
         # Avoid counting a return repeatedly: each slab owns its own points.
         slab = points[(points[:, 0] >= x - .20) & (points[:, 0] < x + .20)]
@@ -93,7 +93,7 @@ def make_line(right, left, speed, settings):
     right_end = end = right[-1, 0]
     inferred_width = None
     if left is not None and left[-1, 0] >= right_end + .8:
-        overlap = np.arange(.7, right_end + .09, .4)
+        overlap = np.arange(.7, right_end + .01, .4)
         if len(overlap) >= 5:
             ly, _, _ = wall_shape(left, overlap)
             ry, _, _ = wall_shape(right, overlap)

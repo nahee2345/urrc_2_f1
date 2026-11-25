@@ -8,4 +8,4 @@ class Deadline(unittest.TestCase):
         self.assertFalse(plan_is_current(1.,1.05,.99,2,3))
     def test_time_rewind_and_future_scan_rejected(self):
         self.assertFalse(plan_is_current(2.,1.,.99,2,2))
-        self.assertFalse(plan_is_current(1.,1.09,1.02,2,2))
+        self.assertFalse(plan_is_current(1.,1.01,1.02,2,2))

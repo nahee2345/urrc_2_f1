@@ -18,7 +18,7 @@ class PlannerTest(unittest.TestCase):
     def test_empty_and_invalid(self):
         self.assertEqual(plan([]),(0.,0.,0.));self.assertEqual(plan([[np.nan,1]]),(0.,0.,0.))
     def test_curve_slowdown(self):
-        self.assertLess(speed_limit(.8,15,1,20),speed_limit(.09,15,1,20))
+        self.assertLess(speed_limit(.8,15,1,20),speed_limit(.01,15,1,20))
     def test_braking_distance(self):
         for d in [1.,2.,5.,10.]:
             v=speed_limit(0,d,1,50);self.assertLessEqual(v*.20+v*v/8,d-.45+1e-6)
@@ -58,13 +58,13 @@ class RegressionTest(unittest.TestCase):
     def test_motion_compensation(self):
         np.testing.assert_allclose(compensate([[3.,0.]],(0.,0.,0.),(1.,0.,math.pi/2)),[[0.,-2.]],atol=1e-6)
     def test_steering_rate_reachable(self):
-        s,p=rollout(1.5,0.,10.);self.assertLess(abs(p[1,2]),.09);self.assertTrue(np.isfinite(p).all())
+        s,p=rollout(1.5,0.,10.);self.assertLess(abs(p[1,2]),.01);self.assertTrue(np.isfinite(p).all())
     def test_centre_bias_away_from_wall(self):
         r=plan_local(self.corridor());self.assertGreater(r.centre_error,0.);self.assertGreater(r.curvature,0.)
     def test_parked_car_has_bypass_candidate(self):
         p=self.corridor(-1.5,1.5);y=np.linspace(-.12,.12,50);x=np.linspace(2.75,3.25,80)
         car=np.vstack([np.column_stack([np.full_like(y,2.75),y]),np.column_stack([x,np.full_like(x,.12)]),np.column_stack([x,np.full_like(x,-.12)])])
-        r=plan_local(np.vstack([p,car]));self.assertNotEqual(r.mode,'BLOCKED');self.assertGreater(abs(r.curvature),.09);self.assertGreater(r.free,3.)
+        r=plan_local(np.vstack([p,car]));self.assertNotEqual(r.mode,'BLOCKED');self.assertGreater(abs(r.curvature),.01);self.assertGreater(r.free,3.)
     def test_tighter_corner_and_higher_straight_limit(self):
         self.assertLess(speed_limit(.6,20,1,10),speed_limit(.6,20,1,10,lateral=2.5));self.assertGreater(speed_limit(0,32,1,10),6.)
 

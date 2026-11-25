@@ -30,7 +30,7 @@ class RacePreview(unittest.TestCase):
         fast=preview_speed(s,np.zeros_like(s),29,18)
         slow=preview_speed(s,k,29,18)
         self.assertLess(slow,fast)
-        self.assertLessEqual(slow**2,2.5/.30+2*4*10.1+.09)
+        self.assertLessEqual(slow**2,2.5/.30+2*4*10.1+.01)
     def test_profile_stops_within_observed_distance(self):
         s=np.arange(0,30,.1)
         for free in (5.,10.,20.):
@@ -46,7 +46,7 @@ class RacePreview(unittest.TestCase):
         self.assertFalse(used);np.testing.assert_equal(mixed,p)
     def test_consistent_camera_refines_shape(self):
         x=np.linspace(1,15,30);p=np.array([.005,0,0])
-        _,used=combine_vision(p,np.c_[x,.005*x*x+.09*x],20,2.4)
+        _,used=combine_vision(p,np.c_[x,.005*x*x+.01*x],20,2.4)
         self.assertTrue(used)
     def test_reactive_fallback_for_ambiguous_road(self):
         r=plan_racing([],speed=1.);self.assertEqual(r.mode,'BLOCKED');self.assertEqual(r.route_kind,'REACTIVE')

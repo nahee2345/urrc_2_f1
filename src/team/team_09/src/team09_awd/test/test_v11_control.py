@@ -8,7 +8,7 @@ class ControlTests(unittest.TestCase):
  def test_steering_rate_and_reversal(self):
   k=steer_step(0,MAX_CURVATURE,.05)
   self.assertAlmostEqual(math.atan(.33*k),.045)
-  self.assertLess(steer_step(.09,-.1,.05),0) # no three-frame direction delay
+  self.assertLess(steer_step(.01,-.1,.05),0) # no three-frame direction delay
  def test_full_steering_available(self):
   k=0
   for _ in range(30):k=steer_step(k,MAX_CURVATURE,.05)
@@ -27,7 +27,7 @@ class ControlTests(unittest.TestCase):
   self.assertFalse(used);np.testing.assert_array_equal(q,p)
  def test_depth_influence_bounded(self):
   x=np.linspace(1,15,30);p=np.zeros(3)
-  q,used=combine_vision(p,np.c_[x,.09*x],20,2.4)
+  q,used=combine_vision(p,np.c_[x,.01*x],20,2.4)
   self.assertTrue(used);self.assertAlmostEqual(q[1],.002);self.assertEqual(q[2],0)
  def test_watchdog_latches_start_not_camera_heartbeat(self):
   g=CommandWatchdog();g.enable(True);g.signal(True);g.signal(False);g.command(3,.1,10)

@@ -26,7 +26,7 @@ def stamp_s(stamp): return stamp.sec + stamp.nanosec*1e-9
 
 class Actuator(Node):
     def __init__(self):
-        super().__init__("awd_actuator_v24")
+        super().__init__("awd_actuator_v24_09")
         self.declare_parameter("config_file","")
         load(self.get_parameter("config_file").value)
         self.declare_parameter("race_start_topic","/race/start/"+SETTINGS["entry_id"])
@@ -245,6 +245,7 @@ class Actuator(Node):
 
 
 def main():
+    cv2.setNumThreads(1)
     rclpy.init();node=Actuator()
     try:rclpy.spin(node)
     except (KeyboardInterrupt,rclpy.executors.ExternalShutdownException):pass

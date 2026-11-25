@@ -32,8 +32,10 @@ from .core import Result, ResumeGate, WallTracker, external_points, compact, cor
 from .racing import plan_racing, CurveTracker
 from .bypass import BypassState
 from .recovery import escape_plan
+from .overtake import Overtake
 from .road_heading import plan_road
 from .control import steer_step, govern_speed
+from .model_builder import fingerprint
 from .continuity import ScanBuffer, plan_is_current
 from .depth import depth_meters, rgbd_preview, fit_depth_route
 from .kinematics import euler, measured_curvature, transform_points
@@ -46,19 +48,25 @@ def stamp_s(stamp):return stamp.sec+stamp.nanosec*1e-9
 
 class Racer(Node):
     def __init__(self):
-        super().__init__("awd_racer_v24")
+        super().__init__("awd_racer_v24_09")
         self.declare_parameter("config_file","");load(self.get_parameter("config_file").value)
         self.c=SETTINGS["control"];self.s=SETTINGS["sensors"]
         self.wall_settings = SETTINGS["right_wall"]
         self.road_heading_enabled = self.wall_settings["enabled"]
         self.road_settings = SETTINGS["road_heading"]
-        self.profile = "v26 ROAD_HEADING" if self.road_heading_enabled else "v26 BASE_V14"
+        self.trial_id = os.environ.get("URRC_V27_TRIAL_ID", "")
+        self.track_name = os.environ.get("URRC_V27_TRACK", "")
+        self.config_hash = fingerprint()
+        self.pace_mode = os.environ.get("URRC_V27_PROFILE", "both")
+        if self.pace_mode not in ("baseline", "pace", "both"):
+            raise ValueError("URRC_V27_PROFILE must be baseline, pace or both")
+        self.profile = f"v27 ROAD_PACE {self.pace_mode}" if self.road_heading_enabled else "v27 BASE_V14"
         self.lock=threading.RLock();self.state_group=MutuallyExclusiveCallbackGroup()
         self.history=deque(maxlen=400);self.pose=(0.,0.,0.);self.speed=0.;self.rate=0.;self.roll=0.;self.pitch=0.
         self.odom_at=-math.inf;self.imu_at=-math.inf;self.imu_stamp=-1.;self.imu_rate=0.;self.imu_accel=0.;self.imu_valid=False
         self.joint_stamp=-1.;self.joint_at=-math.inf;self.joint_k=0.;self.front_left=0.;self.front_right=0.
         self.epoch=0;self.reset_pending=False;self.distance=0.;self.last_pose=None
-        self.scans=ScanBuffer();self.points=np.empty((0,2));self.cloud_at=-math.inf;self.cloud_stamp=-1.
+        self.pass_state=Overtake();self.scans=ScanBuffer();self.points=np.empty((0,2));self.cloud_at=-math.inf;self.cloud_stamp=-1.
         self.start=False;self.command=0.;self.k=0.;self.last_sim=None;self.result=Result();self.last_route="WAIT"
         self.curve_tracker=CurveTracker();self.wall_tracker=WallTracker();self.bypass_state=BypassState();self.gate=ResumeGate();self.guard=AccelerationGuard()
         self.bridge=CvBridge();self.camera_k=None;self.pairer=RGBDPairer(self.s["rgbd_pair_tolerance_s"],self.s["rgbd_queue_size"])
@@ -89,7 +97,7 @@ class Racer(Node):
         folder=Path(folder).expanduser() if folder else Path(os.environ.get("XDG_STATE_HOME",str(Path.home()/".local/state")))/"urrc_awd"/SETTINGS["entry_id"]
         try:folder.mkdir(parents=True,exist_ok=True)
         except OSError:pass
-        self.logfile=BestEffortLog(folder/time.strftime("%Y%m%d-%H%M%S-v26.csv"))
+        self.logfile=BestEffortLog(folder / (time.strftime("%Y%m%d-%H%M%S-") + self.pace_mode + "-v27.csv"))
         self.log=csv.writer(self.logfile)
         self.log.writerow(["sim_s","enabled","odom_x","odom_y","odom_yaw_rad","distance_m","speed_mps","yawrate_radps",
             "command_mps","curvature_1pm","free_m","clearance_m","centre_error_m","confidence","planning_ms","scan_age_sim_s",
@@ -98,7 +106,10 @@ class Racer(Node):
             "end_scan_age_s","odom_age_s","requested_curvature","roll_rad","pitch_rad","yaw_residual_radps","lateral_accel_est",
             "depth_state","depth_rows","depth_quality","front_left_rad","front_right_rad","measured_curvature_1pm","joint_stamp_s",
             "imu_stamp_s","odom_stamp_s","scan_stamp_s","rgb_stamp_s","depth_stamp_s","rgb_depth_skew_s","depth_callback_state",
-            "route_transition","requested_curvature_delta","reaccel_guard","clearance_closing_mps","actuator_state","actuator_mps","speed_source","right_wall_error_m","profile"])
+            "route_transition","requested_curvature_delta","reaccel_guard","clearance_closing_mps","actuator_state","actuator_mps","speed_source","right_wall_error_m","profile",
+            "right_gap_m","left_gap_m","wall_band","wall_relief_m","actuator_sim_s","drive_interruptions",
+            "last_drive_interruption","last_drive_interruption_sim_s","command_age_wall_s","joint_age_wall_s",
+            "imu_age_wall_s","pace_weight","base_preview_limit_mps","turn_lookahead_scale","paired_wall_span_m","pace_sweep_gap_m","trial_id","track","config_sha256"])
         self.last_log=-math.inf;self.last_status=-math.inf
         self.create_timer(1/self.c["planner_hz"],self.tick)
         self.get_logger().info(self.profile+" INDEPENDENT_ACTUATORS; CSV: "+self.logfile.name)
@@ -194,7 +205,7 @@ class Racer(Node):
         else:self.contact_active.discard(name)
 
     def reset_planning(self):
-        self.scans=ScanBuffer();self.bypass_state=BypassState();self.curve_tracker=CurveTracker()
+        self.pass_state=Overtake();self.scans=ScanBuffer();self.bypass_state=BypassState();self.curve_tracker=CurveTracker()
         self.wall_tracker=WallTracker();self.gate=ResumeGate();self.guard=AccelerationGuard()
         self.command=0.;self.k=0.;self.result=Result();self.last_route="WAIT"
         self.pairer=RGBDPairer(self.s["rgbd_pair_tolerance_s"],self.s["rgbd_queue_size"])
@@ -234,7 +245,7 @@ class Racer(Node):
                     points, previous, abs(speed), self.wall_settings, self.road_settings,
                     c["lateral_accel_mps2"], c["brake_mps2"],
                     max(c["minimum_latency_s"], scan_age+c["sensor_latency_reserve_s"]),
-                    vision=vision, contact=bool(self.contact_active),
+                    vision=vision, contact=bool(self.contact_active), yawrate=rate, profile=self.pace_mode, pass_state=self.pass_state, stamp=scan_stamp, pose=pose,
                 )
             else:
                 walls=self.wall_tracker.update(corridor_state(compact(points)),pose,stamp)
@@ -278,7 +289,7 @@ class Racer(Node):
             self.command=0.;reason="PLAN_DEADLINE";limiter=reason
         msg=AckermannDriveStamped();msg.header.stamp=self.get_clock().now().to_msg();msg.header.frame_id=frame("base_link")
         msg.drive.speed=float(self.command);msg.drive.steering_angle=math.atan(G.wheelbase*self.k);self.pub.publish(msg)
-        if safe and r.mode!="BLOCKED":
+        if safe and r.mode!="BLOCKED" and self.plan_pub.get_subscription_count():
             path=PathMessage();path.header=msg.header
             distances,poses=rollout(self.k,previous,abs(speed))
             if hasattr(r,"route_poses"):distances,poses=r.route_dist,r.route_poses
@@ -301,6 +312,7 @@ class Racer(Node):
                 f"actuator={feedback.get('state','UNKNOWN')} cuts={feedback.get('drive_interruptions','?')} "
                 f"last_cut={feedback.get('last_drive_interruption')} right_m={gap_text} "
                 f"band={getattr(r,'wall_band','-')} clear={r.clearance:.3f} free={r.free:.2f} "
+                f"pace={getattr(r,'pace_weight',0.):.2f} look_scale={getattr(r,'turn_lookahead_scale',1.):.2f} "
                 f"k={self.k:.3f} depth={depth_state} contact={monitor} plan_ms={duration:.1f}"
             )))
         if now-self.last_log>=1/SETTINGS["logging"]["csv_hz"]:
@@ -311,12 +323,13 @@ class Racer(Node):
                 stamp-history[-1][0] if history else -1.,r.curvature,roll,pitch,rate-speed*joint_k,rate*speed,depth_state,self.depth_rows,self.depth_quality,
                 left,right,joint_k,joint_stamp,imu_stamp,history[-1][0] if history else -1.,scan_stamp,self.depth_rgb_stamp,self.depth_stamp,
                 self.depth_rgb_stamp-self.depth_stamp,self.depth_callback_status,transition,r.curvature-prior_request,guard_reason,self.guard.closing,
-                self.feedback.get("state","UNKNOWN"),self.feedback.get("actuator_mps",""),"REAR_WHEEL_ESTIMATE",self.profile,
+                self.feedback.get("state","UNKNOWN"),self.feedback.get("actuator_mps",""),"REAR_WHEEL_ESTIMATE",getattr(r,"right_wall_error_m",None),self.profile,
                 getattr(r,"right_gap_m",None),getattr(r,"left_gap_m",None),getattr(r,"wall_band",""),
                 getattr(r,"wall_relief_m",0.),self.feedback.get("sim_s"),self.feedback.get("drive_interruptions"),
                 self.feedback.get("last_drive_interruption"),self.feedback.get("last_drive_interruption_sim_s"),
                 self.feedback.get("command_age_wall_s"),self.feedback.get("joint_age_wall_s"),
-                self.feedback.get("imu_age_wall_s")])
+                self.feedback.get("imu_age_wall_s"),getattr(r,"pace_weight",0.),getattr(r,"base_preview_limit",None),
+                getattr(r,"turn_lookahead_scale",1.),getattr(r,"paired_wall_span",None),getattr(r,"projected_gap",None),self.trial_id,self.track_name,self.config_hash])
             self.logfile.flush()
 
     def close(self):
@@ -326,6 +339,7 @@ class Racer(Node):
 
 
 def main():
+    cv2.setNumThreads(1)
     rclpy.init();node=Racer();executor=MultiThreadedExecutor(num_threads=2);executor.add_node(node)
     try:executor.spin()
     except (KeyboardInterrupt,rclpy.executors.ExternalShutdownException):pass

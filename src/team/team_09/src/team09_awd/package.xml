@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>team09_awd</name><version>24.0.0</version>
-  <description>Portable URRC v24 AWD racer and sensor/actuator adapter</description>
+  <name>team09_awd</name><version>27.0.0</version>
+  <description>Portable URRC v27 AWD racer and sensor/actuator adapter</description>
   <maintainer email="team@example.invalid">URRC team</maintainer><license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend><exec_depend>sensor_msgs</exec_depend>

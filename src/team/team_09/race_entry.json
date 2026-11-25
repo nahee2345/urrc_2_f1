@@ -1,6 +1,6 @@
 {
   "entry_id": "team_09",
-  "display_name": "URRC AWD v24",
+  "display_name": "URRC AWD v27",
   "ros_package": "team09_awd",
   "algorithm_launch_file": "race.launch.py",
   "vehicle_model_file": "src/team09_awd/models/car/model.sdf",

@@ -28,8 +28,8 @@ def test_model_envelope():
 
 def test_pair_arrival_order():
     p=RGBDPairer();assert p.add('depth',1.,'d') is None
-    assert p.add('rgb',1.09,'r')==(1.09,'r',1.,'d')
-    assert p.add('rgb',1.09,'r') is None
+    assert p.add('rgb',1.01,'r')==(1.01,'r',1.,'d')
+    assert p.add('rgb',1.01,'r') is None
 
 def test_guard_keeps_straight_acceleration():
     g=AccelerationGuard();r=Result(clearance=.8,wall_quality=1.);r.route_kind='CURVED_LOCAL'

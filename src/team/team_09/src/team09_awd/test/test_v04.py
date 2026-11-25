@@ -22,7 +22,7 @@ class GentleControl(unittest.TestCase):
         states=[]
         for xy in [(0,0),(1000,-2000)]:
             t=WallTracker();t.update((.3,0,1),(*xy,0),1.)
-            states.append(t.update((.32,.09,1),(*xy,0),1.05))
+            states.append(t.update((.32,.01,1),(*xy,0),1.05))
         np.testing.assert_allclose(states[0],states[1],atol=1e-9)
     def test_wall_jump_rejected(self):
         t=WallTracker();t.update((0,0,1),(0,0,0),1.)
@@ -33,4 +33,4 @@ class GentleControl(unittest.TestCase):
     def test_noisy_observation_filtered(self):
         t=WallTracker();t.update((0,0,1),(0,0,0),1.)
         q=t.update((.1,.05,1),(0,0,0),1.05)
-        self.assertLess(abs(q[0]),.02);self.assertLess(abs(q[1]),.09)
+        self.assertLess(abs(q[0]),.02);self.assertLess(abs(q[1]),.01)
