@@ -1,0 +1,19 @@
+{
+  "entry_id": "team04",
+  "display_name": "Team 04",
+  "ros_package": "team04_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team04_race/models/team04_car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "base_link_name": "base_link",
+  "spawn_z_offset_m": 0.04,
+  "speed_topic": "/team04/speed",
+  "steering_topic": "/team04/steering",
+  "lidar_topic": "/team04/scan",
+  "launch_arguments": {
+    "driving_mode": "autonomous",
+    "autonomy_max_speed": "4.5",
+    "autonomy_path_mode": "racing_line",
+    "autonomy_traffic_mode": "solo_racing"
+  }
+}

@@ -1,0 +1,22 @@
+# Stage5: preserved stage4 solo profile; passing is opt-in. See STAGE5.md.
+autonomy_04:
+  ros__parameters:
+    traffic_mode: traffic_racing
+    traffic_max_speed: 1.0
+    max_speed: 1.0
+    path_mode: racing_line
+    sensor_timeout_s: 0.18
+    reaction_time_s: 0.23
+    visibility_buffer_m: 1.8
+    visibility_buffer_reference_speed_mps: 3.5
+    min_obstacle_height: 0.035
+    max_obstacle_height: 0.38
+    planning_horizon: 10.0
+    safety_margin: 0.16
+    lookahead_min: 1.0
+    lookahead_speed_gain: 0.6
+    lookahead_max: 2.0
+    max_lateral_acceleration: 1.0
+    braking_deceleration: 2.5
+    acceleration_limit: 0.9
+    steering_rate_limit: 0.65

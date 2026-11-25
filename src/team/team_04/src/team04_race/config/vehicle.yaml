@@ -1,0 +1,7 @@
+control_04:
+  ros__parameters:
+    command_timeout_s: 0.5
+    camera_roi_y_max: 0.25
+# Model constants: wheelbase .32 m, tread .184 m, radius .035 m.
+# Torque saturation: rear wheels .6 Nm each; steering .8 Nm each.
+# IMU and encoders are telemetry only. No fusion/planner is enabled.

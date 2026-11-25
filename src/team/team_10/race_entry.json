@@ -1,0 +1,13 @@
+{
+  "entry_id": "team_10",
+  "display_name": "Hanla Racing",
+  "ros_package": "team10_race",
+  "algorithm_launch_file": "race.launch.py",
+  "vehicle_model_file": "src/team10_race/models/team10_car/model.sdf",
+  "vehicle_model_format": "sdf",
+  "spawn_z_offset_m": 0.12,
+  "speed_topic": "/team_10/speed_10",
+  "steering_topic": "/team_10/steering_10",
+  "lidar_topic": "/team_10/scan_10",
+  "launch_arguments": {}
+}

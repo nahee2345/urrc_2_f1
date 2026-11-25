@@ -91,7 +91,7 @@ def accumulate(root: Path, session: dict) -> tuple[dict, bool]:
     provisional = any(bool(row.get('rank_provisional')) for row in completed)
     overall = dict(last or {})
     overall.update(event={'event_id': session['event_id'], 'track': session['track']},
-                   track=session['track'], laps=3, v2_stage='qualifying',
+                   track=session['track'], laps=2, v2_stage='qualifying',
                    valid=all_done, state='complete' if all_done else 'collecting',
                    provisional=provisional, results=completed,
                    entry_fingerprints=session['fingerprints'])
@@ -141,7 +141,7 @@ def execute(root: Path, team: str) -> int:
             atomic_json(manifest_file, session)
         if (base / f'{team}.json').exists():
             raise ValueError(f'{team}은 이미 공식 예선 기록이 있습니다. 중복 출전할 수 없습니다.')
-        print(f'[예선 단독] {team} | {session["track"]} | 3랩 | 전체 {len(session["teams"])}팀', flush=True)
+        print(f'[예선 단독] {team} | {session["track"]} | 2랩 | 전체 {len(session["teams"])}팀', flush=True)
         env = os.environ.copy()
         env['URRC_QUALIFYING_ONLY'] = team
         # Preserve the official stage launcher and its validation/signal/timing.
@@ -164,10 +164,10 @@ def execute(root: Path, team: str) -> int:
             payload.get('track') != session['track'] or not isinstance(rows, list) or
             len(rows) != 1 or rows[0].get('entry_id') != team):
             raise ValueError('개별 예선 검증 실패. 임의로 공식 집계하지 않습니다.')
-        if payload.get('laps')!=3 or rows[0].get('laps',0)>3:
-            raise ValueError('3랩 예선 공식 기록이 아닙니다.')
-        if rows[0].get('status')=='finished' and rows[0].get('laps')!=3:
-            raise ValueError('예선 3랩 완주 검증 실패')
+        if payload.get('laps')!=2 or rows[0].get('laps',0)>2:
+            raise ValueError('2랩 예선 공식 기록이 아닙니다.')
+        if rows[0].get('status')=='finished' and rows[0].get('laps')!=2:
+            raise ValueError('예선 2랩 완주 검증 실패')
         atomic_json(base / f'{team}.json', payload)
         overall, all_done = accumulate(root, session)
         subprocess.run([sys.executable, str(root / 'race/scripts/summary_txt_v18.py'),

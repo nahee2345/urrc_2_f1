@@ -1,0 +1,6 @@
+- topic_name: /team_10/start_camera_image_10
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+  qos_profile: SENSOR_DATA
+  publisher_queue: 1

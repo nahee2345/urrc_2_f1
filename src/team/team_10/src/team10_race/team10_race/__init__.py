@@ -1,0 +1,1 @@
+"""Hanla URRC race entry."""

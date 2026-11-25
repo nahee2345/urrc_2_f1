@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>team04_race</name><version>0.5.0</version>
+  <description>URRC Team 04 physical vehicle, sensors and guarded control.</description>
+  <maintainer email="team04@example.com">Team 04</maintainer><license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend><depend>sensor_msgs</depend><depend>std_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend>
+  <depend>gz_sim_vendor</depend><depend>gz_plugin_vendor</depend><depend>gz_transport_vendor</depend><depend>gz_msgs_vendor</depend>
+  <exec_depend>ros_gz_bridge</exec_depend><exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ament_index_python</exec_depend><exec_depend>launch</exec_depend><exec_depend>launch_ros</exec_depend><exec_depend>tf2_ros</exec_depend><exec_depend>python3-yaml</exec_depend>
+  <test_depend>rclpy</test_depend><test_depend>python3-numpy</test_depend><test_depend>python3-matplotlib</test_depend><test_depend>ros_gz_interfaces</test_depend><test_depend>tf2_msgs</test_depend><test_depend>rosgraph_msgs</test_depend>
+  <export><build_type>ament_cmake</build_type><gazebo_ros gazebo_model_path="${prefix}/models" plugin_path="lib"/></export>
+</package>

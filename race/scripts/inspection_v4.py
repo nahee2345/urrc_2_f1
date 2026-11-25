@@ -25,17 +25,31 @@ def safe_path(folder, rel):
     return p
 
 def geometry_extent(geom):
-    """Geometric primitive local AABB only. Meshes need manual checks."""
-    if geom.find('box') is not None:
-        a=geom.findtext('box/size','').split()
-        return [float(i) for i in a] if len(a)==3 else None
-    if geom.find('sphere') is not None:
-        r=float(geom.findtext('sphere/radius'))
-        return [2*r]*3
-    if geom.find('cylinder') is not None:
-        r=float(geom.findtext('cylinder/radius')); length=float(geom.findtext('cylinder/length'))
-        return [2*r,2*r,length]
+    """Read primitive dimensions from both URDF attributes and SDF elements."""
+    box = geom.find('box')
+    if box is not None:
+        value = box.get('size') or box.findtext('size')
+        return [float(x) for x in value.split()] if value else None
+
+    sphere = geom.find('sphere')
+    if sphere is not None:
+        value = sphere.get('radius') or sphere.findtext('radius')
+        if value is None:
+            return None
+        r = float(value)
+        return [2*r, 2*r, 2*r]
+
+    cylinder = geom.find('cylinder')
+    if cylinder is not None:
+        radius = cylinder.get('radius') or cylinder.findtext('radius')
+        length = cylinder.get('length') or cylinder.findtext('length')
+        if radius is None or length is None:
+            return None
+        r, h = float(radius), float(length)
+        return [2*r, 2*r, h]
+
     return None
+
 
 def pose_xyz(s):
     if not s:return (0.,0.,0.)

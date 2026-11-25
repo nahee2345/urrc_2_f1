@@ -1,0 +1,71 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: team04/lidar_link
+    Background Color: 35; 35; 35
+    Frame Rate: 20
+  Displays:
+    - Class: rviz_default_plugins/PointCloud2
+      Name: LiDAR 3D
+      Enabled: true
+      Topic:
+        Value: /team04/points
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Depth: 1
+      Size (Pixels): 2
+      Style: Points
+      Color Transformer: AxisColor
+      Axis: Z
+    - Class: rviz_default_plugins/Path
+      Name: Local Planned Path
+      Enabled: true
+      Topic:
+        Value: /team04/debug/path
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.03
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Measured Boundaries
+      Enabled: true
+      Topic:
+        Value: /team04/debug/track_boundaries
+    - Class: rviz_default_plugins/Path
+      Name: Measured Center Path
+      Enabled: true
+      Topic:
+        Value: /team04/debug/centerline
+      Color: 80; 160; 255
+      Line Style: Lines
+      Line Width: 0.02
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Racing Line Candidates
+      Enabled: true
+      Topic:
+        Value: /team04/debug/racing_candidates
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Traffic Tracks and Predicted Occupancy
+      Enabled: true
+      Topic:
+        Value: /team04/debug/tracked_vehicles
+    - Class: rviz_default_plugins/PointStamped
+      Name: Pursuit Target
+      Enabled: true
+      Topic:
+        Value: /team04/debug/target_point
+      Color: 255; 255; 0
+      Radius: 0.07
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Local Top View
+      Scale: 55
+      Angle: -1.57079632679
+      X: 3
+      Y: 0
+Window Geometry:
+  Width: 1200
+  Height: 800

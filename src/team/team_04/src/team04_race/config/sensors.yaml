@@ -1,0 +1,8 @@
+scan_04:
+  ros__parameters:
+    lidar_hz: 20.0
+    min_height: -0.04   # relative to lidar origin: ground height .09 m
+    max_height: 0.12
+    max_cloud_age_s: 0.2
+# Authoritative sensor rate is in SDF. Rebuild it with generate_model.py.
+# Camera 640x480 RGB, 30 Hz, HFOV pi/2. IMU and joint measurements 100 Hz.

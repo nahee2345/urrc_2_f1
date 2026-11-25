@@ -1,0 +1,18 @@
+# Experimental profile, never selected as submission default before clean trials.
+autonomy_04:
+  ros__parameters:
+    max_speed: 3.5
+    path_mode: racing_line
+    sensor_timeout_s: 0.18
+    reaction_time_s: 0.23
+    min_obstacle_height: 0.035
+    max_obstacle_height: 0.38
+    planning_horizon: 10.0
+    safety_margin: 0.16
+    lookahead_min: 1.0
+    lookahead_speed_gain: 0.6
+    lookahead_max: 2.0
+    max_lateral_acceleration: 0.7
+    braking_deceleration: 2.0
+    acceleration_limit: 0.6
+    steering_rate_limit: 0.65

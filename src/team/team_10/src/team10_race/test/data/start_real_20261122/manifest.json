@@ -1,0 +1,13 @@
+{
+  "description": "Actual RGB inputs: settling dark from diag01 and stable dark/red/off from final02. A baseline-selection counterexample, NOT an exact temporal replay of the older missing-RGB failure.",
+  "sources": {
+    "old_dark.png": "validation_f1/start_repeat_20261122/diag01/camera/frame_00036.png",
+    "recent_dark.png": "validation_f1/start_repeat_20261122/final02/camera/reference_00673.png",
+    "red0.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00673.png",
+    "red1.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00674.png",
+    "red2.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00675.png",
+    "off0.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00698.png",
+    "off1.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00699.png",
+    "off2.png": "validation_f1/start_repeat_20261122/final02/camera/frame_00700.png"
+  }
+}

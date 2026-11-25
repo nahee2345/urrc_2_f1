@@ -1,0 +1,2 @@
+# No pip dependencies. ROS 2 Python packages are declared in package.xml.
+# Model generation uses Ubuntu python3-yaml (also declared in package.xml).

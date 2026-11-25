@@ -1,0 +1,4 @@
+#include "team04_race/traffic.hpp"
+#include <fstream>
+#include <iostream>
+int main(int argc,char**argv){if(argc<2)return 2;std::ifstream in(argv[1]);team04::Point q;std::vector<team04::Point> p;while(in>>q.x>>q.y>>q.z)p.push_back(q);team04::PlannerConfig c;c.path_mode="racing_line";c.max_speed=1;c.planning_horizon=10;c.braking=2.5;c.lateral_acceleration=1;c.acceleration=.9;c.visibility_buffer=1.8;team04::TrafficPlanner engine;for(int i=0;i<20;++i){auto plan=engine.update(p,c,.3,0,1+i*.05,true);auto d=engine.debug();std::cout<<i<<" "<<d.state<<" "<<d.reason<<" / "<<plan.reason<<" "<<plan.fallback_reason<<" / "<<d.detections.size()<<" heading="<<(d.detections.empty()?false:d.detections[0].heading_supported)<<" box="<<(d.tracks.empty()?0:d.tracks[0].length)<<","<<(d.tracks.empty()?0:d.tracks[0].width)<<" v="<<(d.tracks.empty()?0:d.tracks[0].vx)<<","<<(d.tracks.empty()?0:d.tracks[0].vy)<<"\n";} }
