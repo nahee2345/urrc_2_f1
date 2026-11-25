@@ -1,0 +1,88 @@
+
+[v15] 측정=602.74초, 트랙=monza, GZ_PARTITION=urrc_race_preview_e5adfc2f4a0d
+[v15] /clock 수신=78102, 진행=100.189초, 시계상태=PASS
+[v15] Gazebo 토픽=58, ROS 토픽=44
+[v15 GZ] team_01 관련 토픽=['/model/team_01/urrc_timing', '/team_01/camera/camera_info', '/team_01/camera/depth_image', '/team_01/camera/image', '/team_01/camera/points', '/team_01/contacts/base_link', '/team_01/contacts/front_left_wheel', '/team_01/contacts/front_right_wheel', '/team_01/contacts/rear_left_wheel', '/team_01/contacts/rear_right_wheel', '/team_01/drive/front_left', '/team_01/drive/front_right', '/team_01/drive/rear_left', '/team_01/drive/rear_right', '/team_01/drive/steer_angle', '/team_01/imu', '/team_01/joint_states', '/team_01/lidar'] (존재 확인이며 발행 주기 검증 아님)
+[v15 ROS] /model/team_01/urrc_timing publishers=5, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /race/start/team_01 publishers=1, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/actuator_status publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/camera/camera_info publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/camera/depth_image publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/camera/image publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/candidate_drive publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/contacts/base_link publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/contacts/front_left_wheel publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/contacts/front_right_wheel publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/contacts/rear_left_wheel publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/contacts/rear_right_wheel publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/drive/front_left publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/drive/front_right publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/drive/rear_left publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/drive/rear_right publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/drive/steer_angle publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/enable publishers=0, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/imu publishers=2, subscribers_excluding_diagnostic=4 qos=unknown
+[v15 ROS] /team_01/joint_states publishers=2, subscribers_excluding_diagnostic=4 qos=unknown
+[v15 ROS] /team_01/lidar/points publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/odom publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/planned_path publishers=2, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team_01/race_start publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/speed publishers=2, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /team_01/start_camera/camera_info publishers=2, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team_01/start_camera/debug_image publishers=2, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team_01/start_camera/image publishers=2, subscribers_excluding_diagnostic=2 qos=unknown
+[v15 ROS] /team_01/status publishers=2, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team_01/steering publishers=2, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 GZ] team_08 관련 토픽=['/model/team_08/urrc_timing', '/team08/front_camera_08/camera_info', '/team08/front_camera_08/image', '/team08/front_scan_08', '/team08/front_scan_08/points', '/team08/imu_08', '/team08/joint_states_08', '/team08/pose_08', '/team08/rear_scan_08', '/team08/rear_scan_08/points', '/team08/replay_go_08', '/team08/speed_08', '/team08/steering_08'] (존재 확인이며 발행 주기 검증 아님)
+[v15 ROS] /model/team_08/urrc_timing publishers=2, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /race/start/team_08 publishers=1, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /team08/front_camera_08/image publishers=1, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team08/front_scan_08 publishers=1, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team08/imu_08 publishers=1, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team08/rear_scan_08 publishers=1, subscribers_excluding_diagnostic=0 qos=no_external_subscriber
+[v15 ROS] /team08/replay_go_08 publishers=1, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /team08/speed_08 publishers=1, subscribers_excluding_diagnostic=1 qos=unknown
+[v15 ROS] /team08/steering_08 publishers=1, subscribers_excluding_diagnostic=1 qos=unknown
+
+team_01
+  PASS gate: 출발 신호 관측=2, 마지막 값=True (수신 확인과 앱 적용은 별개)
+  PASS camera: ROS 수신=6736 프레임, 토픽=/team_01/camera/depth_image, /team_01/camera/image, /team_01/start_camera/image, /team_01/start_camera/debug_image
+  PASS lidar: ROS 수신=3006 프레임, 토픽=/team_01/lidar/points
+  PASS imu: ROS 수신=19835 프레임, 토픽=/team_01/imu
+  PASS timing_pose: 중앙 계측 포즈 수신=19990
+  PASS speed_steering: 속도=100388회 (최대=8.49899959564209), 조향=100311회
+  CHECK cause_hint: 속도 명령은 있지만 Gazebo 구동 명령 수신이 관측되지 않았습니다. 어댑터·브리지를 확인하십시오.
+    /model/team_01/urrc_timing: 19990회 / 33.33Hz / sim 지연=-0.001초 / TF=['team_01/rear_left_wheel', 'team_01/front_right_wheel', 'team_01/front_right_knuckle', 'team_01/rear_right_wheel', 'team_01/front_left_wheel', 'team_01/base_link', 'team_01/front_left_knuckle', 'team_01']
+    /race/start/team_01: 2회 / 0.08Hz
+    /team_01/speed: 100388회 / 167.94Hz
+    /team_01/steering: 100311회 / 167.81Hz
+    /team_01/camera/depth_image: 2184회 / 3.66Hz / sim 지연=0.027초
+    /team_01/camera/image: 2129회 / 3.56Hz / sim 지연=0.031초
+    /team_01/imu: 19835회 / 33.19Hz / sim 지연=-0.001초
+    /team_01/lidar/points: 3006회 / 5.03Hz / sim 지연=0.029초
+    /team_01/odom: 19826회 / 33.17Hz / sim 지연=0.003초
+    /team_01/start_camera/image: 2260회 / 3.78Hz / sim 지연=0.015초
+    /team_01/start_camera/debug_image: 163회 / 5.12Hz / sim 지연=0.033초
+
+team_08
+  PASS gate: 출발 신호 관측=2, 마지막 값=True (수신 확인과 앱 적용은 별개)
+  PASS camera: ROS 수신=493 프레임, 토픽=/team08/front_camera_08/image
+  CHECK camera_consumer: ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오.
+  PASS lidar: ROS 수신=5982 프레임, 토픽=/team08/front_scan_08, /team08/rear_scan_08
+  CHECK lidar_consumer: ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오.
+  PASS imu: ROS 수신=19741 프레임, 토픽=/team08/imu_08
+  CHECK imu_consumer: ROS 수신은 확인되지만 진단기 외 구독자를 찾지 못했습니다. 참가 노드 구독 토픽을 확인하십시오.
+  PASS timing_pose: 중앙 계측 포즈 수신=19991
+  PASS speed_steering: 속도=3417회 (최대=15.0), 조향=3417회
+  CHECK cause_hint: 속도 명령은 있지만 Gazebo 구동 명령 수신이 관측되지 않았습니다. 어댑터·브리지를 확인하십시오.
+    /model/team_08/urrc_timing: 19991회 / 33.33Hz / sim 지연=-0.002초 / TF=['team_08/rear_right_wheel', 'team_08/rear_left_wheel', 'team_08/front_right_wheel', 'team_08/front_right_knuckle', 'team_08/front_left_wheel', 'team_08/front_left_knuckle', 'team_08/base_link', 'team_08']
+    /race/start/team_08: 2회 / 0.08Hz
+    /team08/speed_08: 3417회 / 5.73Hz
+    /team08/steering_08: 3417회 / 5.73Hz
+    /team08/front_camera_08/image: 493회 / 0.83Hz / sim 지연=0.006초
+    /team08/front_scan_08: 2991회 / 5.02Hz / sim 지연=0.033초
+    /team08/imu_08: 19741회 / 33.13Hz / sim 지연=-0.002초
+    /team08/rear_scan_08: 2991회 / 5.02Hz / sim 지연=0.034초
+
+[v15] 진단 결과: /home/ww/urrc_2_f1_next/race/previews/v17_semi_a_14f9182b2d95/sensor_diagnostic.json
+[v15] PASS=ROS 관측 성공일 뿐, 팀 애플리케이션의 실제 처리·물리 주행 성공은 별도 검증입니다.

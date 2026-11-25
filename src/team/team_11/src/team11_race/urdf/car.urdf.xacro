@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="team11_car">
+
+  <xacro:arg name="with_lidar" default="true"/>
+  <xacro:arg name="with_camera" default="false"/>
+
+  <xacro:include filename="car_core.xacro"/>
+
+  <xacro:if value="$(arg with_lidar)">
+    <xacro:include filename="car_lidar.xacro"/>
+  </xacro:if>
+
+  <xacro:if value="$(arg with_camera)">
+    <xacro:include filename="car_camera.xacro"/>
+  </xacro:if>
+
+  <xacro:include filename="car_control.xacro"/>
+
+</robot>

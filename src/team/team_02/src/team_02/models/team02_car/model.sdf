@@ -1,0 +1,200 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <model name="team_02">
+    <static>false</static><self_collide>false</self_collide><allow_auto_disable>false</allow_auto_disable>
+    <link name="base_link">
+      <!-- The base_link frame is now at the organizer-reported collision AABB center.
+           Its child meshes/sensors were translated by -0.0500 m, leaving each
+           model-frame shape and sensor at its original physical position. -->
+      <pose>0 0 0.05 0 0 0</pose>
+      <inertial>
+        <!-- Preserve the original model-frame center of mass and dynamics. -->
+        <pose>0 0 -0.05 0 0 0</pose><mass>1.9</mass><inertia><ixx>0.009</ixx><iyy>0.045</iyy><izz>0.048</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+      <gravity>true</gravity>
+      <visual name="chassis_visual">
+        <pose>0 0 0.011 0 0 0</pose><geometry><box><size>0.52 0.168 0.062</size></box></geometry><material><ambient>1 0.86 0.00 1</ambient>
+          <diffuse>1 0.898039 0 1</diffuse><specular>0.30 0.24 0.02 1</specular><emissive>0.14 0.11 0.00 1</emissive></material>
+      </visual>
+      <collision name="chassis_collision">
+        <pose>0 0 0.011 0 0 0</pose><geometry><box><size>0.52 0.168 0.062</size></box></geometry>
+      </collision>
+      <visual name="front_wing_visual">
+        <pose>0.235 0 -0.013 0 0 0</pose><geometry><box><size>0.080 0.250 0.009</size></box></geometry><material><ambient>1 0.86 0.00 1</ambient>
+          <diffuse>1 0.898039 0 1</diffuse><specular>0.30 0.24 0.02 1</specular><emissive>0.14 0.11 0.00 1</emissive></material>
+      </visual>
+      <collision name="front_wing_collision">
+        <pose>0.235 0 -0.013 0 0 0</pose><geometry><box><size>0.080 0.250 0.009</size></box></geometry>
+      </collision>
+      <visual name="nose_visual">
+        <pose>0.17 0 0.051 0 0 0</pose><geometry><box><size>0.12 0.09 0.035</size></box></geometry><material><ambient>1 0.86 0.00 1</ambient>
+          <diffuse>1 0.898039 0 1</diffuse><specular>0.30 0.24 0.02 1</specular><emissive>0.14 0.11 0.00 1</emissive></material>
+      </visual>
+      <collision name="nose_collision">
+        <pose>0.17 0 0.051 0 0 0</pose><geometry><box><size>0.12 0.09 0.035</size></box></geometry>
+      </collision>
+      <visual name="rear_wing_visual">
+        <pose>-0.235 0 0.083 0 0 0</pose><geometry><box><size>0.080 0.220 0.014</size></box></geometry><material><ambient>1 0.86 0.00 1</ambient>
+          <diffuse>1 0.898039 0 1</diffuse><specular>0.30 0.24 0.02 1</specular><emissive>0.14 0.11 0.00 1</emissive></material>
+      </visual>
+      <collision name="rear_wing_collision">
+        <pose>-0.235 0 0.083 0 0 0</pose><geometry><box><size>0.080 0.220 0.014</size></box></geometry>
+      </collision>
+      <sensor name="team02_imu" type="imu">
+        <pose>0 0 0.025 0 0 0</pose><always_on>true</always_on>
+        <update_rate>100</update_rate><topic>/team02/imu_02</topic>
+      </sensor>
+      
+      
+
+      <!-- Monitoring camera only: never used by autonomous motion control. -->
+      <sensor name="team02_front_camera" type="camera">
+        <pose>0.245 0 0.055 0 0 0</pose>
+        <always_on>true</always_on>
+        <update_rate>5</update_rate>
+        <topic>/team02/front_camera_02/image</topic>
+        <camera>
+          <horizontal_fov>1.20</horizontal_fov>
+          <image>
+            <width>320</width><height>240</height><format>R8G8B8</format>
+          </image>
+          <clip><near>0.10</near><far>60.0</far></clip>
+        </camera>
+      </sensor>
+      <visual name="camera_housing_visual">
+        <pose>0.225 0 0.055 0 0 0</pose><geometry><box><size>0.024 0.038 0.026</size></box></geometry><material><ambient>0.05 0.07 0.09 1</ambient>
+          <diffuse>0.05 0.07 0.09 1</diffuse></material>
+      </visual>
+      <collision name="camera_housing_collision">
+        <pose>0.225 0 0.055 0 0 0</pose><geometry><box><size>0.024 0.038 0.026</size></box></geometry>
+      </collision>
+      <sensor name="front_lidar" type="gpu_lidar">
+        <pose>0.187 0 0.059 0 0 0</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team02/front_scan_02</topic><lidar><scan><horizontal>
+              <samples>361</samples><resolution>1</resolution><min_angle>-2.18</min_angle><max_angle>2.18</max_angle></horizontal></scan><range><min>0.1</min>
+            <max>16.0</max><resolution>0.02</resolution></range></lidar>
+      </sensor>
+      <sensor name="rear_lidar" type="gpu_lidar">
+        <pose>-0.208 0 0.059 0 0 3.14159265359</pose><always_on>true</always_on><update_rate>30</update_rate><topic>/team02/rear_scan_02</topic><lidar><scan>
+            <horizontal><samples>361</samples><resolution>1</resolution><min_angle>-1.57</min_angle><max_angle>1.57</max_angle></horizontal></scan><range>
+            <min>0.1</min><max>16.0</max><resolution>0.02</resolution></range></lidar>
+      </sensor>
+      <visual name="front_lidar_housing_visual">
+        <pose>0.187 0 0.059 0 0 0</pose><geometry><cylinder><radius>0.015</radius><length>0.014</length></cylinder></geometry><material>
+          <ambient>0.10 0.10 0.11 1</ambient><diffuse>0.10 0.10 0.11 1</diffuse></material>
+      </visual>
+      <collision name="front_lidar_housing_collision">
+        <pose>0.187 0 0.059 0 0 0</pose><geometry><cylinder><radius>0.015</radius><length>0.014</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+      <visual name="rear_lidar_housing_visual">
+        <pose>-0.208 0 0.059 0 0 0</pose><geometry><cylinder><radius>0.015</radius><length>0.014</length></cylinder></geometry><material>
+          <ambient>0.10 0.10 0.11 1</ambient><diffuse>0.10 0.10 0.11 1</diffuse></material>
+      </visual>
+      <collision name="rear_lidar_housing_collision">
+        <pose>-0.208 0 0.059 0 0 0</pose><geometry><cylinder><radius>0.015</radius><length>0.014</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+      <visual name="rear_pylon_r_visual">
+        <pose>-0.22 -0.064 0.057 0 0 0</pose><geometry><box><size>.019 .020 .051</size></box></geometry><material><ambient>0.08 0.08 0.10 1</ambient>
+          <diffuse>0.08 0.08 0.10 1</diffuse></material>
+      </visual>
+      <collision name="rear_pylon_r_collision">
+        <pose>-0.22 -0.064 0.057 0 0 0</pose><geometry><box><size>.019 .020 .051</size></box></geometry>
+      </collision>
+      <visual name="rear_pylon_l_visual">
+        <pose>-0.22 0.064 0.057 0 0 0</pose><geometry><box><size>.019 .020 .051</size></box></geometry><material><ambient>0.08 0.08 0.10 1</ambient>
+          <diffuse>0.08 0.08 0.10 1</diffuse></material>
+      </visual>
+      <collision name="rear_pylon_l_collision">
+        <pose>-0.22 0.064 0.057 0 0 0</pose><geometry><box><size>.019 .020 .051</size></box></geometry>
+      </collision>
+    </link>
+    <link name="front_left_knuckle">
+      <pose>0.17 0.107 0 0 0 0</pose><inertial><mass>0.035</mass><inertia><ixx>5e-05</ixx><iyy>5e-05</iyy><izz>5e-05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia></inertial>
+    </link>
+    <joint name="front_left_steer_joint" type="fixed">
+      <parent>base_link</parent><child>front_left_knuckle</child>
+    </joint>
+    <link name="front_left_wheel">
+      <pose>0.17 0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
+          <iyz>0</iyz></inertia></inertial>
+      <visual name="rubber_visual">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><material>
+          <ambient>0.05 0.06 0.075 1</ambient><diffuse>0.05 0.06 0.075 1</diffuse></material>
+      </visual>
+      <collision name="rubber_collision">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+    </link>
+    <joint name="front_left_spin_joint" type="fixed">
+      <parent>front_left_knuckle</parent><child>front_left_wheel</child>
+    </joint>
+    <link name="front_right_knuckle">
+      <pose>0.17 -0.107 0 0 0 0</pose><inertial><mass>0.035</mass><inertia><ixx>5e-05</ixx><iyy>5e-05</iyy><izz>5e-05</izz><ixy>0</ixy><ixz>0</ixz>
+          <iyz>0</iyz></inertia></inertial>
+    </link>
+    <joint name="front_right_steer_joint" type="fixed">
+      <parent>base_link</parent><child>front_right_knuckle</child>
+    </joint>
+    <link name="front_right_wheel">
+      <pose>0.17 -0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
+          <iyz>0</iyz></inertia></inertial>
+      <visual name="rubber_visual">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><material>
+          <ambient>0.05 0.06 0.075 1</ambient><diffuse>0.05 0.06 0.075 1</diffuse></material>
+      </visual>
+      <collision name="rubber_collision">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+    </link>
+    <joint name="front_right_spin_joint" type="fixed">
+      <parent>front_right_knuckle</parent><child>front_right_wheel</child>
+    </joint>
+    <link name="rear_left_wheel">
+      <pose>-0.17 0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
+          <iyz>0</iyz></inertia></inertial>
+      <visual name="rubber_visual">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><material>
+          <ambient>0.05 0.06 0.075 1</ambient><diffuse>0.05 0.06 0.075 1</diffuse></material>
+      </visual>
+      <collision name="rubber_collision">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+    </link>
+    <joint name="rear_left_spin_joint" type="fixed">
+      <parent>base_link</parent><child>rear_left_wheel</child>
+    </joint>
+    <link name="rear_right_wheel">
+      <pose>-0.17 -0.107 0 0 0 0</pose><inertial><mass>0.12</mass><inertia><ixx>0.00011</ixx><iyy>0.0001</iyy><izz>0.00011</izz><ixy>0</ixy><ixz>0</ixz>
+          <iyz>0</iyz></inertia></inertial>
+      <visual name="rubber_visual">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><material>
+          <ambient>0.05 0.06 0.075 1</ambient><diffuse>0.05 0.06 0.075 1</diffuse></material>
+      </visual>
+      <collision name="rubber_collision">
+        <pose>0 0 0 1.5707963268 0 0</pose><geometry><cylinder><radius>0.040</radius><length>0.034</length></cylinder></geometry><surface><friction><ode>
+              <mu>1.7</mu><mu2>1.7</mu2></ode></friction></surface>
+      </collision>
+    </link>
+    <joint name="rear_right_spin_joint" type="fixed">
+      <parent>base_link</parent><child>rear_right_wheel</child>
+    </joint>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+      <topic>/team02/joint_states_02</topic><update_rate>50</update_rate>
+      <joint_name>front_left_steer_joint</joint_name><joint_name>front_right_steer_joint</joint_name>
+    </plugin>
+    <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+    <publish_link_pose>false</publish_link_pose>
+    <publish_model_pose>true</publish_model_pose>
+    <publish_nested_model_pose>false</publish_nested_model_pose>
+    <use_pose_vector_msg>true</use_pose_vector_msg>
+    <update_frequency>40</update_frequency>
+    <topic>/team02/pose_02</topic>
+  </plugin>
+    <plugin filename="libteam02_pose_02.so" name="urrc::Team02Pose_02"/>
+  </model>
+</sdf>

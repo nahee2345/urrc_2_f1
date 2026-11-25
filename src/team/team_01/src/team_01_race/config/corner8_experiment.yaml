@@ -1,0 +1,9 @@
+# Explicit simulator experiment. These are ceilings, not safety overrides.
+/**:
+  ros__parameters:
+    corner_control:
+      mild_max_speed_mps: 8.0
+      medium_max_speed_mps: 8.0
+      sharp_max_speed_mps: 8.0
+    path_manager:
+      lidar_only_max_speed_mps: 8.0

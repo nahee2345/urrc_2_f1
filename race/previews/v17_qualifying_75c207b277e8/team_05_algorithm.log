@@ -1,0 +1,57 @@
+[INFO] [launch]: All log files can be found below /home/ww/.ros/log/2026-11-25-18-38-25-116195-ww-8363
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [parameter_bridge-1]: process started with pid [8366]
+[INFO] [controller-2]: process started with pid [8367]
+[parameter_bridge-1] [INFO] [1795599505.475764648] [ros_gz_bridge]: Creating ROS->GZ Bridge: [/model/team_05/cmd_vel (geometry_msgs/msg/Twist) -> /model/team_05/cmd_vel (gz.msgs.Twist)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795599505.482215925] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/model/team_05/odometry (gz.msgs.Odometry) -> /model/team_05/odometry (nav_msgs/msg/Odometry)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795599505.489524987] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/team_05/scan (gz.msgs.LaserScan) -> /team_05/scan (sensor_msgs/msg/LaserScan)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795599505.496511906] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/team_05/camera/image_raw (gz.msgs.Image) -> /team_05/camera/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[controller-2] [INFO] [1795599507.055372223] [team05_controller]: TEAM05 READY
+[parameter_bridge-1] [INFO] [1795599507.071809469] [ros_gz_bridge]: Passing message from ROS geometry_msgs/msg/Twist to Gazebo gz.msgs.Twist (showing msg only once per type)
+[controller-2] [INFO] [1795599507.073934300] [team05_controller]: WAIT START | scan=1 camera=1
+[controller-2] [INFO] [1795599510.171653167] [team05_controller]: WAIT START | scan=26 camera=17
+[controller-2] [INFO] [1795599513.176287970] [team05_controller]: WAIT START | scan=55 camera=37
+[controller-2] [INFO] [1795599516.271972760] [team05_controller]: WAIT START | scan=81 camera=54
+[controller-2] [INFO] [1795599519.371304343] [team05_controller]: WAIT START | scan=107 camera=71
+[controller-2] [INFO] [1795599522.374957471] [team05_controller]: WAIT START | scan=134 camera=88
+[controller-2] [INFO] [1795599525.471927245] [team05_controller]: WAIT START | scan=160 camera=106
+[controller-2] [INFO] [1795599528.473683417] [team05_controller]: WAIT START | scan=185 camera=123
+[controller-2] [INFO] [1795599531.474197993] [team05_controller]: WAIT START | scan=212 camera=140
+[controller-2] [INFO] [1795599534.570911084] [team05_controller]: WAIT START | scan=234 camera=154
+[controller-2] [INFO] [1795599537.672450267] [team05_controller]: WAIT START | scan=257 camera=170
+[controller-2] [INFO] [1795599540.770692151] [team05_controller]: WAIT START | scan=286 camera=189
+[controller-2] [INFO] [1795599543.774675179] [team05_controller]: WAIT START | scan=311 camera=206
+[controller-2] [INFO] [1795599546.870510919] [team05_controller]: WAIT START | scan=335 camera=222
+[controller-2] [INFO] [1795599549.976657396] [team05_controller]: DRIVE speed=0.85 clearance=1.50 scan=348 camera=230
+[controller-2] [INFO] [1795599552.969632175] [team05_controller]: DRIVE speed=0.85 clearance=1.50 scan=374 camera=247
+[controller-2] [INFO] [1795599556.081208741] [team05_controller]: DRIVE speed=0.85 clearance=1.50 scan=398 camera=263
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[controller-2] [INFO] [1795599559.185282050] [team05_controller]: DRIVE speed=0.85 clearance=1.50 scan=421 camera=278
+[controller-2] [INFO] [1795599562.169132489] [team05_controller]: WAIT START | scan=434 camera=287
+[ERROR] [controller-2]: process[controller-2] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [parameter_bridge-1]: process[parameter_bridge-1] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[INFO] [controller-2]: sending signal 'SIGTERM' to process[controller-2]
+[INFO] [parameter_bridge-1]: sending signal 'SIGTERM' to process[parameter_bridge-1]
+[parameter_bridge-1] [INFO] [1795599564.116014720] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[controller-2] Traceback (most recent call last):
+[controller-2]   File "/home/ww/urrc_2_f1_next/race/install/lib/team05_race/controller", line 33, in <module>
+[controller-2]     sys.exit(load_entry_point('team05-race==0.3.0', 'console_scripts', 'controller')())
+[controller-2]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[controller-2]   File "/home/ww/urrc_2_f1_next/race/install/lib/python3.12/site-packages/team05_race/controller.py", line 219, in main
+[controller-2]     rclpy.spin(node)
+[controller-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/__init__.py", line 247, in spin
+[controller-2]     executor.spin_once()
+[controller-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 926, in spin_once
+[controller-2]     self._spin_once_impl(timeout_sec)
+[controller-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 907, in _spin_once_impl
+[controller-2]     handler, entity, node = self.wait_for_ready_callbacks(
+[controller-2]                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[controller-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 877, in wait_for_ready_callbacks
+[controller-2]     return next(self._cb_iter)
+[controller-2]            ^^^^^^^^^^^^^^^^^^^
+[controller-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 757, in _wait_for_ready_callbacks
+[controller-2]     wait_set = _rclpy.WaitSet(
+[controller-2]                ^^^^^^^^^^^^^^^
+[controller-2] rclpy._rclpy_pybind11.RCLError: failed to initialize wait set: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/wait.c:130
+[INFO] [parameter_bridge-1]: process has finished cleanly [pid 8366]
+[ERROR] [controller-2]: process has died [pid 8367, exit code 1, cmd '/home/ww/urrc_2_f1_next/race/install/lib/team05_race/controller --ros-args --params-file /tmp/launch_params_m5vb3mzy'].

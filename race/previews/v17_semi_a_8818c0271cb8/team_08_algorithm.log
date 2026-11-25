@@ -1,0 +1,48 @@
+[INFO] [launch]: All log files can be found below /home/ww/.ros/log/2026-11-23-19-34-45-520467-ww-34791
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [parameter_bridge-1]: process started with pid [34822]
+[INFO] [team08_control-2]: process started with pid [34823]
+[parameter_bridge-1] [INFO] [1795430085.715751247] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/front_scan_08 (gz.msgs.LaserScan) -> /team08/front_scan_08 (sensor_msgs/msg/LaserScan)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.719668381] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/rear_scan_08 (gz.msgs.LaserScan) -> /team08/rear_scan_08 (sensor_msgs/msg/LaserScan)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.720442406] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/imu_08 (gz.msgs.IMU) -> /team08/imu_08 (sensor_msgs/msg/Imu)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.721478309] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/front_camera_08/image (gz.msgs.Image) -> /team08/front_camera_08/image (sensor_msgs/msg/Image)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.722191949] [team08_bridge_08]: Creating ROS->GZ Bridge: [/team08/replay_go_08 (std_msgs/msg/Bool) -> /team08/replay_go_08 (gz.msgs.Boolean)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.723186587] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/speed_08 (gz.msgs.Float) -> /team08/speed_08 (std_msgs/msg/Float32)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.723721875] [team08_bridge_08]: Creating GZ->ROS Bridge: [/team08/steering_08 (gz.msgs.Float) -> /team08/steering_08 (std_msgs/msg/Float32)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430086.078203001] [team08_bridge_08]: Passing message from ROS std_msgs/msg/Bool to Gazebo gz.msgs.Boolean (showing msg only once per type)
+[team08_control-2] [INFO] [1795430122.833745705] [team08_control_08]: TEAM08 START: official signal gate released after lights-out
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[ERROR] [team08_control-2]: process[team08_control-2] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [parameter_bridge-1]: process[parameter_bridge-1] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[INFO] [team08_control-2]: sending signal 'SIGTERM' to process[team08_control-2]
+[INFO] [parameter_bridge-1]: sending signal 'SIGTERM' to process[parameter_bridge-1]
+[parameter_bridge-1] [INFO] [1795430177.683051819] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[team08_control-2] Traceback (most recent call last):
+[team08_control-2]   File "/home/ww/urrc_2_f1_next/race/install/lib/python3.12/site-packages/team08_race/control.py", line 44, in main
+[team08_control-2]     rclpy.spin(node)
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/__init__.py", line 247, in spin
+[team08_control-2]     executor.spin_once()
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 926, in spin_once
+[team08_control-2]     self._spin_once_impl(timeout_sec)
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 907, in _spin_once_impl
+[team08_control-2]     handler, entity, node = self.wait_for_ready_callbacks(
+[team08_control-2]                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 877, in wait_for_ready_callbacks
+[team08_control-2]     return next(self._cb_iter)
+[team08_control-2]            ^^^^^^^^^^^^^^^^^^^
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 785, in _wait_for_ready_callbacks
+[team08_control-2]     raise ExternalShutdownException()
+[team08_control-2] rclpy.executors.ExternalShutdownException
+[team08_control-2] 
+[team08_control-2] During handling of the above exception, another exception occurred:
+[team08_control-2] 
+[team08_control-2] Traceback (most recent call last):
+[team08_control-2]   File "/home/ww/urrc_2_f1_next/race/install/lib/team08_race/team08_control", line 4, in <module>
+[team08_control-2]     main()
+[team08_control-2]   File "/home/ww/urrc_2_f1_next/race/install/lib/python3.12/site-packages/team08_race/control.py", line 46, in main
+[team08_control-2]     node.publisher.publish(Bool(data=False))
+[team08_control-2]   File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/publisher.py", line 70, in publish
+[team08_control-2]     self.__publisher.publish(msg)
+[team08_control-2] rclpy._rclpy_pybind11.RCLError: Failed to publish: publisher's context is invalid, at ./src/rcl/publisher.c:423
+[INFO] [parameter_bridge-1]: process has finished cleanly [pid 34822]
+[ERROR] [team08_control-2]: process has died [pid 34823, exit code 1, cmd '/home/ww/urrc_2_f1_next/race/install/lib/team08_race/team08_control --ros-args -r __node:=team08_control_08 --params-file /tmp/launch_params_68zv3ota'].

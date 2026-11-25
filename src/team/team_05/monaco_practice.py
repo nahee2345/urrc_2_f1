@@ -1,0 +1,542 @@
+"""TEAM_05 solo Monaco practice with Gazebo Harmonic and ROS 2 Jazzy."""
+
+import csv
+import json
+import math
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+import time
+import xml.etree.ElementTree as ET
+
+import numpy as np
+import rclpy
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from rclpy.signals import SignalHandlerOptions
+from sensor_msgs.msg import LaserScan
+
+
+TEAM_DIR = Path(__file__).resolve().parent
+TRACK_DIR = TEAM_DIR.parents[2] / "src/urrc_track_gazebo/tracks/processed"
+MODEL_FILE = TEAM_DIR / "src/team05_race/models/car/model.sdf"
+CMD = "/model/team_05/cmd_vel"
+ODOM = "/model/team_05/odometry"
+SCAN = "/team_05/scan"
+BRIDGES = (
+    f"{CMD}@geometry_msgs/msg/Twist]gz.msgs.Twist",
+    f"{ODOM}@nav_msgs/msg/Odometry[gz.msgs.Odometry",
+    f"{SCAN}@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
+)
+
+# Body dimensions are the starting estimates from the TEAM_05 practice code.
+BODY_HALF_LENGTH = 0.185
+BODY_HALF_WIDTH = 0.117
+PRACTICE_SPEED = 0.55
+MAX_CURVATURE = 1.85
+SCAN_MAX_AGE = 0.65
+PREVIEW_DISTANCES = np.arange(0.04, 1.41, 0.04)
+
+
+def rotation(angle):
+    cosine, sine = math.cos(angle), math.sin(angle)
+    return np.array([[cosine, -sine], [sine, cosine]])
+
+
+def wrap_distance(distance, length):
+    return (distance + length / 2) % length - length / 2
+
+
+def yaw_from_quaternion(x, y, z, w):
+    return math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+
+
+class Centerline:
+    def __init__(self, points, grid):
+        points = np.asarray(points, dtype=float)
+        if len(points) < 4 or not np.isfinite(points).all():
+            raise ValueError("Invalid Monaco centerline coordinates")
+        keep = np.r_[True, np.linalg.norm(np.diff(points, axis=0), axis=1) > 1e-5]
+        points = points[keep]
+        if np.linalg.norm(points[-1] - points[0]) < 1e-5:
+            points = points[:-1]
+        if len(points) < 4:
+            raise ValueError("Monaco centerline has too few distinct points")
+
+        self.set_points(points)
+        _, _, segment = self.project(np.array([grid["x"], grid["y"]]))
+        forward = np.array([math.cos(grid["yaw"]), math.sin(grid["yaw"])])
+        if self.vectors[segment] @ forward < 0:
+            self.set_points(points[::-1].copy())
+
+    def set_points(self, points):
+        self.points = points
+        self.vectors = np.roll(points, -1, axis=0) - points
+        self.lengths = np.linalg.norm(self.vectors, axis=1)
+        self.ends = np.cumsum(self.lengths)
+        self.starts = self.ends - self.lengths
+        self.total = float(self.ends[-1])
+
+    def project(self, position, previous=None, window=0.85):
+        offsets = position - self.points
+        fraction = np.clip(
+            np.einsum("ij,ij->i", offsets, self.vectors) / self.lengths**2,
+            0.0,
+            1.0,
+        )
+        error = offsets - self.vectors * fraction[:, None]
+        cost = np.einsum("ij,ij->i", error, error)
+        arcs = (self.starts + fraction * self.lengths) % self.total
+        if previous is not None:
+            # Restrict the search by arc length to stay on the current hairpin branch.
+            midpoint = self.starts + self.lengths / 2
+            nearby = abs(wrap_distance(midpoint - previous, self.total))
+            cost[nearby > window + self.lengths / 2] = np.inf
+        index = int(np.argmin(cost))
+        return float(arcs[index]), math.sqrt(cost[index]), index
+
+    def point_at(self, arc):
+        arc %= self.total
+        index = int(np.searchsorted(self.ends, arc, side="right"))
+        fraction = (arc - self.starts[index]) / self.lengths[index]
+        return self.points[index] + self.vectors[index] * fraction
+
+
+def read_centerline(track_dir):
+    grid = json.loads((track_dir / "monaco.json").read_text())["grid"][0]
+    with (track_dir / "monaco_centerline.csv").open(newline="", encoding="utf-8-sig") as stream:
+        reader = csv.DictReader(stream)
+        columns = {key.strip().lower(): key for key in (reader.fieldnames or [])}
+        x_key = next((columns[key] for key in ("x", "x_m", "local_x", "local_x_m") if key in columns), None)
+        y_key = next((columns[key] for key in ("y", "y_m", "local_y", "local_y_m") if key in columns), None)
+        if x_key is None or y_key is None:
+            raise ValueError(f"Monaco centerline x/y columns not found: {list(columns)}")
+        points = [[float(row[x_key]), float(row[y_key])] for row in reader]
+    return Centerline(points, grid), grid
+
+
+def planar_pose(element):
+    if element is None or not element.text:
+        return np.zeros(3)
+    coordinates = [float(value) for value in element.text.split()]
+    if element.get("rotation_format") == "quat_xyzw" and len(coordinates) == 7:
+        return np.array([coordinates[0], coordinates[1], yaw_from_quaternion(*coordinates[3:])])
+    if len(coordinates) != 6:
+        raise ValueError("Unexpected pose format in the TEAM_05 model SDF")
+    yaw = coordinates[5]
+    if element.get("degrees", "").lower() in {"true", "1"}:
+        yaw = math.radians(yaw)
+    return np.array([coordinates[0], coordinates[1], yaw])
+
+
+def read_lidar_pose(model_file):
+    root = ET.parse(model_file).getroot()
+    model = root if root.tag == "model" else root.find("model")
+    if model is None:
+        raise ValueError(f"TEAM_05 model not found in {model_file}")
+    links = {link.get("name"): link for link in model.findall("link")}
+    sensors = [
+        (link_name, sensor)
+        for link_name, link in links.items()
+        for sensor in link.findall("sensor")
+        if sensor.get("type") in {"lidar", "gpu_lidar", "ray", "gpu_ray"}
+    ]
+    candidates = [entry for entry in sensors if (entry[1].findtext("topic") or "").strip() == SCAN]
+    if not candidates and len(sensors) == 1:
+        candidates = sensors
+    if len(candidates) != 1:
+        raise ValueError(f"Could not determine the LiDAR pose for {SCAN} in {model_file}")
+
+    model_frames = {"__model__", model.get("name")}
+    frames = {name: link.find("pose") for name, link in links.items()}
+    frames.update({frame.get("name"): frame.find("pose") for frame in model.findall("frame")})
+    parents = {
+        frame.get("name"): frame.get("attached_to") or "__model__"
+        for frame in model.findall("frame")
+    }
+
+    def pose_in_model(pose, default_parent, visited):
+        local = planar_pose(pose)
+        parent = (pose.get("relative_to") if pose is not None else None) or default_parent
+        if parent in model_frames:
+            return local
+        if parent in visited or parent not in frames:
+            raise ValueError(f"Unresolved LiDAR reference frame: {parent}")
+        anchor = pose_in_model(frames[parent], parents.get(parent, "__model__"), visited | {parent})
+        return np.r_[anchor[:2] + rotation(anchor[2]) @ local[:2], anchor[2] + local[2]]
+
+    link_name, sensor = candidates[0]
+    return pose_in_model(sensor.find("pose"), link_name, set())
+
+
+def scan_points(scan, lidar_pose):
+    ranges = np.asarray(scan.ranges, dtype=float)
+    if len(ranges) < 8 or not math.isfinite(scan.angle_increment) or scan.angle_increment == 0:
+        return None, ()
+    valid = np.isfinite(ranges) & (ranges >= max(0.01, scan.range_min))
+    valid &= ranges <= scan.range_max
+    if not np.any(valid | np.isposinf(ranges)):
+        return None, ()
+    valid &= ranges <= 3.5
+    indices = np.flatnonzero(valid)
+    angles = scan.angle_min + indices * scan.angle_increment + lidar_pose[2]
+    angles_are_finite = np.isfinite(angles)
+    if not angles_are_finite.all() or not math.isfinite(scan.angle_min):
+        return None, ()
+    returns = np.column_stack((np.cos(angles), np.sin(angles))) * ranges[indices, None]
+    returns += lidar_pose[:2]
+    own_body = (abs(returns[:, 0]) <= BODY_HALF_LENGTH) & (abs(returns[:, 1]) <= BODY_HALF_WIDTH)
+    returns, indices = returns[~own_body], indices[~own_body]
+    if len(returns) < 2:
+        return returns, ()
+    jumps = np.linalg.norm(np.diff(returns, axis=0), axis=1)
+    breaks = np.flatnonzero((np.diff(indices) != 1) | (jumps > 0.10)) + 1
+    return returns, np.split(returns, breaks)
+
+
+def swept_clearance(points, curvature):
+    limit = float(PREVIEW_DISTANCES[-1])
+    if not len(points):
+        return limit, limit, None
+    distance = PREVIEW_DISTANCES[:, None]
+    angle = curvature * distance
+    if abs(curvature) < 1e-6:
+        dx, dy = points[:, 0] - distance, points[:, 1]
+    else:
+        dx = points[:, 0] - np.sin(angle) / curvature
+        dy = points[:, 1] - (1 - np.cos(angle)) / curvature
+    along = np.cos(angle) * dx + np.sin(angle) * dy
+    across = -np.sin(angle) * dx + np.cos(angle) * dy
+
+    body_hit = abs(along) <= BODY_HALF_LENGTH + 0.003
+    body_hit &= abs(across) <= BODY_HALF_WIDTH + 0.003
+    margin_hit = along >= -BODY_HALF_LENGTH - 0.015
+    margin_hit &= along <= BODY_HALF_LENGTH + 0.025
+    margin_hit &= abs(across) <= BODY_HALF_WIDTH + 0.018
+    body_steps = np.flatnonzero(np.any(body_hit, axis=1))
+    margin_steps = np.flatnonzero(np.any(margin_hit, axis=1))
+    margin = round(float(PREVIEW_DISTANCES[margin_steps[0]] - 0.04), 3) if len(margin_steps) else limit
+    if not len(body_steps):
+        return limit, margin, None
+    first = body_steps[0]
+    blocker = points[np.flatnonzero(body_hit[first])[0]]
+    return round(float(PREVIEW_DISTANCES[first] - 0.04), 3), margin, blocker
+
+
+def collision_distance(points, curvature):
+    return swept_clearance(points, curvature)[0]
+
+
+def vehicle_candidate(clusters, curvature, track, pose, arc):
+    to_world = rotation(pose[2])
+    for group in clusters:
+        if len(group) < 3:
+            continue
+        span = np.linalg.norm(np.ptp(group, axis=0))
+        center = group.mean(axis=0)
+        if not (0.07 <= span <= 0.60 and 0.0 < center[0] < 1.65):
+            continue
+        world_center = pose[:2] + to_world @ center
+        _, offset, _ = track.project(world_center, arc, window=1.8)
+        if offset <= 0.28 and collision_distance(group, curvature) < 1.10:
+            return True
+    return False
+
+
+def choose_path(points, nominal):
+    options = np.unique(np.clip(nominal + np.array([0, -0.35, 0.35, -0.7, 0.7, -1.1, 1.1]),
+                                -MAX_CURVATURE, MAX_CURVATURE))
+    checks = [swept_clearance(points, candidate) for candidate in options]
+    clearance = np.array([check[0] for check in checks])
+    margins = np.array([check[1] for check in checks])
+    scores = np.minimum(clearance, 0.90) + 0.20 * np.minimum(margins, 0.90)
+    scores -= 0.33 * abs(options - nominal)
+    can_drive = clearance > 0.12
+    if np.any(can_drive):
+        scores[~can_drive] = -np.inf
+    index = int(np.argmax(scores))
+    return float(options[index]), *checks[index]
+
+
+class MonacoPractice:
+    def __init__(self, node, track, anchor, lidar_pose):
+        self.node = node
+        self.track = track
+        self.anchor = anchor
+        self.lidar_pose = lidar_pose
+        self.pose = self.odom_origin = self.position = self.points = None
+        self.arc = self.start_arc = None
+        self.progress = self.speed = 0.0
+        self.last_scan = self.last_odom = self.last_report = 0.0
+        self.motion_check = None
+        self.scan_index = self.classified_index = self.vehicle_frames = 0
+        self.clusters = ()
+        self.state = None
+        self.finished = False
+        self.has_commanded = False
+        self.publisher = node.create_publisher(Twist, CMD, 10)
+        self.odom_subscription = node.create_subscription(Odometry, ODOM, self.on_odom, qos_profile_sensor_data)
+        self.scan_subscription = node.create_subscription(LaserScan, SCAN, self.on_scan, qos_profile_sensor_data)
+        self.timer = node.create_timer(0.10, self.drive)
+
+    def on_odom(self, message):
+        pose = message.pose.pose
+        q = pose.orientation
+        if not all(map(math.isfinite, (pose.position.x, pose.position.y, q.x, q.y, q.z, q.w))):
+            return
+        if q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w < 1e-6:
+            return
+        raw = np.array([pose.position.x, pose.position.y, yaw_from_quaternion(q.x, q.y, q.z, q.w)])
+        if self.odom_origin is None:
+            self.odom_origin = raw.copy()
+        delta_yaw = self.anchor[2] - self.odom_origin[2]
+        map_xy = self.anchor[:2] + rotation(delta_yaw) @ (raw[:2] - self.odom_origin[:2])
+        self.pose = np.r_[map_xy, raw[2] + delta_yaw]
+        self.last_odom = time.monotonic()
+
+    def on_scan(self, message):
+        points, clusters = scan_points(message, self.lidar_pose)
+        self.points, self.clusters = points, clusters
+        if points is not None:
+            self.last_scan = time.monotonic()
+            self.scan_index += 1
+
+    def command(self, speed, curvature=0.0):
+        message = Twist()
+        message.linear.x = float(speed)
+        message.angular.z = float(speed * curvature)
+        self.publisher.publish(message)
+        self.speed = speed
+        self.has_commanded |= speed > 0
+        if speed <= 0.04:
+            self.motion_check = None
+
+    def report(self, state, detail=""):
+        now = time.monotonic()
+        if state != self.state or now - self.last_report >= 3.0:
+            percentage = max(0.0, min(100.0, 100 * self.progress / self.track.total))
+            print(f"{state} | progress={percentage:.1f}% speed={self.speed:.2f} m/s {detail}".rstrip())
+            self.state, self.last_report = state, now
+
+    def drive(self):
+        conflict = controller_conflict(self.node, own_publisher=True)
+        if conflict:
+            raise RuntimeError(conflict)
+        if not self.node.count_subscribers(CMD):
+            self.report("WAIT BRIDGE", CMD)
+            return
+        now = time.monotonic()
+        if self.pose is None or self.points is None or now - min(self.last_scan, self.last_odom) > SCAN_MAX_AGE:
+            self.command(0)
+            missing = [topic for topic, value, received in (
+                (SCAN, self.points, self.last_scan), (ODOM, self.pose, self.last_odom)
+            ) if value is None or now - received > SCAN_MAX_AGE]
+            self.report("WAIT SENSOR", ", ".join(missing))
+            return
+
+        position = self.pose[:2]
+        arc, error, _ = self.track.project(position, self.arc)
+        step = 0.0 if self.arc is None else float(wrap_distance(arc - self.arc, self.track.total))
+        movement = 0.0 if self.position is None else np.linalg.norm(position - self.position)
+        if error > 1.35 or abs(step) > 0.20 + 2.0 * movement or movement > 0.45:
+            self.command(0)
+            self.report("TRACK LOST", f"centerline_error={error:.2f} m")
+            return
+
+        self.arc, self.position = arc, position.copy()
+        if self.start_arc is None:
+            self.start_arc = arc
+        self.progress += step
+        start = self.track.point_at(self.start_arc)
+        if self.progress >= self.track.total - 0.06 and np.linalg.norm(position - start) < 0.75:
+            self.command(0)
+            self.progress = self.track.total
+            self.report("MONACO LAP COMPLETE", "(practice odometry)")
+            self.finished = True
+            return
+
+        lookahead = 0.70 + 0.25 * self.speed
+        target = rotation(-self.pose[2]) @ (self.track.point_at(arc + lookahead) - position)
+        if target[0] <= 0.06:
+            self.command(0)
+            self.report("HEADING ERROR", f"forward_target={target[0]:.2f} m")
+            return
+        nominal = float(np.clip(2 * target[1] / max(float(target @ target), 0.1), -MAX_CURVATURE, MAX_CURVATURE))
+        curvature, free, margin, blocker = choose_path(self.points, nominal)
+
+        if self.classified_index != self.scan_index:
+            has_candidate = vehicle_candidate(self.clusters, nominal, self.track, self.pose, arc)
+            self.vehicle_frames = self.vehicle_frames + 1 if has_candidate else 0
+            self.classified_index = self.scan_index
+        candidate = " vehicle_candidate=1" if self.vehicle_frames >= 3 else ""
+        if free <= 0.12:
+            self.command(0)
+            x, y = blocker
+            self.report("OBSTACLE STOP", f"free={free:.2f} m hit_x={x:+.3f} hit_y={y:+.3f}{candidate}")
+            return
+        speed_limit = min(PRACTICE_SPEED, 0.10 + 0.55 * max(0.0, margin - 0.12))
+        speed = min(speed_limit, math.sqrt(0.23 / max(abs(curvature), 0.1)),
+                    math.sqrt(1.0 * (free - 0.12)), self.speed + 0.045)
+        if speed > 0.04:
+            if self.motion_check is None or np.linalg.norm(position - self.motion_check[1]) > 0.025:
+                self.motion_check = now, position.copy()
+            elif now - self.motion_check[0] > 4.0:
+                self.command(0)
+                raise RuntimeError(f"NO MOTION | inspect the TEAM_05 drive plugin and {CMD}")
+        self.command(speed, curvature)
+        state = "AVOID" if abs(curvature - nominal) > 0.27 else "DRIVING"
+        if margin <= 0.12:
+            state = "CLOSE PASS"
+        self.report(state, f"free={free:.2f} m margin={margin:.2f} m{candidate}")
+
+
+def run_command(*args, timeout=10):
+    result = subprocess.run(args, check=False, text=True, capture_output=True, timeout=timeout)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"{' '.join(args)} failed: {detail}")
+    return result.stdout
+
+
+def ensure_vehicle(grid):
+    services = run_command("gz", "service", "-l").splitlines()
+    if "/world/monaco/create" not in services:
+        partition = os.environ.get("GZ_PARTITION", "")
+        raise RuntimeError(f"Open the Monaco practice world first. GZ_PARTITION={partition}")
+    if any(service.startswith("/world/") and service.endswith("/create") and service != "/world/monaco/create"
+           for service in services):
+        raise RuntimeError("Use a Gazebo partition containing the Monaco practice world only")
+
+    models = run_command("gz", "model", "--list")
+    if "Available models:" not in models:
+        raise RuntimeError(f"Could not read the Monaco model list: {models.strip()}")
+    if not re.search(r"^\s*-\s+team_05\s*$", models, re.MULTILINE):
+        # Grid 1 road_z plus the spawn clearance from the TEAM_05 practice setup.
+        coordinates = (grid["x"], grid["y"], grid["road_z"] + 0.055, grid["yaw"])
+        print("SPAWNING TEAM_05 at Monaco grid 1")
+        run_command("ros2", "run", "ros_gz_sim", "create", "-world", "monaco",
+                    "-name", "team_05", "-file", str(MODEL_FILE),
+                    "-x", str(coordinates[0]), "-y", str(coordinates[1]),
+                    "-z", str(coordinates[2]), "-Y", str(coordinates[3]), timeout=18)
+
+    deadline = time.monotonic() + 10
+    # A Gazebo subscription alone does not appear in the advertised topic list.
+    expected = {ODOM, SCAN}
+    missing = expected
+    while time.monotonic() < deadline:
+        missing = expected - set(run_command("gz", "topic", "-l").splitlines())
+        if not missing:
+            break
+        time.sleep(0.35)
+    else:
+        raise RuntimeError(f"TEAM_05 Gazebo topics missing: {', '.join(sorted(missing))}")
+
+    output = run_command("gz", "model", "-m", "team_05", "--pose")
+    position = re.search(
+        r"- Pose \[ XYZ \(m\) \] \[ RPY \(rad\) \]:\s*\[([^\]]+)\]\s*\[([^\]]+)\]",
+        output,
+    )
+    if position is None:
+        raise RuntimeError("Could not read the current TEAM_05 world pose")
+    xyz, rpy = ([float(value) for value in group.replace("|", " ").split()] for group in position.groups())
+    anchor = np.array([xyz[0], xyz[1], rpy[2]])
+    if not np.isfinite(anchor).all():
+        raise RuntimeError("TEAM_05 world pose contains invalid coordinates")
+    return anchor
+
+
+def controller_conflict(node, own_publisher=False):
+    if "team05_controller" in node.get_node_names() or node.count_publishers(CMD) > int(own_publisher):
+        return f"An existing TEAM_05 controller is active. Stop it before running practice: {CMD}"
+    return None
+
+
+def stop_bridge(process):
+    if process is None or process.poll() is not None:
+        return
+    for stop_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, stop_signal)
+            process.wait(timeout=3)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+        except ProcessLookupError:
+            process.wait()
+            return
+
+
+def interrupt_practice(_signum, _frame):
+    raise KeyboardInterrupt
+
+
+def hold_vehicle(node, controller, bridge):
+    if not controller.has_commanded or controller_conflict(node, True):
+        return
+    if bridge.poll() is not None or not node.count_subscribers(CMD):
+        try:
+            run_command("gz", "topic", "-t", CMD, "-m", "gz.msgs.Twist",
+                        "-p", "linear: {x: 0}, angular: {z: 0}", timeout=3)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            print(f"MONACO STOP | Gazebo stop command failed: {error}", file=sys.stderr)
+        return
+    for _ in range(3):
+        controller.command(0)
+        time.sleep(0.07)
+
+
+def main():
+    bridge = node = controller = None
+    signal.signal(signal.SIGTERM, interrupt_practice)
+    try:
+        track, grid = read_centerline(TRACK_DIR)
+        lidar_pose = read_lidar_pose(MODEL_FILE)
+        run_command("ros2", "pkg", "prefix", "ros_gz_bridge")
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+        node = Node("team05_monaco_practice")
+        for _ in range(8):
+            conflict = controller_conflict(node)
+            if conflict:
+                raise RuntimeError(conflict)
+            rclpy.spin_once(node, timeout_sec=0.15)
+        anchor = ensure_vehicle(grid)
+        bridge = subprocess.Popen(
+            ["ros2", "run", "ros_gz_bridge", "parameter_bridge", *BRIDGES, "--ros-args", "--log-level", "warn"],
+            start_new_session=True,
+        )
+        controller = MonacoPractice(node, track, anchor, lidar_pose)
+        print(f"MONACO READY | track={track.total:.1f} m | x={anchor[0]:.2f} y={anchor[1]:.2f}")
+        deadline = time.monotonic() + 18
+        while rclpy.ok() and not controller.finished:
+            if bridge.poll() is not None:
+                raise RuntimeError(f"Gazebo bridge exited with status {bridge.returncode}")
+            rclpy.spin_once(node, timeout_sec=0.2)
+            if controller.state in {"WAIT BRIDGE", "WAIT SENSOR"} and time.monotonic() > deadline:
+                raise RuntimeError("ROS 2 bridge/sensors are not ready. Check that Gazebo is playing.")
+            if controller.state not in {"WAIT BRIDGE", "WAIT SENSOR"}:
+                deadline = time.monotonic() + 18
+        return 0
+    except KeyboardInterrupt:
+        print("\nTEAM_05 practice stopped.")
+        return 130
+    except (OSError, RuntimeError, ValueError, KeyError, ET.ParseError, subprocess.SubprocessError) as error:
+        print(f"MONACO ERROR | {error}", file=sys.stderr)
+        return 1
+    finally:
+        try:
+            if node is not None and rclpy.ok():
+                if controller is not None:
+                    hold_vehicle(node, controller, bridge)
+                node.destroy_node()
+                rclpy.shutdown()
+        finally:
+            stop_bridge(bridge)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

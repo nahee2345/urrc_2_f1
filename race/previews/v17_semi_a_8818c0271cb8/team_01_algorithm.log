@@ -1,0 +1,108 @@
+[INFO] [launch]: All log files can be found below /home/ww/.ros/log/2026-11-23-19-34-44-388977-ww-34678
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [parameter_bridge-1]: process started with pid [34686]
+[INFO] [actuator-2]: process started with pid [34687]
+[INFO] [racer-3]: process started with pid [34688]
+[INFO] [static_transform_publisher-4]: process started with pid [34689]
+[INFO] [static_transform_publisher-5]: process started with pid [34690]
+[INFO] [static_transform_publisher-6]: process started with pid [34691]
+[static_transform_publisher-4] [INFO] [1795430084.613159441] [team_01_lidar_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-4] translation: ('0.040000', '0.000000', '0.075000')
+[static_transform_publisher-4] rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+[static_transform_publisher-4] from 'team_01/base_link' to 'team_01/lidar'
+[static_transform_publisher-6] [INFO] [1795430084.618671399] [team_01_start_camera_optical_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-6] translation: ('0.180000', '0.000000', '0.055000')
+[static_transform_publisher-6] rotation: ('-0.386771', '0.332709', '-0.560879', '0.652018')
+[static_transform_publisher-6] from 'team_01/base_link' to 'team_01/start_camera_optical'
+[static_transform_publisher-5] [INFO] [1795430084.619441748] [team_01_camera_optical_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-5] translation: ('0.180000', '0.000000', '0.055000')
+[static_transform_publisher-5] rotation: ('-0.525549', '0.525549', '-0.473073', '0.473073')
+[static_transform_publisher-5] from 'team_01/base_link' to 'team_01/camera_optical'
+[actuator-2] [INFO] [1795430085.545219118] [awd_actuator_v24]: v29 CAMERA_START_SYNC; host=/race/start/team_01 qos=RELIABLE/VOLATILE; require observed five-red then all-five-off
+[actuator-2] [INFO] [1795430085.546940118] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=0 camera=WAIT_RED/WAIT_FIVE_RED/NO_FRAMES
+[parameter_bridge-1] [INFO] [1795430085.634948261] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/lidar/points (gz.msgs.PointCloudPacked) -> /team_01/lidar/points (sensor_msgs/msg/PointCloud2)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.641647706] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/imu (gz.msgs.IMU) -> /team_01/imu (sensor_msgs/msg/Imu)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.644735275] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/joint_states (gz.msgs.Model) -> /team_01/joint_states (sensor_msgs/msg/JointState)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.646555350] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/camera/image (gz.msgs.Image) -> /team_01/camera/image (sensor_msgs/msg/Image)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.648437604] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/camera/depth_image (gz.msgs.Image) -> /team_01/camera/depth_image (sensor_msgs/msg/Image)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.649778256] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/start_camera/image (gz.msgs.Image) -> /team_01/start_camera/image (sensor_msgs/msg/Image)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.651128374] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/camera/camera_info (gz.msgs.CameraInfo) -> /team_01/camera/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.653044484] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/start_camera/camera_info (gz.msgs.CameraInfo) -> /team_01/start_camera/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.654174305] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/contacts/base_link (gz.msgs.Contacts) -> /team_01/contacts/base_link (ros_gz_interfaces/msg/Contacts)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.657288576] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/contacts/front_left_wheel (gz.msgs.Contacts) -> /team_01/contacts/front_left_wheel (ros_gz_interfaces/msg/Contacts)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.658317799] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/contacts/front_right_wheel (gz.msgs.Contacts) -> /team_01/contacts/front_right_wheel (ros_gz_interfaces/msg/Contacts)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.659217376] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/contacts/rear_left_wheel (gz.msgs.Contacts) -> /team_01/contacts/rear_left_wheel (ros_gz_interfaces/msg/Contacts)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.660212378] [team_01_bridge]: Creating GZ->ROS Bridge: [/team_01/contacts/rear_right_wheel (gz.msgs.Contacts) -> /team_01/contacts/rear_right_wheel (ros_gz_interfaces/msg/Contacts)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.661164418] [team_01_bridge]: Creating ROS->GZ Bridge: [/team_01/drive/steer_angle (std_msgs/msg/Float64) -> /team_01/drive/steer_angle (gz.msgs.Double)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.662326248] [team_01_bridge]: Creating ROS->GZ Bridge: [/team_01/drive/front_left (std_msgs/msg/Float64) -> /team_01/drive/front_left (gz.msgs.Double)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.663820190] [team_01_bridge]: Creating ROS->GZ Bridge: [/team_01/drive/front_right (std_msgs/msg/Float64) -> /team_01/drive/front_right (gz.msgs.Double)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.664691356] [team_01_bridge]: Creating ROS->GZ Bridge: [/team_01/drive/rear_left (std_msgs/msg/Float64) -> /team_01/drive/rear_left (gz.msgs.Double)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.665650983] [team_01_bridge]: Creating ROS->GZ Bridge: [/team_01/drive/rear_right (std_msgs/msg/Float64) -> /team_01/drive/rear_right (gz.msgs.Double)] (Lazy 0)
+[parameter_bridge-1] [INFO] [1795430085.666955595] [team_01_bridge]: Passing message from ROS std_msgs/msg/Float64 to Gazebo gz.msgs.Double (showing msg only once per type)
+[racer-3] [INFO] [1795430085.989719922] [awd_racer_v24]: v29 ROAD_PACE corner INDEPENDENT_ACTUATORS; CSV: /home/ww/.local/state/urrc_awd/team_01/20261123-193445-9720ed4855984a43a40dbdb7e69b4ca2-corner-v29.csv
+[actuator-2] [INFO] [1795430089.031808614] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=0 camera=WAIT_RED/WAIT_FIVE_RED/FRAMES_OK
+[actuator-2] [INFO] [1795430108.873094901] [awd_actuator_v24]: [START HOST] received=False rx=1 camera=WAIT_RED
+[actuator-2] [INFO] [1795430120.835116868] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=1 camera=WAIT_RED/WAIT_FIVE_RED/CAMERA_TIMEOUT
+[actuator-2] [INFO] [1795430121.037134564] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=1 camera=WAIT_RED/CONFIRM_FIVE_RED/FRAMES_OK
+[actuator-2] [INFO] [1795430122.090743065] [awd_actuator_v24]: [START CAMERA] WAIT_RED -> FIVE_RED sim=12.145 reason=FIVE_RED_LOCKED host=False
+[actuator-2] [INFO] [1795430122.255616919] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=1 camera=FIVE_RED/FIVE_RED_LOCKED/FRAMES_OK
+[actuator-2] [INFO] [1795430122.776767388] [awd_actuator_v24]: [START HOST] received=True rx=2 camera=FIVE_RED
+[actuator-2] [INFO] [1795430122.864495064] [awd_actuator_v24]: [START/DRIVE] state=WAIT_FIVE_RED host=True rx=2 camera=FIVE_RED/FIVE_RED_LOCKED/FRAMES_OK
+[actuator-2] [INFO] [1795430123.073920564] [awd_actuator_v24]: [START/DRIVE] state=WAIT_FIVE_RED host=True rx=2 camera=FIVE_RED/FIVE_RED_LOCKED/CAMERA_TIMEOUT
+[actuator-2] [INFO] [1795430124.097777494] [awd_actuator_v24]: [START/DRIVE] state=WAIT_FIVE_RED host=True rx=2 camera=FIVE_RED/CONFIRM_ALL_FIVE_OFF/FRAMES_OK
+[actuator-2] [INFO] [1795430124.514298963] [awd_actuator_v24]: [START CAMERA] FIVE_RED -> GO sim=12.244 reason=ALL_FIVE_OFF_CONFIRMED host=True
+[actuator-2] [INFO] [1795430124.524840332] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/FRAMES_OK
+[actuator-2] [INFO] [1795430124.735749969] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430125.135053162] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430125.335052588] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430129.461051224] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430129.664368380] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430131.718282109] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430131.915472266] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430132.953671495] [awd_actuator_v24]: [START/DRIVE] state=STALE_JOINTS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430133.164897573] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430133.364408916] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430134.404161504] [awd_actuator_v24]: [START/DRIVE] state=STALE_JOINTS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430134.614007593] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430135.856960770] [awd_actuator_v24]: [START/DRIVE] state=STALE_JOINTS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430136.059966668] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430137.506260127] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430137.707608065] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430146.965134597] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430147.177549537] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430149.626944337] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430149.835275581] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430157.609770839] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430157.810414005] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430162.334459779] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430162.539852735] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430162.752017753] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430162.955402033] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430164.196563206] [awd_actuator_v24]: [START/DRIVE] state=COMMAND_TIMEOUT host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430164.398459183] [awd_actuator_v24]: [START/DRIVE] state=PASS host=True rx=2 camera=GO/ALL_FIVE_OFF_CONFIRMED/LATCHED_GO
+[actuator-2] [INFO] [1795430172.060955169] [awd_actuator_v24]: [START HOST] received=False rx=3 camera=WAIT_RED
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[actuator-2] [INFO] [1795430172.214697266] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=3 camera=WAIT_RED/WAIT_FIVE_RED/FRAMES_OK
+[actuator-2] [INFO] [1795430175.722203620] [awd_actuator_v24]: [START/DRIVE] state=WAIT_HOST_GATE host=False rx=3 camera=WAIT_RED/WAIT_FIVE_RED/CAMERA_TIMEOUT
+[ERROR] [static_transform_publisher-6]: process[static_transform_publisher-6] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [static_transform_publisher-5]: process[static_transform_publisher-5] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [static_transform_publisher-4]: process[static_transform_publisher-4] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [racer-3]: process[racer-3] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [actuator-2]: process[actuator-2] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[ERROR] [parameter_bridge-1]: process[parameter_bridge-1] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+[INFO] [static_transform_publisher-6]: sending signal 'SIGTERM' to process[static_transform_publisher-6]
+[INFO] [static_transform_publisher-5]: sending signal 'SIGTERM' to process[static_transform_publisher-5]
+[INFO] [static_transform_publisher-4]: sending signal 'SIGTERM' to process[static_transform_publisher-4]
+[INFO] [racer-3]: sending signal 'SIGTERM' to process[racer-3]
+[INFO] [actuator-2]: sending signal 'SIGTERM' to process[actuator-2]
+[INFO] [parameter_bridge-1]: sending signal 'SIGTERM' to process[parameter_bridge-1]
+[static_transform_publisher-6] [INFO] [1795430177.183947916] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[static_transform_publisher-5] [INFO] [1795430177.184719964] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[static_transform_publisher-4] [INFO] [1795430177.186289188] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[parameter_bridge-1] [INFO] [1795430177.189487016] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [static_transform_publisher-5]: process has finished cleanly [pid 34690]
+[INFO] [static_transform_publisher-6]: process has finished cleanly [pid 34691]
+[INFO] [static_transform_publisher-4]: process has finished cleanly [pid 34689]
+[INFO] [parameter_bridge-1]: process has finished cleanly [pid 34686]
+[INFO] [actuator-2]: process has finished cleanly [pid 34687]
+[INFO] [racer-3]: process has finished cleanly [pid 34688]

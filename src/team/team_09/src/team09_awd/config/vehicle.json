@@ -1,0 +1,208 @@
+{
+  "entry_id": "team_09",
+  "geometry": {
+    "wheelbase_m": 0.33,
+    "track_m": 0.18,
+    "wheel_radius_m": 0.035,
+    "wheel_width_m": 0.026,
+    "wheel_z_m": -0.04,
+    "body_size_m": [
+      0.49,
+      0.16,
+      0.05
+    ],
+    "body_z_m": 0.0,
+    "body_mass_kg": 1.2,
+    "wheel_mass_kg": 0.06,
+    "knuckle_mass_kg": 0.09,
+    "max_wheel_angle_deg": 30.0,
+    "footprint_padding_m": 0.002,
+    "tyre_friction": 1.0,
+    "steer_p_gain": 8.0,
+    "steer_effort_nm": 10.0,
+    "steer_joint_rate_radps": 4.0,
+    "drive_effort_nm": 5.0,
+    "drive_joint_rate_radps": 1500.0,
+    "sensor_housings": [
+      {
+        "name": "camera_house",
+        "xyz": [
+          0.155,
+          0.0,
+          0.05
+        ],
+        "size": [
+          0.035,
+          0.035,
+          0.04
+        ]
+      },
+      {
+        "name": "lidar_house",
+        "xyz": [
+          0.04,
+          0.0,
+          0.055
+        ],
+        "size": [
+          0.035,
+          0.035,
+          0.04
+        ]
+      }
+    ]
+  },
+  "sensors": {
+    "lidar_pose": [
+      0.04,
+      0.0,
+      0.075,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera_pose": [
+      0.18,
+      0.0,
+      0.055,
+      0.0,
+      0.105,
+      0.0
+    ],
+    "start_camera_pose": [
+      0.18,
+      0.0,
+      0.055,
+      0.0,
+      -0.5,
+      0.15
+    ],
+    "load_imu_contact_systems": true,
+    "lidar_mode": "2d",
+    "lidar_fov_deg": 360.0,
+    "lidar_horizontal_samples": 720,
+    "lidar_vertical_samples_3d": 16,
+    "lidar_vertical_fov_deg": 30.0,
+    "lidar_min_m": 0.08,
+    "lidar_max_m": 60.0,
+    "lidar_hz": 30.0,
+    "camera_hz": 30.0,
+    "imu_hz": 100.0,
+    "camera_width": 640,
+    "camera_height": 480,
+    "camera_hfov_rad": 1.5707963,
+    "start_camera_hfov_rad": 1.1,
+    "camera_near_m": 0.03,
+    "camera_far_m": 100.0,
+    "cloud_min_ground_height_m": 0.035,
+    "cloud_max_ground_height_m": 0.65,
+    "rgbd_pair_tolerance_s": 0.04,
+    "rgbd_process_interval_s": 0.09,
+    "rgbd_valid_s": 0.2,
+    "rgbd_queue_size": 8
+  },
+  "control": {
+    "max_speed_mps": 12.0,
+    "use_depth": true,
+    "lateral_accel_mps2": 2.5,
+    "brake_mps2": 4.0,
+    "accel_mps2": 1.5,
+    "collision_margin_m": 0.06,
+    "planner_hz": 20.0,
+    "steer_rate_max_radps": 0.9,
+    "steer_rate_base_radps": 0.06,
+    "steer_rate_speed_gain": 1.2,
+    "curvature_lateral_bound_mps2": 3.0,
+    "near_clearance_m": 0.12,
+    "near_speed_mps": 0.45,
+    "close_clearance_m": 0.22,
+    "close_speed_mps": 1.2,
+    "reactive_speed_mps": 8.0,
+    "yaw_residual_limit_radps": 0.6,
+    "yaw_residual_speed_mps": 5.0,
+    "minimum_latency_s": 0.2,
+    "sensor_latency_reserve_s": 0.1,
+    "max_scan_age_s": 0.3,
+    "max_pose_age_s": 0.2,
+    "sensor_wall_timeout_s": 0.6,
+    "max_roll_deg": 35.0,
+    "max_pitch_deg": 50.0,
+    "reaccel_guard": true,
+    "guard_min_speed_mps": 3.0,
+    "guard_clearance_m": 0.6,
+    "guard_closing_mps": 0.08,
+    "guard_wall_quality": 0.35,
+    "guard_heading_rad": 0.04,
+    "guard_release_s": 0.5,
+    "guard_max_sample_gap_s": 0.3
+  },
+  "right_wall": {
+    "enabled": true,
+    "clearance_m": 0.22,
+    "min_corner_clearance_m": 0.07,
+    "sweep_margin_m": 0.018,
+    "corner_curvature_1pm": 0.055,
+    "corner_fraction": 0.78,
+    "corner_setup_m": 3.2,
+    "corner_blend_m": 2.3,
+    "lookahead_base_m": 0.95,
+    "lookahead_time_s": 0.45,
+    "lookahead_max_m": 4.5,
+    "horizon_m": 27.0,
+    "preview_latency_s": 0.2
+  },
+  "road_heading": {
+    "band_min_m": 0.18,
+    "band_max_m": 0.45,
+    "relief_gain": 1.0,
+    "relief_max_m": 0.14,
+    "relief_length_m": 2.8,
+    "vision_weight": 0.2,
+    "vision_heading_agreement_rad": 0.2
+  },
+  "start_signal": {
+    "on_frames": 3,
+    "off_frames": 3,
+    "red_hue_band": 12,
+    "min_red_saturation": 140,
+    "min_red_value": 180,
+    "off_red_ratio": 0.12,
+    "off_value_fraction": 0.65,
+    "scene_delta_limit": 12.0,
+    "black_value_max": 3,
+    "scene_min_nonblack_fraction": 0.05,
+    "max_frame_gap_s": 0.25,
+    "lock_timeout_s": 3.0,
+    "search_margin_fraction": 0.1,
+    "blob_min_area_fraction": 4.8828125e-05,
+    "blob_max_area_fraction": 0.0048828125,
+    "blob_min_height_fraction": 0.00625,
+    "blob_max_height_fraction": 0.09375,
+    "blob_min_aspect": 0.4,
+    "blob_max_aspect": 2.5,
+    "row_height_fraction": 0.7,
+    "gap_ratio_max": 1.6,
+    "min_gap_width_fraction": 0.00625,
+    "background_padding_height_fraction": 0.008333333333333333,
+    "debug_hz": 5.0,
+    "camera_timeout_wall_s": 1.0,
+    "camera_max_age_s": 0.5,
+    "camera_future_tolerance_s": 0.1
+  },
+  "actuator": {
+    "hz": 100.0,
+    "joint_state_hz": 100.0,
+    "max_accel_mps2": 3.0,
+    "max_brake_mps2": 6.0,
+    "command_timeout_s": 0.35,
+    "state_timeout_s": 0.25,
+    "state_pair_skew_s": 0.03,
+    "max_reverse_mps": 0.2,
+    "joint_speed_limit_mps": 30.0
+  },
+  "logging": {
+    "csv_hz": 10.0,
+    "status_hz": 5.0,
+    "log_dir": ""
+  }
+}

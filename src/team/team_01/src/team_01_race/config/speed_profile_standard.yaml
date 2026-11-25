@@ -1,0 +1,19 @@
+# Default for run.sh 3: requested ceilings; measured-visibility and safety caps remain.
+/**:
+  ros__parameters:
+    planner:
+      cruise_speed_mps: 12.0
+    control:
+      max_speed_mps: 12.0
+      max_accel_mps2: 3.5
+      max_decel_mps2: 3.5
+    corner_control:
+      straight_max_speed_mps: 12.0
+      mild_max_speed_mps: 10.0
+      medium_max_speed_mps: 10.0
+      sharp_max_speed_mps: 10.0
+      corner_approach_decel_mps2: 3.5
+    path_manager:
+      lidar_only_max_speed_mps: 10.0
+    safety:
+      assumed_max_decel_mps2: 2.5

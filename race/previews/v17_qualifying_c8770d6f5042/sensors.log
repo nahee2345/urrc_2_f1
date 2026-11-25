@@ -1,0 +1,39 @@
+Traceback (most recent call last):
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 341, in run_capture
+    rclpy.spin_once(node,timeout_sec=.10)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/__init__.py", line 226, in spin_once
+    executor.spin_once(timeout_sec=timeout_sec)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 926, in spin_once
+    self._spin_once_impl(timeout_sec)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 918, in _spin_once_impl
+    raise handler.exception()
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/task.py", line 286, in _execute_coroutine_step
+    result = coro.send(None)
+             ^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 584, in handler
+    call_coroutine = take_from_wait_list(entity)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 470, in _take_subscription
+    msg_info = sub.handle.take_message(sub.msg_type, sub.raw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Unable to convert call argument '0' to Python object (#define PYBIND11_DETAILED_ERROR_MESSAGES or compile in debug mode for details)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 475, in <module>
+    try:sys.exit(main())
+                 ^^^^^^
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 455, in main
+    return run_capture(args)
+           ^^^^^^^^^^^^^^^^^
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 347, in run_capture
+    info={'types':types, 'publishers':node.count_publishers(name),
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py", line 2148, in count_publishers
+    return self._count_publishers_or_subscribers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py", line 2134, in _count_publishers_or_subscribers
+    return func(fq_topic_name)
+           ^^^^^^^^^^^^^^^^^^^
+rclpy._rclpy_pybind11.RCLError: Error in rcl_count_publishers: rcl node's context is invalid, at ./src/rcl/node.c:404

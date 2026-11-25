@@ -1,0 +1,15 @@
+# World name must match <world name="..."> in the running SDF.
+world: monza
+
+clock_topic: /clock
+
+with_lidar: true
+with_camera: true
+
+# base_link is at 3D AABB center (0.085 m above ground).
+# z = road_z + 0.105 m (0.085 m half-height + 0.02 m clearance).
+spawn:
+  x: 0.37867235
+  y: -2.05603540
+  z: 1.30852656
+  yaw: 1.45738442

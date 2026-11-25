@@ -1,0 +1,12 @@
+[INFO] [1795599503.001576153] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[INFO] [1795599503.006168006] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/model/team_05/urrc_timing (gz.msgs.Pose_V) -> /model/team_05/urrc_timing (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[1;31m[Err] [UserCommands.cc:1119] [0m[1;31mEntity named [[0m[1;31murrc_start_signal_active[0m[1;31m] of type [[0m[1;31m2[0m[1;31m] not found, so not removed.[0m[1;31m[0m
+[INFO] [1795599568.512336512] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+Stack trace (most recent call last) in thread 8665:
+#5    Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#4    Object "/lib/x86_64-linux-gnu/libc.so.6", at 0x739902529ecb, in 
+#3    Object "/lib/x86_64-linux-gnu/libc.so.6", at 0x73990249cb83, in 
+#2    Object "/lib/x86_64-linux-gnu/libstdc++.so.6", at 0x7398fd2ecdb3, in 
+#1    Object "/opt/ros/jazzy/opt/gz_sim_vendor/lib/libgz-sim8.so.8", at 0x7398fc3608f0, in 
+#0    Object "/opt/ros/jazzy/opt/gz_sim_vendor/lib/libgz-sim8.so.8", at 0x7398fc36aa7c, in 
+Segmentation fault (Address not mapped to object [(nil)])

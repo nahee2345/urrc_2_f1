@@ -1,0 +1,18 @@
+[v15] 측정 중단: 수집된 데이터로 보고서 작성
+Traceback (most recent call last):
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 475, in <module>
+    try:sys.exit(main())
+                 ^^^^^^
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 455, in main
+    return run_capture(args)
+           ^^^^^^^^^^^^^^^^^
+  File "/home/ww/urrc_2_f1_next/race/scripts/environment_diagnostic_v15.py", line 347, in run_capture
+    info={'types':types, 'publishers':node.count_publishers(name),
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py", line 2148, in count_publishers
+    return self._count_publishers_or_subscribers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py", line 2134, in _count_publishers_or_subscribers
+    return func(fq_topic_name)
+           ^^^^^^^^^^^^^^^^^^^
+rclpy._rclpy_pybind11.RCLError: Error in rcl_count_publishers: rcl node's context is invalid, at ./src/rcl/node.c:404

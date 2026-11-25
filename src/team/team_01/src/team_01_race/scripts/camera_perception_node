@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+from team_01_race.ros_support import run
+from team_01_race.camera_node import CameraNode
+
+if __name__ == "__main__":
+    run(CameraNode)

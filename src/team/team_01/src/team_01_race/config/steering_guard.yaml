@@ -1,0 +1,20 @@
+# Active Camera path safety. Corner speed/steering authority lives only in
+# corner_control.yaml. The legacy IMU yaw experiment is disabled in production.
+team_01_control_adapter:
+  ros__parameters:
+    steering_guard:
+      enabled: true
+      yaw_safety_enabled: false
+      straight_max_steering_deg: 8.0  # Conservative fallback when policy is stale.
+      recovery_max_steering_deg: 8.0
+      recovery_speed_mps: 2.0
+      recovery_exit_confirm_frames: 5
+      recovery_heading_deg: 5.0  # Stable Camera heading difference, not IMU yaw.
+      target_jump_m: 0.35
+      path_heading_jump_deg: 30.0
+      path_curvature_jump: 0.35
+      path_jump_confirm_frames: 2
+      path_hold_sec: 0.25
+      camera_timeout_sec: 0.25
+      camera_min_confidence: 0.40
+      recovery_min_confidence: 0.75

@@ -1,0 +1,5 @@
+build:
+  base-paths: [src]
+  symlink-install: true
+  cmake-force-configure: true
+  cmake-args: [--fresh]

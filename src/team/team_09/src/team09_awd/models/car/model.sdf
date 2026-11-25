@@ -1,0 +1,550 @@
+<?xml version="1.0"?>
+<!-- generated config sha256: 2a8924b2a182d4c77c68f7453a716f61fa312ddb097d9b1309b7dda792d54f48 -->
+<sdf version="1.9">
+  <model name="team_09">
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu" />
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact" />
+    <self_collide>false</self_collide>
+    <link name="base_link">
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>1.2</mass>
+        <inertia>
+          <ixx>0.00281</ixx>
+          <iyy>0.02426</iyy>
+          <izz>0.026569999999999996</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="body_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.49 0.16 0.05</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="body_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.49 0.16 0.05</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.05 0.3 0.85 1</ambient>
+          <diffuse>0.05 0.3 0.85 1</diffuse>
+        </material>
+      </visual>
+      <collision name="camera_house_collision">
+        <pose>0.155 0 0.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.035 0.035 0.04</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="camera_house_visual">
+        <pose>0.155 0 0.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.035 0.035 0.04</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.15 0.15 0.18 1</ambient>
+          <diffuse>0.15 0.15 0.18 1</diffuse>
+        </material>
+      </visual>
+      <collision name="lidar_house_collision">
+        <pose>0.04 0 0.055 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.035 0.035 0.04</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="lidar_house_visual">
+        <pose>0.04 0 0.055 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.035 0.035 0.04</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.15 0.15 0.18 1</ambient>
+          <diffuse>0.15 0.15 0.18 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="contact_base_link" type="contact">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/team_09/contacts/base_link</topic>
+        <contact>
+          <collision>body_collision</collision>
+          <collision>camera_house_collision</collision>
+          <collision>lidar_house_collision</collision>
+        </contact>
+      </sensor>
+      <sensor name="body_imu" type="imu">
+        <always_on>true</always_on>
+        <update_rate>100.0</update_rate>
+        <topic>/team_09/imu</topic>
+        <gz_frame_id>team_09/base_link</gz_frame_id>
+        <imu />
+      </sensor>
+      <sensor name="lidar" type="gpu_lidar">
+        <pose>0.04 0 0.075 0 0 0</pose>
+        <topic>/team_09/lidar</topic>
+        <gz_frame_id>team_09/lidar</gz_frame_id>
+        <always_on>true</always_on>
+        <update_rate>30.0</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>720</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.141592653589793</min_angle>
+              <max_angle>3.141592653589793</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.08</min>
+            <max>60.0</max>
+            <resolution>0.09</resolution>
+          </range>
+        </lidar>
+      </sensor>
+      <sensor name="camera" type="rgbd_camera">
+        <pose>0.18 0 0.055 0 0.105 0</pose>
+        <topic>/team_09/camera</topic>
+        <always_on>true</always_on>
+        <update_rate>30.0</update_rate>
+        <gz_frame_id>team_09/camera_optical</gz_frame_id>
+        <camera>
+          <camera_info_topic>/team_09/camera/camera_info</camera_info_topic>
+          <horizontal_fov>1.5707963</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.03</near>
+            <far>100.0</far>
+          </clip>
+        </camera>
+      </sensor>
+      <sensor name="start_camera" type="camera">
+        <pose>0.18 0 0.055 0 -0.5 0.15</pose>
+        <topic>/team_09/start_camera/image</topic>
+        <always_on>true</always_on>
+        <update_rate>30.0</update_rate>
+        <gz_frame_id>team_09/start_camera_optical</gz_frame_id>
+        <camera>
+          <camera_info_topic>/team_09/start_camera/camera_info</camera_info_topic>
+          <horizontal_fov>1.1</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.03</near>
+            <far>100.0</far>
+          </clip>
+        </camera>
+      </sensor>
+    </link>
+    <link name="front_left_knuckle">
+      <pose>0.165 0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.09</mass>
+        <inertia>
+          <ixx>6.66666667e-07</ixx>
+          <iyy>6.66666667e-07</iyy>
+          <izz>6.66666667e-07</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+    </link>
+    <joint name="front_left_steer" type="revolute">
+      <parent>base_link</parent>
+      <child>front_left_knuckle</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.5235987755982988</lower>
+          <upper>0.5235987755982988</upper>
+          <effort>10.0</effort>
+          <velocity>4.0</velocity>
+        </limit>
+        <dynamics>
+          <damping>0.1</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="front_left_wheel">
+      <pose>0.165 0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.06</mass>
+        <inertia>
+          <ixx>2.1755e-05</ixx>
+          <iyy>3.6750000000000006e-05</iyy>
+          <izz>2.1755e-05</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="front_left_wheel_collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="front_left_wheel_visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.04 0.04 0.05 1</ambient>
+          <diffuse>0.04 0.04 0.05 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="contact_front_left_wheel" type="contact">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/team_09/contacts/front_left_wheel</topic>
+        <contact>
+          <collision>front_left_wheel_collision</collision>
+        </contact>
+      </sensor>
+    </link>
+    <joint name="front_left_drive" type="revolute">
+      <parent>front_left_knuckle</parent>
+      <child>front_left_wheel</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <effort>5.0</effort>
+          <velocity>1500.0</velocity>
+        </limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-joint-controller-system" name="gz::sim::systems::JointController">
+      <joint_name>front_left_drive</joint_name>
+      <topic>/team_09/drive/front_left</topic>
+      <initial_velocity>0</initial_velocity>
+      <use_force_commands>false</use_force_commands>
+    </plugin>
+    <link name="front_right_knuckle">
+      <pose>0.165 -0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.09</mass>
+        <inertia>
+          <ixx>6.66666667e-07</ixx>
+          <iyy>6.66666667e-07</iyy>
+          <izz>6.66666667e-07</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+    </link>
+    <joint name="front_right_steer" type="revolute">
+      <parent>base_link</parent>
+      <child>front_right_knuckle</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.5235987755982988</lower>
+          <upper>0.5235987755982988</upper>
+          <effort>10.0</effort>
+          <velocity>4.0</velocity>
+        </limit>
+        <dynamics>
+          <damping>0.1</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="front_right_wheel">
+      <pose>0.165 -0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.06</mass>
+        <inertia>
+          <ixx>2.1755e-05</ixx>
+          <iyy>3.6750000000000006e-05</iyy>
+          <izz>2.1755e-05</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="front_right_wheel_collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="front_right_wheel_visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.04 0.04 0.05 1</ambient>
+          <diffuse>0.04 0.04 0.05 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="contact_front_right_wheel" type="contact">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/team_09/contacts/front_right_wheel</topic>
+        <contact>
+          <collision>front_right_wheel_collision</collision>
+        </contact>
+      </sensor>
+    </link>
+    <joint name="front_right_drive" type="revolute">
+      <parent>front_right_knuckle</parent>
+      <child>front_right_wheel</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <effort>5.0</effort>
+          <velocity>1500.0</velocity>
+        </limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-joint-controller-system" name="gz::sim::systems::JointController">
+      <joint_name>front_right_drive</joint_name>
+      <topic>/team_09/drive/front_right</topic>
+      <initial_velocity>0</initial_velocity>
+      <use_force_commands>false</use_force_commands>
+    </plugin>
+    <link name="rear_left_wheel">
+      <pose>-0.165 0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.06</mass>
+        <inertia>
+          <ixx>2.1755e-05</ixx>
+          <iyy>3.6750000000000006e-05</iyy>
+          <izz>2.1755e-05</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="rear_left_wheel_collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="rear_left_wheel_visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.04 0.04 0.05 1</ambient>
+          <diffuse>0.04 0.04 0.05 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="contact_rear_left_wheel" type="contact">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/team_09/contacts/rear_left_wheel</topic>
+        <contact>
+          <collision>rear_left_wheel_collision</collision>
+        </contact>
+      </sensor>
+    </link>
+    <joint name="rear_left_drive" type="revolute">
+      <parent>base_link</parent>
+      <child>rear_left_wheel</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <effort>5.0</effort>
+          <velocity>1500.0</velocity>
+        </limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-joint-controller-system" name="gz::sim::systems::JointController">
+      <joint_name>rear_left_drive</joint_name>
+      <topic>/team_09/drive/rear_left</topic>
+      <initial_velocity>0</initial_velocity>
+      <use_force_commands>false</use_force_commands>
+    </plugin>
+    <link name="rear_right_wheel">
+      <pose>-0.165 -0.09 -0.04 0 0 0</pose>
+      <inertial>
+        <mass>0.06</mass>
+        <inertia>
+          <ixx>2.1755e-05</ixx>
+          <iyy>3.6750000000000006e-05</iyy>
+          <izz>2.1755e-05</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="rear_right_wheel_collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="rear_right_wheel_visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.035</radius>
+            <length>0.026</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.04 0.04 0.05 1</ambient>
+          <diffuse>0.04 0.04 0.05 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="contact_rear_right_wheel" type="contact">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/team_09/contacts/rear_right_wheel</topic>
+        <contact>
+          <collision>rear_right_wheel_collision</collision>
+        </contact>
+      </sensor>
+    </link>
+    <joint name="rear_right_drive" type="revolute">
+      <parent>base_link</parent>
+      <child>rear_right_wheel</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <effort>5.0</effort>
+          <velocity>1500.0</velocity>
+        </limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-joint-controller-system" name="gz::sim::systems::JointController">
+      <joint_name>rear_right_drive</joint_name>
+      <topic>/team_09/drive/rear_right</topic>
+      <initial_velocity>0</initial_velocity>
+      <use_force_commands>false</use_force_commands>
+    </plugin>
+    <plugin filename="gz-sim-ackermann-steering-system" name="gz::sim::systems::AckermannSteering">
+      <steering_only>true</steering_only>
+      <left_steering_joint>front_left_steer</left_steering_joint>
+      <right_steering_joint>front_right_steer</right_steering_joint>
+      <wheel_base>0.33</wheel_base>
+      <wheel_separation>0.18</wheel_separation>
+      <kingpin_width>0.18</kingpin_width>
+      <wheel_radius>0.035</wheel_radius>
+      <steering_limit>0.4626938161508865</steering_limit>
+      <steer_p_gain>8.0</steer_p_gain>
+      <topic>/team_09/drive/steer_angle</topic>
+    </plugin>
+    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+      <topic>/team_09/joint_states</topic>
+      <update_rate>100.0</update_rate>
+      <joint_name>front_left_drive</joint_name>
+      <joint_name>front_right_drive</joint_name>
+      <joint_name>rear_left_drive</joint_name>
+      <joint_name>rear_right_drive</joint_name>
+      <joint_name>front_left_steer</joint_name>
+      <joint_name>front_right_steer</joint_name>
+    </plugin>
+  </model>
+</sdf>

@@ -1,0 +1,17 @@
+/**:
+  ros__parameters:
+    vision:
+      allow_partial_trajectory: true
+      partial_trajectory_confidence: 0.85
+    camera_geometry:
+      prefer_bundle: true
+      bundle_topic: /team_01/path_manager/geometry_bundle
+    corner_braking_preview:
+      enabled: true
+      process_fps: 10.0
+      horizon_m: 25.0
+      bev_half_width_m: 4.5
+      road_roi_top: 0.38
+      min_confidence: 0.40
+      timeout_sec: 0.25
+      confirm_frames: 2
