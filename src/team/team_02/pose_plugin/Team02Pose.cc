@@ -34,7 +34,8 @@ constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
 constexpr double SHARP_SPEED=7., MILD_SPEED=11.;
-constexpr double MAX_TEAM_SPEED=15.;
+constexpr double MAX_TEAM_SPEED=20.;
+constexpr double BASE_TEAM_SPEED=12.;
 constexpr double NORMAL_LANE_CHANGE_SPEED=10.5;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
@@ -239,7 +240,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{15.,14.,13.,12.,11.,10.,9.}){
+      for(double trial:{20.,19.,18.,17.,16.,15.,14.,13.,12.,11.,10.,9.}){
         // A lane change at or below the 9m/s leader is not an overtake.
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
@@ -332,9 +333,9 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
     return std::clamp(desired,0.,limit);
   };
-  // Three-lap race: normal pace 10m/s, safe passing may reach 15m/s.
+  // Three-lap race: normal pace 12m/s, safe passing may reach 20m/s.
   // A requested average is measured; it is not a hard speed controller.
-  const double teamCruise=(!hasLead&&!hasRear)?MAX_TEAM_SPEED:(raceMode?10.:MAX_TEAM_SPEED);
+  const double teamCruise=(!hasLead&&!hasRear)?MAX_TEAM_SPEED:(raceMode?BASE_TEAM_SPEED:MAX_TEAM_SPEED);
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
   // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
   // Do not force unsafe speed through an overlapping lane. Instead allow
@@ -348,7 +349,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     if(currentBody>STRAIGHT_GAP+.25){
       // Continue checking at the current passing speed, not just while
       // team speed is almost identical to the 9m/s lead car.
-      for(double trial:{15.,14.,13.,12.,11.,10.5,10.,9.5}){
+      for(double trial:{20.,19.,18.,17.,16.,15.,14.,13.,12.,11.,10.5,10.,9.5}){
         if(trial>curvatureSpeedLimit+.01)continue;
         if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
                     STRAIGHT_GAP+.08)>=0.){
@@ -413,7 +414,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
     bool foundComfort=false;
-    for(double trial:{15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
+    for(double trial:{20.,19.,18.,17.,16.,15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.}){
       if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
@@ -508,12 +509,12 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
-    // The emergency ceiling is not the normal 10m/s cruise target:
-    // collision-checked passes must still be able to reach 15m/s.
+    // The emergency ceiling is not the normal 12m/s cruise target:
+    // collision-checked passes must still be able to reach 20m/s.
     speedCeiling=MAX_TEAM_SPEED;
     if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
-      for(double trial:{15.,14.,13.,12.,11.,10.5,9.,7.,5.,3.,1.,0.}){
+      for(double trial:{20.,19.,18.,17.,16.,15.,14.,13.,12.,11.,10.5,9.,7.,5.,3.,1.,0.}){
         if(trial>vt+.01)continue;
         if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
@@ -541,7 +542,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   // Phase 2 (Monaco only): sustain a safe, straight-line passing window.
   // Phase 1 did not complete any pass despite 5-6 attempts. After a
-  // committed lane change ends, normal 10m/s cruise can be too slow to
+  // committed lane change ends, normal 12m/s cruise can be too slow to
   // close on the 9m/s S-car. Never override curvature or braking caps.
   // Use both vehicles in the footprint prediction, including the pursuer.
   if(hasLead&&raceMode&&trackName=="monaco"&&!passed &&
@@ -606,7 +607,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const double risk=forecast(dst,elapsed,now,team.changing,vt,horizon,false);
     if((hasLead||hasRear)&&risk<0.){
       bool found=false;
-      for(double candidate:{15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.,2.,1.,0.}){
+      for(double candidate:{20.,19.,18.,17.,16.,15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.,2.,1.,0.}){
         if(candidate>vt+.01)continue;
         if(forecast(dst,elapsed,now,team.changing,candidate,horizon,false)>=0.){
           raceSafeTarget=candidate;
