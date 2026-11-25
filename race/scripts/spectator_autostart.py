@@ -32,10 +32,10 @@ def race_partition():
         if not proc.name.isdigit():
             continue
         try:
-            args = (proc / 'cmdline').read_bytes().replace(b'\\0', b' ')
+            args = (proc / 'cmdline').read_bytes().replace(bytes([0]), b' ')
             if b'gz sim' not in args:
                 continue
-            for item in (proc / 'environ').read_bytes().split(b'\\0'):
+            for item in (proc / 'environ').read_bytes().split(bytes([0])):
                 if item.startswith(b'GZ_PARTITION=urrc_race_'):
                     found.add(item.split(b'=', 1)[1].decode('utf-8'))
         except (OSError, UnicodeError):
