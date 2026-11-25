@@ -172,7 +172,10 @@ def start_world(root,track,event,entries,run_dir):
     env["GZ_PARTITION"]="urrc_race_"+event["event_id"]
     os.environ["GZ_PARTITION"]=env["GZ_PARTITION"]
     log=(run_dir/"gazebo.log").open("w")
-    server=subprocess.Popen(["gz","sim","-r","--gui-config",str(pkg/"worlds"/f"{track}_grid.gui.config"),str(pkg/"worlds"/f"{track}_race.sdf")],env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+    gui_dir = root/"race/spectator_worlds" if env.get("URRC_GAZEBO_FOLLOW","1") == "1" else pkg/"worlds"
+    gui_config = gui_dir/f"{track}_grid.gui.config"
+    if not gui_config.is_file(): raise FileNotFoundError(f"Gazebo GUI 설정 없음: {gui_config}")
+    server=subprocess.Popen(["gz","sim","-r","--gui-config",str(gui_config),str(pkg/"worlds"/f"{track}_race.sdf")],env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
     try:
         for _ in range(90):
             if server.poll() is not None:raise RuntimeError(f"Gazebo가 시작 직후 종료됐습니다. {run_dir / 'gazebo.log'} 확인")
