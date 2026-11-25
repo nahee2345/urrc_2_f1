@@ -85,7 +85,8 @@ def preview_map(root:Path,stage:str,track:str)->int:
     # v19 Monza-equivalent preview + preview-only signal demo
     from preview_visual_v19 import ensure_assets,preview_signal_demo,stop_preview
     world=root/'src/urrc_track_gazebo/worlds'/f'{track}_race.sdf'
-    gui=root/'src/urrc_track_gazebo/worlds'/f'{track}_grid.gui.config'
+    gui_dir = root/'race/spectator_worlds' if os.environ.get('URRC_GAZEBO_FOLLOW','1') == '1' else root/'src/urrc_track_gazebo/worlds'
+    gui=gui_dir/f'{track}_grid.gui.config'
     if not world.is_file():
         raise ValueError('Gazebo 대회 월드 파일 없음: '+str(world))
     if not gui.is_file():
