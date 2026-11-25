@@ -34,8 +34,9 @@ constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
 constexpr double SHARP_SPEED=7., MILD_SPEED=11.;
-constexpr double MAX_TEAM_SPEED=15.;
-constexpr double NORMAL_LANE_CHANGE_SPEED=10.5;
+constexpr double MAX_TEAM_SPEED=10.;
+constexpr double BASE_TEAM_SPEED=8.;
+constexpr double NORMAL_LANE_CHANGE_SPEED=10.;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
 struct Pt {double s,x,y,z,yaw,width=0.;};
@@ -332,9 +333,9 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
     return std::clamp(desired,0.,limit);
   };
-  // Three-lap race: normal pace 10m/s, safe passing may reach 15m/s.
+  // Three-lap race: normal pace 8m/s, safe passing may reach 10m/s.
   // A requested average is measured; it is not a hard speed controller.
-  const double teamCruise=(!hasLead&&!hasRear)?MAX_TEAM_SPEED:(raceMode?10.:MAX_TEAM_SPEED);
+  const double teamCruise=BASE_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
   // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
   // Do not force unsafe speed through an overlapping lane. Instead allow
@@ -443,7 +444,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
       comfortSpeed=teamCruise;
     }
   }
-  if(!hasLead&&!hasRear)comfortSpeed=curvatureSpeedLimit;
+  if(!hasLead&&!hasRear)comfortSpeed=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
    // Preserve a locally safe acceleration window; the existing 2.5s
   // following forecast otherwise repeatedly resets the limit to 9m/s.
   if(passingSpeedWindow>comfortSpeed)comfortSpeed=passingSpeedWindow;
@@ -508,8 +509,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
-    // The emergency ceiling is not the normal 10m/s cruise target:
-    // collision-checked passes must still be able to reach 15m/s.
+    // The emergency ceiling is not the normal 8m/s cruise target:
+    // collision-checked passes must still be able to reach 10m/s.
     speedCeiling=MAX_TEAM_SPEED;
     if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
@@ -541,20 +542,20 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   // Phase 2 (Monaco only): sustain a safe, straight-line passing window.
   // Phase 1 did not complete any pass despite 5-6 attempts. After a
-  // committed lane change ends, normal 10m/s cruise can be too slow to
+  // committed lane change ends, normal 8m/s cruise can be too slow to
   // close on the 9m/s S-car. Never override curvature or braking caps.
   // Use both vehicles in the footprint prediction, including the pursuer.
   if(hasLead&&raceMode&&trackName=="monaco"&&!passed &&
      !team.changing && !joinPending &&
      now-changeFinishedAt>0.5 && overtakeZone &&
      currentCurve<MILD_CURVE && sharpDistance>20. &&
-     curvatureSpeedLimit>=12.5 &&
+     curvatureSpeedLimit>=MAX_TEAM_SPEED &&
      lead.s>team.s+LEN && lead.s-team.s<25. &&
      fabs(team.lat-lead.lat)>WID+.25 &&
      clearance(pose(team),pose(lead))>STRAIGHT_GAP &&
-     forecast(team.lat,elapsed,now,false,12.5,1.5,true)>=0.){
+     forecast(team.lat,elapsed,now,false,MAX_TEAM_SPEED,1.5,true)>=0.){
     const double prior=vt;
-    vt=std::max(vt,12.5);
+    vt=std::max(vt,MAX_TEAM_SPEED);
     if(vt>prior+.01 && now-lastMonacoPassLog>2.){
       lastMonacoPassLog=now;
       std::cout<<"[BATTLE] MONACO_PASS_ACCEL target="<<vt
@@ -565,17 +566,17 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   // Monaco boost must never bypass the existing 1s emergency-braking cap.
   vt=std::min(vt,speedCeiling);
-  // Phase 1 (Monaco only): a modest 11.5m/s corner-exit burst.
+  // Phase 1 (Monaco only): a modest 10m/s corner-exit burst.
   // Retain the existing 7.5m/s sharp-corner cap, front/rear collision
   // forecasts, road envelope, and physical acceleration limit.
   // Do not accelerate before the bend has actually ended.
   if(raceMode && trackName=="monaco" &&
      now-lastMonacoSharpAt>0. && now-lastMonacoSharpAt<3.0 &&
      currentCurve<MILD_CURVE && sharpDistance>10. &&
-     !team.changing && !joinPending && curvatureSpeedLimit>=10.5 &&
-     forecast(team.lat,elapsed,now,false,11.5,1.5,true)>=0.){
+     !team.changing && !joinPending && curvatureSpeedLimit>=MAX_TEAM_SPEED &&
+     forecast(team.lat,elapsed,now,false,MAX_TEAM_SPEED,1.5,true)>=0.){
     const double prior=vt;
-    vt=std::max(vt,std::min(11.5,curvatureSpeedLimit));
+    vt=std::max(vt,std::min(MAX_TEAM_SPEED,curvatureSpeedLimit));
     if(vt>prior+.01 && now-lastMonacoExitLog>2.){
       lastMonacoExitLog=now;
       std::cout<<"[BATTLE] MONACO_EXIT_ACCEL target="<<vt
@@ -645,7 +646,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     a.v+=std::clamp(desired-a.v,-5.0*dt,3.0*dt);
     a.s+=(before+a.v)*.5*dt;
   };
-  update(team,vt);
+  update(team,std::clamp(vt,0.,MAX_TEAM_SPEED));
   if(raceMode){
     // Reapply envelope after longitudinal motion, using next-lap geometry.
     team.lat=std::clamp(team.lat,-roadOffsetLimit(team.s),roadOffsetLimit(team.s));
