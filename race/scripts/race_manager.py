@@ -132,12 +132,15 @@ def start_sequence(track, root, entries, delay, monitor, gate, laps, env, *, ope
     ids = [e['entry_id'] for e in entries]
     gate.publish(ids, False)
     lights_all(track, root, False)  # Make the permanent gantry lenses dark BEFORE the sequence.
+    from spectator_signal_v29 import publish as spectator_signal
+    spectator_signal(root,track,env,'waiting',0)
     signal = AtomicFiveRed(root, track)
     signal.start()
     lights_out = False
     try:
         for index in range(1, 6):
             signal.red(index)
+            spectator_signal(root,track,env,'countdown',index)
             time.sleep(1.)
         time.sleep(delay)
         pause_world(track, True, env)
@@ -146,6 +149,7 @@ def start_sequence(track, root, entries, delay, monitor, gate, laps, env, *, ope
         # Remove ALL five red visuals in one operation while physics is paused.
         # Release the camera-dependent controllers only after remove is accepted.
         signal.all_off()
+        spectator_signal(root,track,env,'started',0)
         lights_out = True
         gate.publish(ids, True)
         time.sleep(.1)
@@ -156,6 +160,7 @@ def start_sequence(track, root, entries, delay, monitor, gate, laps, env, *, ope
     finally:
         if not lights_out:
             signal.cleanup_on_error()
+            spectator_signal(root,track,env,'error',0)
 
 def start_world(root,track,event,entries,run_dir):
     pkg=root/"src/urrc_track_gazebo"; env=os.environ.copy()
