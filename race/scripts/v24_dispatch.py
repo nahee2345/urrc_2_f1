@@ -109,6 +109,8 @@ def route(root:Path,args:list[str])->list[str]:
         if verb not in {'preview','rehearse','compatibility','check','sync','prepare','vehicles','results','summary','help','--help'}:
             raise ValueError('연습용에서 허용되지 않는 명령: '+verb)
         return ['bash',str(root/'race_v22.sh'),*args]
+    if verb == 'rehearse' and mode == 'official':
+        return ['python3', str(root/'race/scripts/rehearsal_with_spectator.py'), str(root), *args]
     if verb in MAP_COMMANDS:
         tr=option_get(extra,'--track')
         if tr is not None and tr not in available:
