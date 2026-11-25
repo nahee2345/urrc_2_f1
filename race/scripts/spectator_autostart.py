@@ -25,6 +25,24 @@ def alive(pid):
     except (ValueError, TypeError, OSError):
         return False
 
+def race_partition():
+    """Find the one official Gazebo transport partition, never touch other runs."""
+    found = set()
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            args = (proc / 'cmdline').read_bytes().replace(b'\\0', b' ')
+            if b'gz sim' not in args:
+                continue
+            for item in (proc / 'environ').read_bytes().split(b'\\0'):
+                if item.startswith(b'GZ_PARTITION=urrc_race_'):
+                    found.add(item.split(b'=', 1)[1].decode('utf-8'))
+        except (OSError, UnicodeError):
+            continue
+    return next(iter(found)) if len(found) == 1 else None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, required=True)
@@ -52,11 +70,16 @@ def main():
             if (fresh and status.get('stage') == 'qualifying'
                     and args.team in status.get('teams', [])
                     and alive(status.get('pid'))):
-                print('[관전] 공식 예선 세션 확인: 3D 웹 관전 자동 실행', flush=True)
+                partition = race_partition()
+                if not partition:
+                    time.sleep(0.5)
+                    continue
+                print('[관전] 공식 예선 및 Gazebo 확인: 3D 웹 관전 자동 실행', flush=True)
+                env = os.environ.copy()
+                env['GZ_PARTITION'] = partition
                 viewer = subprocess.Popen(
-                    ['bash', str(launch)],
-                    cwd=root,
-                    stdin=subprocess.DEVNULL,
+                    ['bash', str(launch)], cwd=root,
+                    env=env, stdin=subprocess.DEVNULL,
                 )
                 break
             time.sleep(0.5)
