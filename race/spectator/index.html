@@ -57,15 +57,15 @@ const teamSelect=$('team'),trackSelect=$('track'),angle=$('angle');
 const TRACKS=['monza','hungaroring','monaco','spa','cota','baku'];
 let latest=null,route=[],loadedTrack='',selected=null,mode='free',error='',pollStarted=false,carHits=[];
 let bounds=null,center={x:0,y:0},zoom=1,rotation=0,viewWidth=0,viewHeight=0;
-let pointer=null,loadedRequest=0,serverWasActive=false;
+let pointer=null,loadedRequest=0,serverWasActive=false,followZoom=1,followCamera=null,followLastTime=0;
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 function activeCar(team){return (latest?.teams||[]).find(t=>t.team===team && t.available && t.pose)}
 function isActive(){return latest?.state==='running'||latest?.state==='waiting_vehicles'}
 function refreshMode(){ $('free').classList.toggle('active',mode==='free'); $('target').textContent=mode==='follow'&&selected?'FOLLOW '+selected:'전체 맵 자유 관전';
   $('detail').textContent=mode==='follow'&&selected?'선택 차량 추적 중 · 지도 드래그로 자유 관전 전환':'맵 어디든 마우스로 이동·확대·축소할 수 있습니다.';
   if(mode==='free'){teamSelect.value=''}else{teamSelect.value=selected||''}}
-function toFree(keepTarget=true){if(mode==='follow'&&keepTarget){const car=activeCar(selected);if(car){center={x:car.pose.x,y:car.pose.y};zoom=Math.max(zoom,3)}}mode='free';selected=null;refreshMode()}
-function follow(team){const car=activeCar(team);if(!car)return false;mode='follow';selected=team;refreshMode();return true}
+function toFree(keepTarget=true){followCamera=null;if(mode==='follow'&&keepTarget){const car=activeCar(selected);if(car){center={x:car.pose.x,y:car.pose.y};zoom=Math.max(zoom,3)}}mode='free';selected=null;refreshMode()}
+function follow(team){const car=activeCar(team);if(!car)return false;if(selected!==team){followCamera=null;followZoom=1}mode='follow';selected=team;refreshMode();return true}
 function fit(){mode='free';selected=null;zoom=1;rotation=0;center=bounds?{x:bounds.cx,y:bounds.cy}:{x:0,y:0};refreshMode()}
 function ensureBounds(){if(!route.length)return;const xs=route.map(x=>x[0]),ys=route.map(x=>x[1]);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);bounds={cx:(x0+x1)/2,cy:(y0+y1)/2,sx:Math.max(5,x1-x0),sy:Math.max(5,y1-y0)};fit()}
 async function getJson(path,params={}){const url=new URL(path,location.href);url.searchParams.set('key',key);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);const r=await fetch(url,{cache:'no-store',credentials:'omit'});if(!r.ok)throw Error('HTTP '+r.status+' · '+path);return r.json()}
@@ -102,10 +102,10 @@ function getScale(){if(!bounds)return 1;return Math.max(.00001,Math.min((viewWid
 function mapToScreen(x,y){const a=x-center.x,b=y-center.y,c=Math.cos(rotation),s=Math.sin(rotation),k=getScale();return [viewWidth/2+(a*c-b*s)*k,viewHeight/2-(a*s+b*c)*k]}
 function screenToMap(px,py){const dx=(px-viewWidth/2)/getScale(),dy=-(py-viewHeight/2)/getScale(),c=Math.cos(rotation),s=Math.sin(rotation);return {x:center.x+dx*c+dy*s,y:center.y-dx*s+dy*c}}
 function zoomAt(x,y,factor){const before=screenToMap(x,y);zoom=clamp(zoom*factor,.15,100);const after=screenToMap(x,y);center.x+=before.x-after.x;center.y+=before.y-after.y}
-$('zoomIn').addEventListener('click',()=>{toFree();zoomAt(viewWidth/2,viewHeight/2,1.5)});
-$('zoomOut').addEventListener('click',()=>{toFree();zoomAt(viewWidth/2,viewHeight/2,1/1.5)});
+$('zoomIn').addEventListener('click',()=>{if(mode==='follow')followZoom=clamp(followZoom*1.25,.5,3);else zoomAt(viewWidth/2,viewHeight/2,1.5)});
+$('zoomOut').addEventListener('click',()=>{if(mode==='follow')followZoom=clamp(followZoom/1.25,.5,3);else zoomAt(viewWidth/2,viewHeight/2,1/1.5)});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
-cv.addEventListener('wheel',e=>{e.preventDefault();toFree();const b=cv.getBoundingClientRect();zoomAt(e.clientX-b.left,e.clientY-b.top,Math.exp(-e.deltaY*.0013))},{passive:false});
+cv.addEventListener('wheel',e=>{e.preventDefault();if(mode==='follow'){followZoom=clamp(followZoom*Math.exp(-e.deltaY*.001),.5,3);return}const b=cv.getBoundingClientRect();zoomAt(e.clientX-b.left,e.clientY-b.top,Math.exp(-e.deltaY*.0013))},{passive:false});
 cv.addEventListener('pointerdown',e=>{if(e.button!==0&&e.button!==2)return;pointer={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,button:e.button,moved:false};cv.setPointerCapture(e.pointerId);cv.classList.add('dragging')});
 cv.addEventListener('pointermove',e=>{if(!pointer||e.pointerId!==pointer.id)return;const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;pointer.x=e.clientX;pointer.y=e.clientY;
   if(!pointer.moved&&Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)<3)return;
@@ -138,20 +138,90 @@ function drawFree(w,h){carHits=[];if(!route.length){textCenter(error||'트랙 �
   }
   ctx.fillStyle='#d4e4ec';ctx.textAlign='left';ctx.font='12px system-ui';ctx.fillText('자유 관전 · 확대 '+zoom.toFixed(1)+'배 · '+loadedTrack+' · 화면 조작만 허용',13,h-15);
 }
-function drawFollow(w,h){carHits=[];const t=activeCar(selected);if(!t||!route.length){textCenter('Follow 차량 위치를 기다리는 중입니다',w,h);return}
-  const p=t.pose,theta=heading(p),fx=Math.cos(theta),fy=Math.sin(theta),top=angle.value==='top';
-  const cam={x:p.x-fx*(top?2:12),y:p.y-fy*(top?2:12),z:p.z+(top?35:7)},aim={x:p.x+fx*(top?1:17),y:p.y+fy*(top?1:17),z:p.z};
-  let f=[aim.x-cam.x,aim.y-cam.y,aim.z-cam.z],fl=Math.hypot(...f);f=f.map(v=>v/fl);
-  let right=[f[1],-f[0],0],rl=Math.hypot(...right);right=right.map(v=>v/rl);const up=[right[1]*f[2],-right[0]*f[2],right[0]*f[1]-right[1]*f[0]];
-  const scale=(top?.95:1.1)*Math.min(w,h),cx=w/2,cy=h*(top?.51:.6);
-  function project(v){const x=v[0]-cam.x,y=v[1]-cam.y,z=v[2]-cam.z,depth=x*f[0]+y*f[1]+z*f[2];if(depth<.3)return null;return [cx+scale*(x*right[0]+y*right[1]+z*right[2])/depth,cy-scale*(x*up[0]+y*up[1]+z*up[2])/depth,depth]}
-  const road=[];for(let i=0;i<route.length;i++){const a=route[i],b=route[(i+1)%route.length],dx=b[0]-a[0],dy=b[1]-a[1],n=Math.hypot(dx,dy)||1,hw=a[3]/2,px=-dy/n*hw,py=dx/n*hw;road.push({L:project([a[0]+px,a[1]+py,a[2]]),R:project([a[0]-px,a[1]-py,a[2]])})}
-  const patches=[];for(let i=0;i<road.length-1;i++){const a=road[i],b=road[i+1];if(!a.L||!a.R||!b.L||!b.R)continue;patches.push({poly:[a.L,a.R,b.R,b.L],depth:(a.L[2]+b.L[2])/2})}
-  patches.sort((a,b)=>b.depth-a.depth);for(const patch of patches){const q=patch.poly;ctx.beginPath();ctx.moveTo(q[0][0],q[0][1]);for(let j=1;j<4;j++)ctx.lineTo(q[j][0],q[j][1]);ctx.closePath();ctx.fillStyle='#56616b';ctx.fill();ctx.strokeStyle='#c6d0d8';ctx.lineWidth=.7;ctx.stroke()}
-  const cars=(latest.teams||[]).filter(row=>row.available&&row.pose).map(row=>({row,pos:project([row.pose.x,row.pose.y,row.pose.z+.32])})).filter(q=>q.pos).sort((a,b)=>b.pos[2]-a.pos[2]);
-  for(const {row,pos} of cars){const [x,y,z]=pos,r=clamp(70/z,7,40);if(x<-50||x>w+50||y<-50||y>h+50)continue;
-    ctx.fillStyle=row.team===selected?'#7fe2bf':'#8bbff2';ctx.beginPath();ctx.roundRect(x-r/1.65,y-r/2,r*1.3,r,3);ctx.fill();ctx.strokeStyle='#0b1b25';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#f5faff';ctx.textAlign='center';ctx.font='600 12px system-ui';ctx.fillText(row.team,x,y-r*.7-5);ctx.fillText((row.rank||'-')+'위',x,y+2*r+2)}
-  ctx.fillStyle='#dfedfa';ctx.textAlign='left';ctx.font='12px system-ui';ctx.fillText((top?'상공':'후방')+' Follow · 자유 탐색은 마우스를 드래그하십시오',13,h-15)
+// Chase camera is local to the spectator browser; never publishes vehicle commands.
+function drawFollow(w,h){
+  carHits=[];
+  const t=activeCar(selected);
+  if(!t||!route.length){textCenter('Follow 차량 위치를 기다리는 중입니다',w,h);return}
+  const p=t.pose,theta=heading(p),fx=Math.cos(theta),fy=Math.sin(theta);
+  const top=angle.value==='top';
+  // Low, moderately distant camera behind the vehicle, looking far down the road.
+  // Units are track metres. Zoom adjusts field of view, not the vehicle pose.
+  const distance=top?3:12,height=top?36:8.5,lookAhead=top?2:20;
+  const target={x:p.x-fx*distance,y:p.y-fy*distance,z:p.z+height,
+                ax:p.x+fx*lookAhead,ay:p.y+fy*lookAhead,az:p.z+.3};
+  const now=performance.now(),dt=clamp((now-followLastTime)/1000,0,.1);
+  followLastTime=now;
+  if(!followCamera||!Number.isFinite(followCamera.x)||dt===0)followCamera={...target};
+  else {
+    const alpha=1-Math.exp(-dt*(top?9:6));
+    for(const key of ['x','y','z','ax','ay','az'])followCamera[key]+=(target[key]-followCamera[key])*alpha;
+  }
+  const cam=followCamera,forward=[cam.ax-cam.x,cam.ay-cam.y,cam.az-cam.z];
+  const len=Math.hypot(...forward)||1;
+  const f=forward.map(v=>v/len);
+  const right=[f[1],-f[0],0],rl=Math.hypot(...right)||1;
+  for(let i=0;i<3;i++)right[i]/=rl;
+  const up=[right[1]*f[2],-right[0]*f[2],right[0]*f[1]-right[1]*f[0]];
+  const focal=(top?1.05:1.12)*Math.min(w,h)*followZoom,cx=w*.5,cy=h*(top?.53:.61);
+  function project(x,y,z){
+    const dx=x-cam.x,dy=y-cam.y,dz=z-cam.z;
+    const depth=dx*f[0]+dy*f[1]+dz*f[2];
+    if(depth<.35)return null;
+    return [cx+focal*(dx*right[0]+dy*right[1])/depth,
+            cy-focal*(dx*up[0]+dy*up[1]+dz*up[2])/depth,depth];
+  }
+  // Draw the visible strip around the selected car. Avoid long track sections
+  // behind the camera painting over the road ahead at self-intersections.
+  const surfaces=[];
+  function quad(points,color,depth,stroke){
+    if(points.some(v=>!v))return;
+    if(!points.some(v=>v[0]>-2*w&&v[0]<3*w&&v[1]>-2*h&&v[1]<3*h))return;
+    surfaces.push({points,color,depth,stroke});
+  }
+  for(let i=0;i<route.length;i++){
+    const a=route[i],b=route[(i+1)%route.length];
+    const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    if(Math.hypot(mx-p.x,my-p.y)>(top?95:110))continue;
+    const dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy);
+    if(d<.0001||d>35)continue;
+    const nx=-dy/d,ny=dx/d;
+    const wa=Math.max(.8,(a[3]||2.4)/2),wb=Math.max(.8,(b[3]||2.4)/2);
+    const al=project(a[0]+nx*wa,a[1]+ny*wa,a[2]);
+    const ar=project(a[0]-nx*wa,a[1]-ny*wa,a[2]);
+    const bl=project(b[0]+nx*wb,b[1]+ny*wb,b[2]);
+    const br=project(b[0]-nx*wb,b[1]-ny*wb,b[2]);
+    const depth=((al?.[2]||0)+(br?.[2]||0))/2;
+    quad([al,ar,br,bl],'#25272b',depth,null);
+    // Alternating Monaco-style red/white safety walls, approximate geometry.
+    const color=(Math.floor(i/3)%2===0)?'#d32a31':'#e4e5e3';
+    const alh=project(a[0]+nx*wa,a[1]+ny*wa,a[2]+.85);
+    const blh=project(b[0]+nx*wb,b[1]+ny*wb,b[2]+.85);
+    const arh=project(a[0]-nx*wa,a[1]-ny*wa,a[2]+.85);
+    const brh=project(b[0]-nx*wb,b[1]-ny*wb,b[2]+.85);
+    quad([al,bl,blh,alh],color,depth-.01,null);
+    quad([br,ar,arh,brh],color,depth-.01,null);
+  }
+  surfaces.sort((a,b)=>b.depth-a.depth);
+  for(const surface of surfaces){
+    const q=surface.points;ctx.beginPath();ctx.moveTo(q[0][0],q[0][1]);
+    for(let j=1;j<q.length;j++)ctx.lineTo(q[j][0],q[j][1]);
+    ctx.closePath();ctx.fillStyle=surface.color;ctx.fill();
+  }
+  const cars=(latest.teams||[]).filter(row=>row.available&&row.pose)
+    .map(row=>({row,pos:project(row.pose.x,row.pose.y,row.pose.z+.20)}))
+    .filter(q=>q.pos).sort((a,b)=>b.pos[2]-a.pos[2]);
+  for(const {row,pos} of cars){
+    const [x,y,z]=pos,r=clamp(focal*.28/z,6,46);
+    if(x<-60||x>w+60||y<-60||y>h+60)continue;
+    ctx.fillStyle=row.team===selected?'#458de2':'#8bbff2';
+    ctx.fillRect(x-r*.48,y-r*.72,r*.96,r*1.44);
+    ctx.strokeStyle='#10171e';ctx.lineWidth=2;ctx.strokeRect(x-r*.48,y-r*.72,r*.96,r*1.44);
+    ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.fillStyle='#edf5fb';
+    if(row.team!==selected)ctx.fillText(row.team,x,y-r-7);
+  }
+  ctx.fillStyle='#dfedfa';ctx.textAlign='left';ctx.font='12px system-ui';
+  ctx.fillText((top?'상공':'후방')+' Follow · 휠 확대/축소 '+followZoom.toFixed(2)+'배 · 드래그 시 자유 관전',13,h-15);
 }
 function draw(){const w=viewWidth,h=viewHeight;if(!w||!h)return;ctx.clearRect(0,0,w,h);background(w,h);if(mode==='follow'&&activeCar(selected))drawFollow(w,h);else drawFree(w,h)}
 function render(){draw();requestAnimationFrame(render)}
