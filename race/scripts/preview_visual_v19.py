@@ -34,11 +34,10 @@ def ensure_assets(root: Path, track: str) -> None:
                 model_mesh/'road_textured.obj',
                 model_mesh/'asphalt_ground.obj',
                 model_mesh/'offroad.png')
-    source = race.read_text(encoding='utf-8')
-    if any(not f.is_file() for f in rendered) or 'urrc_v10_spectator' not in source:
+    if any(not f.is_file() for f in rendered):
         sys.path.insert(0, str(package))
         from urrc_tracks.v10_assets import enhance_track
-        print(f'[v19 VISUAL] {track}: Monza 기준 텍스처·5등 신호·관전 카메라 생성', flush=True)
+        print(f'[v19 VISUAL] {track}: 누락된 시각 리소스 생성', flush=True)
         enhance_track(package, track)
     else:
         print(f'[v19 VISUAL] {track}: 기존 텍스처·신호 리소스 확인', flush=True)
