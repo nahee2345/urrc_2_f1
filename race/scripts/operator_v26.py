@@ -91,13 +91,32 @@ class OperatorSession:
         return data
 
     def wait_spawn(self, team, check_world):
-        print('[v26] '+team+' 스폰 지시 대기 중 (자동 스폰하지 않음)',flush=True)
-        while True:
-            cmd=self.consume(team,{'spawn','dnf'})
-            if cmd:
-                return cmd
+        if self.info['stage']=='qualifying':
             check_world()
-            time.sleep(.25)
+            print('[AUTO SPAWN] 예선 '+team, flush=True)
+            return {'action':'spawn','team':team}
+        if not getattr(self,'_grid_approved',False):
+            print('\\n===== 그리드 배정 =====',flush=True)
+            for n,name in enumerate(self.info['teams'],1):
+                print(f'{n:02d}번 그리드: {name}',flush=True)
+            print('이대로 스폰하시는거 맞으신가요? yes/no',flush=True)
+            if not sys.stdin.isatty():
+                raise RuntimeError('yes 승인을 위한 운영자 터미널이 필요합니다')
+            import select
+            while True:
+                check_world()
+                ready,_,_=select.select([sys.stdin],[],[],0.5)
+                if not ready:continue
+                answer=sys.stdin.readline().strip().lower()
+                if answer=='yes':
+                    self._grid_approved=True
+                    break
+                if answer in ('no','n','q',''):
+                    raise RuntimeError('운영자가 스폰을 취소했습니다')
+                print('yes 또는 no를 입력하십시오.',flush=True)
+        check_world()
+        print(f'[AUTO SPAWN] {team}',flush=True)
+        return {'action':'spawn','team':team}
 
     def wait_dnf(self, team, check_world):
         print('[v26] '+team+' 운영자 수동 DNF 지시 대기 중',flush=True)
