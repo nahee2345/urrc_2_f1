@@ -38,6 +38,8 @@ constexpr double MAX_TEAM_SPEED=8.;
 constexpr double PASS_TEAM_SPEED=10.;
 constexpr double TEAM_ACCEL=5., TEAM_DECEL=2.;
 constexpr double BASE_TEAM_SPEED=5.5;
+constexpr double DEFENSE_RANGE=25., DEFENSE_HORIZON=2.5, DEFENSE_GAP=1.;
+constexpr double DEFENSE_REACTION=.5, DEFENSE_REPLAN_INTERVAL=.1;
 constexpr double NORMAL_LANE_CHANGE_SPEED=BASE_TEAM_SPEED;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
@@ -47,6 +49,7 @@ struct Car {
  std::string name;gz::sim::Entity entity{gz::sim::kNullEntity};
  double s=0,v=0,lat=0,from=0,to=0,changeStart=0,changeDuration=2.5;
  bool changing=false;
+ double lateralVelocity=0.; bool speedKnown=false;
 };
 class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,public gz::sim::ISystemPreUpdate {
  public:
@@ -104,6 +107,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   if(passingActive){
     if(passTargetSeen && team.s-passTarget.s>LEN+STRAIGHT_TARGET){
       passed=true;
+       postPassDefense=true;
       ++completedPassCount;
       std::cout<<"[BATTLE] OVERTAKE COMPLETED target="<<passTargetName
                <<" count="<<completedPassCount<<std::endl;
@@ -171,6 +175,17 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     curvatureSpeedLimit>lead.v+.5 &&
     (!raceMode || team.s-teamStart>=5.0);
   if(passingActive && !overtakeZone)passingActive=false;
+   const double defenseSpeed=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
+   const bool defenseZone=!corner && sharpDistance>std::max(team.v,defenseSpeed)*DEFENSE_HORIZON+2.;
+   const bool defenseEligible=postPassDefense && !passingActive && !joinPending &&
+       defenseZone && rearBehind && rear.speedKnown && rearGap<=DEFENSE_RANGE &&
+       rearGap>=LEN+DEFENSE_GAP && frontTTC>2.;
+   const double defenseRoadLimit=roadOffsetLimitAhead(team.s,std::max(team.v,defenseSpeed)*DEFENSE_HORIZON+2.);
+   const double rearIntent=rear.lat+std::clamp(rear.lateralVelocity*DEFENSE_REACTION,-.20,.20);
+   const double defenseLane=std::clamp(std::clamp(std::round(rearIntent/std::max(.01,lateralOffset)),-1.,1.)*lateralOffset,
+                                      -defenseRoadLimit,defenseRoadLimit);
+   const bool defenseNeedsChange=std::abs(defenseLane-team.lat)>.25*lateralOffset &&
+       std::abs(rearIntent-defenseLane)+.10<std::abs(rearIntent-team.lat);
   if(previousCurveMode!=lastLoggedCurveMode){
     lastLoggedCurveMode=previousCurveMode;
     std::cout<<"[BATTLE] CORNER_SPEED mode="
@@ -181,7 +196,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   const double targetGap=corner?CORNER_TARGET:STRAIGHT_TARGET;
   minRearTTC=std::min(minRearTTC,rearTTC);
-  if(rearBehind && rearTTC<=5.){
+  if(defenseEligible && rearTTC<=5.){
     if(!defenseOpportunity){defenseStart=now;defenseOutcome="DETECTED";}
     if(!defenseOpportunity)std::cout<<"[BATTLE] REAR_PRESSURE TTC="<<rearTTC
       <<" gap="<<rearGap<<" team_speed="<<team.v<<" rear_speed="<<rear.v<<std::endl;
@@ -190,8 +205,18 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // A change is a committed manoeuvre: keep its goal unless a *predicted
   // footprint collision* is detected. Negative clearance by itself is not
   // a collision and must not create oscillating replan requests.
-  if(team.changing){
-    const double risk=forecast(team.to,elapsed,now,true,
+  if(team.changing && defenseChanging){
+     if(!defenseZone || !hasRear || rear.name!=defenseTargetName ||
+        (now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL &&
+         !defensePathSafe(team.to,elapsed,now,true,defenseSpeed,
+                          std::max(.1,team.changeStart+team.changeDuration-now)))){
+       change(team.lat,now);team.changing=false;defenseChanging=false;
+       changeFinishedAt=now;defenseOutcome="SAFE_ABORT";
+       std::cout<<"[BATTLE] DEFENSE ABORT rear="<<defenseTargetName<<" sharp="<<!defenseZone<<std::endl;
+     }
+     if(now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL)lastDefenseCheck=now;
+   }else if(team.changing){
+     const double risk=forecast(team.to,elapsed,now,true,
       std::min(plannedPassSpeed,curvatureSpeedLimit),2.5);
     if(risk<0.0 && now-lastReplan>1.0){
       lastReplan=now;
@@ -222,27 +247,29 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
   }else if(now-changeFinishedAt<.5){
     // Hysteresis prevents immediate re-selection of the opposite lane.
-  }else if(!overtakeZone && rearBehind && rearTTC<=5.0 && !defended &&
-            frontTTC>1.0 && !(frontGap<8.)){
-    // Handle rear pressure before an optional front overtake. Safest
-    // defense is maintaining a corridor or speeding away, not cutting off
-    // a vehicle already alongside.
-    const double backClearance=clearance(pose(team),pose(rear));
-    if(rearGap>LEN+STRAIGHT_TARGET && backClearance>STRAIGHT_TARGET){
-      if(defenseOutcome=="DETECTED" || defenseOutcome=="SAFE_ABORT"){
-        defenseOutcome="HOLDING";
-        std::cout<<"[BATTLE] DEFENSE HOLD_START TTC="<<rearTTC
-                 <<"s gap="<<rearGap<<"m clearance="<<backClearance<<std::endl;
-      }
-    }else{
-      defenseOutcome="SAFE_ABORT";
-      if(now-lastDefenseLog>1.0){
-        lastDefenseLog=now;
-        std::cout<<"[BATTLE] DEFENSE SAFE_ABORT TTC="<<rearTTC
-                 <<" gap="<<rearGap<<" clearance="<<backClearance<<std::endl;
-      }
-    }
-  }else if(frontPassRequested && !passingActive && now-lastPassPlan>=.2){
+  }else if(defenseEligible && defenseNeedsChange &&
+             now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL){
+     lastDefenseCheck=now;
+     if(defensePathSafe(defenseLane,elapsed,now,false,defenseSpeed,DEFENSE_HORIZON)){
+       change(defenseLane,now);defenseChanging=true;defenseTargetName=rear.name;
+       if(!defenseOpportunity){defenseOpportunity=true;defenseStart=now;}
+       defenseOutcome="HOLDING";
+       std::cout<<"[BATTLE] DEFENSE MATCH_LANE rear="<<rear.name
+                <<" rear_lat="<<rear.lat<<" rear_vlat="<<rear.lateralVelocity
+                <<" target="<<defenseLane<<" gap="<<rearGap
+                <<" speed_target="<<defenseSpeed
+                <<" curve="<<(currentCurve>=MILD_CURVE?"MILD":"STRAIGHT")<<std::endl;
+     }else if(now-lastDefenseLog>1.){
+       lastDefenseLog=now;defenseOutcome="SAFE_ABORT";
+       std::cout<<"[BATTLE] DEFENSE BLOCK_REJECTED rear="<<rear.name<<" gap="<<rearGap<<std::endl;
+     }
+   }else if(defenseEligible && !defenseNeedsChange && !(hasLead && frontGap<8.)){
+     if(now-lastDefenseLog>2.){
+       lastDefenseLog=now;
+       std::cout<<"[BATTLE] DEFENSE HOLD_LANE rear="<<rear.name
+                <<" target="<<team.lat<<" speed_target="<<defenseSpeed<<std::endl;
+     }
+   }else if(frontPassRequested && !passingActive && now-lastPassPlan>=.2){
     lastPassPlan=now;
     const double passingLimit=std::min(PASS_TEAM_SPEED,curvatureSpeedLimit);
     double bestScore=-1e9,bestTarget=team.lat,bestSpeed=0.;
@@ -294,7 +321,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   if(team.changing){
    const double t=(now-team.changeStart)/team.changeDuration;
    team.lat=team.from+(team.to-team.from)*ease(t);
-   if(t>=1){team.lat=team.to;team.changing=false;changeFinishedAt=now;}
+   if(t>=1){team.lat=team.to;team.changing=false;defenseChanging=false;changeFinishedAt=now;}
   }
   if(raceMode){
     // Restrict lateral travel using the smallest road width over the
@@ -305,8 +332,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     if(team.changing)team.to=std::clamp(team.to,-safe,safe);
     if(std::fabs(old-team.lat)>1e-5){
       team.from=team.lat;team.to=team.lat;
-      team.changing=false;changeFinishedAt=now;
-      passingActive=false;
+      team.changing=false;defenseChanging=false;changeFinishedAt=now;
+       passingActive=false;
       if(now-lastWallCorrectionLog>1.){
         lastWallCorrectionLog=now;
         std::cout<<"[BATTLE] ROAD_CORRECTION vehicle=team_08"
@@ -529,13 +556,15 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   vt=std::min(vt,speedCeiling);
   // Braking for a pursuer behind would make a rear-end collision worse,
   // but only when the forward trajectory also remains clear.
-  if(rearBehind && rearTTC<2. && frontTTC>2. &&
+  if(!postPassDefense && rearBehind && rearTTC<2. && frontTTC>2. &&
      !team.changing && speedCeiling>=team.v &&
      (!raceMode || forecast(team.lat,elapsed,now,false,
           std::min(curvatureSpeedLimit,team.v+0.5),1.5,true)>=0.))
     vt=std::max(vt,std::min(curvatureSpeedLimit,team.v+0.5));
   vt=std::min(vt,curvatureSpeedLimit);
-  if(raceMode && now-lastRaceHazardCheck>=.1){
+   // Maintain base pace after passing; collision protection can reduce it.
+   if(postPassDefense && !passingActive)vt=std::min(vt,BASE_TEAM_SPEED);
+   if(raceMode && now-lastRaceHazardCheck>=.1){
     lastRaceHazardCheck=now;
     // The old emergency check only looked one second ahead and could
     // return speed=0 when the lead car was already beside TEAM11.
@@ -839,6 +868,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    // Only actual spawned entrants count. The nearest front and rear car
    // are selected dynamically; the original two-car forecast remains intact.
    hasLead=false;hasRear=false;leadSpeedKnown=false;passTargetSeen=false;
+    observedTraffic.clear();
    double closestFront=1e9,closestRear=1e9;
    ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
             gz::sim::components::ParentEntity>(
@@ -854,26 +884,33 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
          double ss=0,lat=0;
          if(!project(gz::sim::worldPose(e,ecm),ss,lat))return true;
          const double relative=std::remainder(ss-team.s,lap);
-         if(std::abs(relative)>25.)return true;
+         if(std::abs(relative)>90.)return true;
          // Use a multi-tick sample interval. The 200 Hz controller used
          // to overwrite the sample every tick, so dt>.01 rarely held.
          auto it=trafficHistory.find(name);
          if(it==trafficHistory.end()){
-           trafficHistory[name]={ss,now};
+           trafficHistory[name]={ss,now};trafficLastLat[name]=lat;
          }else{
            const double dt=now-it->second.second;
            if(dt>=.05 && dt<2.){
              trafficSpeeds[name]=std::clamp(std::remainder(
                 ss-it->second.first,lap)/dt,0.,30.);
-             it->second={ss,now};
-           }else if(dt>=2. || dt<0.){
-             trafficSpeeds.erase(name);
-             it->second={ss,now};
+             trafficLateralSpeeds[name]=std::clamp((lat-trafficLastLat[name])/dt,-2.,2.);
+              trafficLastLat[name]=lat;it->second={ss,now};
+            }else if(dt>=2. || dt<0.){
+             trafficSpeeds.erase(name);trafficLateralSpeeds.erase(name);
+              trafficLastLat[name]=lat;it->second={ss,now};
            }
          }
          const auto speedIt=trafficSpeeds.find(name);
          const bool speedKnown=speedIt!=trafficSpeeds.end();
          const double measuredSpeed=speedKnown?speedIt->second:0.;
+          const auto latIt=trafficLateralSpeeds.find(name);
+          const double lateralVelocity=latIt!=trafficLateralSpeeds.end()?latIt->second:0.;
+          Car observed;observed.name=name;observed.entity=e;observed.s=team.s+relative;
+          observed.lat=lat;observed.v=measuredSpeed;observed.lateralVelocity=lateralVelocity;observed.speedKnown=speedKnown;
+          observedTraffic.push_back(observed);
+          if(std::abs(relative)>DEFENSE_RANGE)return true;
          if(passingActive && name==passTargetName){
            passTargetSeen=true;passTarget.name=name;passTarget.entity=e;
            passTarget.s=team.s+relative;passTarget.lat=lat;passTarget.v=measuredSpeed;
@@ -888,6 +925,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
            target->name=name;target->entity=e;
            target->s=team.s+relative;
            target->lat=lat;target->v=measuredSpeed;
+            target->lateralVelocity=lateralVelocity;target->speedKnown=speedKnown;
          }
          return true;
       });
@@ -952,7 +990,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  }
  bool collide(const Pos&a,const Pos&b)const {
   double dx=b.x-a.x,dy=b.y-a.y;
-  for(double yaw:{a.yaw,b.y}){
+  for(double yaw:{a.yaw,b.yaw}){
     for(int k=0;k<2;k++){
       double ux=k==0?cos(yaw):-sin(yaw),uy=k==0?sin(yaw):cos(yaw);
       auto r=[&](const Pos&p){double cs=cos(p.yaw),sn=sin(p.yaw);
@@ -1091,7 +1129,41 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   return std::max(0.,minimumMargin);
  }
- void change(double dest,double now){
+ // Defense forecast covers all nearby entrants and measured lateral motion.
+  bool defensePathSafe(double destination,double elapsed,double now,bool active,
+                       double desiredSpeed,double horizon)const{
+   if(forecast(destination,elapsed,now,active,desiredSpeed,horizon,true,DEFENSE_GAP)<0.)return false;
+   const double acc=desiredSpeed<team.v?-TEAM_DECEL:TEAM_ACCEL;
+   const double reach=std::abs(desiredSpeed-team.v)/std::abs(acc);
+   for(double t=0.;t<=horizon+.001;t+=.1){
+     Car candidate=team;
+     const double until=std::min(t,reach);
+     candidate.s+=std::max(0.,team.v*until+.5*acc*until*until+desiredSpeed*std::max(0.,t-until));
+     const double from=active?team.from:team.lat;
+     const double start=active?team.changeStart:now;
+     const double duration=active?team.changeDuration:DEFENSE_HORIZON;
+     candidate.lat=from+(destination-from)*ease((now+t-start)/duration);
+     if(std::abs(curve(candidate.s))>=SHARP_CURVE ||
+        std::abs(candidate.lat)>roadOffsetLimit(candidate.s))return false;
+     for(const auto&o:observedTraffic){
+       if(!o.speedKnown && std::abs(o.s-team.s)<DEFENSE_RANGE)return false;
+       if(!o.speedKnown)continue;
+       for(int lateral=0;lateral<2;++lateral){
+         for(int braking=0;braking<(o.s>=team.s?2:1);++braking){
+           Car sample=o;
+           const double stop=std::min(t,o.v/5.);
+           sample.s+=braking?o.v*stop-2.5*stop*stop:o.v*t;
+           if(lateral)sample.lat+=o.lateralVelocity*t;
+           const double limit=roadOffsetLimit(sample.s);
+           sample.lat=std::clamp(sample.lat,-limit,limit);
+           if(clearance(pose(candidate),pose(sample))<DEFENSE_GAP)return false;
+         }
+       }
+     }
+   }
+   return true;
+  }
+  void change(double dest,double now){
   team.from=team.lat;team.to=dest;team.changeStart=now;
   team.changeDuration=2.5;team.changing=true;
  }
@@ -1126,7 +1198,11 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  gz::math::Pose3d spawnPose;
  std::vector<std::pair<std::string,std::vector<Pt>>> maps;
  std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
- std::unordered_map<std::string,double> trafficSpeeds;
+ std::unordered_map<std::string,double> trafficSpeeds,trafficLastLat,trafficLateralSpeeds;
+  std::vector<Car> observedTraffic;
+  bool postPassDefense=false,defenseChanging=false;
+  std::string defenseTargetName;
+  double lastDefenseCheck=-1e6;
  bool leadSpeedKnown=false,passTargetSeen=false;
  Car passTarget;
  std::string passTargetName;
