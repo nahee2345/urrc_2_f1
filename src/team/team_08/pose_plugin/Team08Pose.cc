@@ -34,7 +34,7 @@ constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
 constexpr double SHARP_SPEED=5., MILD_SPEED=5.5;
-constexpr double MAX_TEAM_SPEED=10.;
+constexpr double MAX_TEAM_SPEED=8.5;
 constexpr double BASE_TEAM_SPEED=6.;
 constexpr double NORMAL_LANE_CHANGE_SPEED=BASE_TEAM_SPEED;
 double wrap(double a){return atan2(sin(a),cos(a));}
@@ -211,7 +211,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const bool initialStraightDone=!raceMode || team.s-teamStart>=5.0;
     if(initialStraightDone &&
        forecast(preferredLane,elapsed,now,false,
-                std::min(team.v+1.0,10.0),2.5,true)>=0.){
+                std::min(team.v+1.0,MAX_TEAM_SPEED),2.5,true)>=0.){
       change(preferredLane,now);joinPending=false;
       std::cout<<"[BATTLE] JOIN initial lane="<<initialLane
                <<" distance_from_grid_m="<<(team.s-teamStart)
@@ -250,7 +250,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     for(double dst:{team.lat,-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-lead.lat)<WID+.15)continue;
       if(dst!=team.lat && fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
+      for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
                                     mildAhead?CORNER_GAP:STRAIGHT_GAP);
@@ -337,7 +337,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
     return std::clamp(desired,0.,limit);
   };
-  // Three-lap race: normal pace 6m/s, safe passing may reach 10m/s.
+  // Three-lap race: normal pace 6m/s, safe passing may reach 8.5m/s.
   // A requested average is measured; it is not a hard speed controller.
   const double teamCruise=BASE_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
@@ -398,7 +398,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
     bool foundComfort=false;
-    for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
+    for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
       if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
@@ -493,11 +493,11 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
     // The emergency ceiling is not the normal 6m/s cruise target:
-    // collision-checked passes must still be able to reach 10m/s.
+    // collision-checked passes must still be able to reach 8.5m/s.
     speedCeiling=MAX_TEAM_SPEED;
     if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
-      for(double trial:{10.,9.5,9.,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
+      for(double trial:{8.5,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
         if(trial>vt+.01)continue;
         if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
@@ -545,7 +545,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const double risk=forecast(dst,elapsed,now,team.changing,vt,horizon,false);
     if((hasLead||hasRear)&&risk<0.){
       bool found=false;
-      for(double candidate:{10.,9.5,9.,8.,7.,6.,5.5,5.,4.,3.,2.,1.,0.}){
+      for(double candidate:{8.5,8.,7.,6.,5.5,5.,4.,3.,2.,1.,0.}){
         if(candidate>vt+.01)continue;
         if(forecast(dst,elapsed,now,team.changing,candidate,horizon,false)>=0.){
           raceSafeTarget=candidate;
@@ -1141,7 +1141,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=9.;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=MAX_TEAM_SPEED;
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
