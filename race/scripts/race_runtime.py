@@ -26,7 +26,10 @@ class PoseLapMonitor:
         self.timers = {eid:LapTimer(gates, cfg['max_pose_gap_seconds'], cfg['max_pose_step_m']) for eid in self.entries}
         self.audit = audit_path.open('w', buffering=1)
         self.audit.write(json.dumps({'type':'gates','gates':gates})+'\n')
-        self.node.create_subscription(Clock, '/clock', self.clock_cb, 100)
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+        clock_qos = QoSProfile(depth=100, reliability=ReliabilityPolicy.BEST_EFFORT,
+                               durability=DurabilityPolicy.VOLATILE)
+        self.node.create_subscription(Clock, '/clock', self.clock_cb, clock_qos)
         for eid in self.entries:
             self.node.create_subscription(TFMessage, f'/model/{eid}/urrc_timing',
                                           lambda msg, eid=eid:self.pose_cb(eid,msg), 200)
