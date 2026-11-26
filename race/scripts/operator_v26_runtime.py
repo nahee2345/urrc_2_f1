@@ -232,6 +232,69 @@ def monitored(base):
     return V26PoseMonitor
 
 
+def patch_invalid_race(source):
+    """Accept structurally equivalent local diagnostics, never auto-DNF on host failure."""
+    tree=ast.parse(source)
+    handlers=[n for n in ast.walk(tree) if isinstance(n,ast.ExceptHandler)
+              and n.col_offset==4 and isinstance(n.type,ast.Name)
+              and n.type.id=='BaseException']
+    if len(handlers)!=1:
+        raise RuntimeError('[v26] 전체 경기 무효 예외 처리 위치를 식별하지 못했습니다')
+    handler=handlers[0]
+
+    def named_call(node,name):
+        return isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id==name
+
+    def invalid_update(node):
+        if not isinstance(node,ast.Expr) or not isinstance(node.value,ast.Call):
+            return False
+        call=node.value
+        if not (isinstance(call.func,ast.Attribute) and call.func.attr=='update'
+                and isinstance(call.func.value,ast.Name) and call.func.value.id=='payload'):
+            return False
+        kw={k.arg:k.value for k in call.keywords}
+        return (isinstance(kw.get('valid'),ast.Constant) and kw['valid'].value is False
+                and isinstance(kw.get('state'),ast.Constant) and kw['state'].value=='invalid'
+                and isinstance(kw.get('error'),ast.Name) and kw['error'].id=='error_text'
+                and named_call(kw.get('results'),'rank_rows'))
+
+    updates=[n for n in handler.body if invalid_update(n)]
+    if len(updates)!=1:
+        raise RuntimeError('[v26] 전체 경기 무효 결과 갱신을 안전하게 식별하지 못했습니다')
+    update=updates[0]
+    legacy=[n for n in handler.body if isinstance(n,ast.If)
+            and isinstance(n.test,ast.Name) and n.test.id=='monitor'
+            and any(named_call(x,'record') for x in ast.walk(n))]
+    calls=[x for x in ast.walk(handler) if named_call(x,'record')]
+    if calls:
+        if (len(legacy)!=1 or len(calls)!=1 or legacy[0].end_lineno>=update.lineno
+                or not any(isinstance(x,ast.For) and ast.unparse(x.iter)=='list(active)'
+                           for x in ast.walk(legacy[0]))
+                or not any(x is calls[0] for x in ast.walk(legacy[0]))):
+            raise RuntimeError('[v26] 전체 경기 무효 중 DNF 기록 구조가 예상과 다릅니다')
+    elif legacy:
+        raise RuntimeError('[v26] 전체 경기 무효 DNF 구조 불일치')
+
+    # Retain the original exception, diagnostic logging, invalid save and raise.
+    # Remove only the legacy branch that creates individual DNF from host errors.
+    lines=source.splitlines(keepends=True)
+    replacement="""        # Host/Gazebo/clock/operator-stop failure invalidates the whole race.
+        unadjudicated=[e['entry_id'] for e in active
+                       if not any(row['entry_id']==e['entry_id'] for row in out)]
+        if unadjudicated:
+            print('[v26] 경기 무효 / 운영자 판정 필요: '+', '.join(unadjudicated),flush=True)
+        payload.update(valid=False,state='invalid',error=error_text,
+                       unadjudicated=unadjudicated,results=rank_rows(out))
+"""
+    lines[update.lineno-1:update.end_lineno]=[replacement]
+    if legacy:
+        node=legacy[0]
+        lines[node.lineno-1:node.end_lineno]=[]
+    result=''.join(lines)
+    ast.parse(result)
+    return result
+
+
 def adapt_run(source: str) -> str:
     """Source-level extension of race_manager.run_mode; strict compatibility guards."""
     source=once(source,
@@ -382,28 +445,7 @@ def adapt_run(source: str) -> str:
                     if reason is not None:completed.append((e,reason))
 ''',
         '수동·자동 DNF 판정')
-    source=once(source,
-'''        if monitor:
-            for entry in list(active):
-                if any(row['entry_id']==entry['entry_id'] for row in out):
-                    continue
-                try:
-                    record(entry,monitor.failure_reason(entry['entry_id'],error_text),
-                           1 if mode=='qualifying' else entries.index(entry)+1)
-                except Exception as record_error:
-                    print(f'[v13] DNF 기록 실패: {entry["entry_id"]}: {record_error}',flush=True)
-        payload.update(valid=False,state='invalid',error=error_text,results=rank_rows(out))
-''',
-'''        # Host/Gazebo/clock/operator-stop failure invalidates the whole race;
-        # it does NOT create individual automatic DNF for unadjudicated cars.
-        unadjudicated=[e['entry_id'] for e in active
-                       if not any(row['entry_id']==e['entry_id'] for row in out)]
-        if unadjudicated:
-            print('[v26] 경기 무효 / 운영자 판정 필요: '+', '.join(unadjudicated),flush=True)
-        payload.update(valid=False,state='invalid',error=error_text,
-                       unadjudicated=unadjudicated,results=rank_rows(out))
-''',
-        '전체 무효 기록 DNF 오인 방지')
+    source=patch_invalid_race(source)
     source=once(source,
 '''    finally:
         _v13_cleanup_errors=[]
