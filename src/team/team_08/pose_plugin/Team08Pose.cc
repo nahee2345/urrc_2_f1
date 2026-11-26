@@ -97,6 +97,19 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   const Pos previousTeam=pose(team), previousLead=pose(lead), previousRear=pose(rear);
   const std::array<double,3> previousS{{team.s,lead.s,rear.s}};
   refreshOpponents(ecm,now);
+  // Keep race-wide success for reporting, not as a lock on future passes.
+  // Track the named opponent even after it moves from lead to rear.
+  if(passingActive){
+    if(passTargetSeen && team.s-passTarget.s>LEN+STRAIGHT_TARGET){
+      passed=true;
+      ++completedPassCount;
+      std::cout<<"[BATTLE] OVERTAKE COMPLETED target="<<passTargetName
+               <<" count="<<completedPassCount<<std::endl;
+      passingActive=false;
+    }else if(!passTargetSeen){
+      passingActive=false;
+    }
+  }
    double frontGap=hasLead?gap(team.s,lead.s):1e6,rearGap=hasRear?gap(rear.s,team.s):1e6;
   double frontTTC=team.v>lead.v+.01?std::max(0.,frontGap-LEN)/(team.v-lead.v):1e6;
   // Count only an actual approaching car still behind us; a car that has
@@ -150,6 +163,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // projected travel range, even if the current speed cap is still high.
   const bool overtakeZone=!sharpAhead &&
     currentCurve<SHARP_CURVE;
+  // Proactive, repeatable passing, even when TTC is infinite at equal speed.
+  const bool frontPassRequested=hasLead && leadSpeedKnown && overtakeZone &&
+    frontGap>LEN && frontGap<=25. &&
+    curvatureSpeedLimit>lead.v+.5 &&
+    (!raceMode || team.s-teamStart>=5.0);
+  if(passingActive && !overtakeZone)passingActive=false;
   if(previousCurveMode!=lastLoggedCurveMode){
     lastLoggedCurveMode=previousCurveMode;
     std::cout<<"[BATTLE] CORNER_SPEED mode="
@@ -181,6 +200,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
       }else if(stay>0.0){
         change(team.lat,now);replanCount++;
       }
+      passingActive=false;
       emergencyBraking=true;
       std::cout<<"[BATTLE] HAZARD_REPLAN future="<<risk
                <<" stay="<<stay<<" back="<<back<<std::endl;
@@ -198,10 +218,10 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                <<" from_offset="<<team.lat
                <<" to_offset="<<preferredLane<<std::endl;
     }
-  }else if(now-changeFinishedAt<2.0){
+  }else if(now-changeFinishedAt<.5){
     // Hysteresis prevents immediate re-selection of the opposite lane.
   }else if(!overtakeZone && rearBehind && rearTTC<=5.0 && !defended &&
-            frontTTC>1.0 && !(frontGap<8. && !passed)){
+            frontTTC>1.0 && !(frontGap<8.)){
     // Handle rear pressure before an optional front overtake. Safest
     // defense is maintaining a corridor or speeding away, not cutting off
     // a vehicle already alongside.
@@ -220,52 +240,36 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                  <<" gap="<<rearGap<<" clearance="<<backClearance<<std::endl;
       }
     }
-  }else if(hasLead&&overtakeZone&&!passed &&
-            (!raceMode || team.s-teamStart>=5.0) &&
-            lead.s>team.s+LEN &&
-            frontGap>LEN+STRAIGHT_TARGET &&
-            frontGap<(raceMode && trackName=="monaco"?28.:20.) &&
-            (frontTTC<=3. || frontGap<5.0 ||
-             (raceMode && trackName=="monaco" &&
-              frontGap<28. && team.v>lead.v+.3 &&
-              (frontGap-LEN-STRAIGHT_TARGET)/
-                std::max(.3,team.v-lead.v)<4.5) ||
-             (frontGap<18. && curvatureSpeedLimit>lead.v+0.5 &&
-              team.s-teamStart<lap-25.))){
-    // Start looking before following at 5m. A 2.5s manoeuvre begun
-    // after the lead is already alongside is often too late on Monaco.
-    // Pre-position only if both opponents and the bend remain safe for
-    // the complete forecast; don't make a mandatory unsafe lane change.
-    double bestScore=-1e9,bestTarget=team.lat,bestSpeed=team.v;
+  }else if(frontPassRequested && !passingActive && now-lastPassPlan>=.2){
+    lastPassPlan=now;
     const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
-    for(double dst:{-lateralOffset,0.,lateralOffset}){
-      if(fabs(dst-team.lat)<.2*lateralOffset)continue;
+    double bestScore=-1e9,bestTarget=team.lat,bestSpeed=0.;
+    bool found=false;
+    // Existing clear corridor is also a valid passing path; otherwise
+    // evaluate the left, middle and right lanes before following.
+    for(double dst:{team.lat,-lateralOffset,0.,lateralOffset}){
+      if(fabs(dst-lead.lat)<WID+.15)continue;
+      if(dst!=team.lat && fabs(dst-team.lat)<.2*lateralOffset)continue;
       for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
-        // A lane change at or below the 9m/s leader is not an overtake.
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
                                     mildAhead?CORNER_GAP:STRAIGHT_GAP);
-        // Prefer a genuinely faster passing profile after it has passed
-        // the hard footprint checks; excessive clearance alone should not
-        // make a 10m/s plan outrank a safe 12m/s plan.
         const double utility=.25*std::min(score,1.5)-
-                             .10*fabs(dst-team.lat)+
-                             .50*(trial-lead.v);
+                             .10*fabs(dst-team.lat)+.50*(trial-lead.v);
         if(score>=0. && utility>bestScore){
-          bestScore=utility;bestTarget=dst;bestSpeed=trial;
+          found=true;bestScore=utility;bestTarget=dst;bestSpeed=trial;
         }
       }
     }
-    if(fabs(bestTarget-team.lat)>.2*lateralOffset){
-      change(bestTarget,now);attempted=true;attemptCount++;
+    if(found){
+      if(fabs(bestTarget-team.lat)>.2*lateralOffset)change(bestTarget,now);
+      attempted=true;++attemptCount;
       plannedPassSpeed=bestSpeed;
+      passTargetName=lead.name;passTarget=lead;passTargetSeen=true;
       passingActive=true;
-      std::cout<<"[BATTLE] OVERTAKE ATTEMPT TTC="<<frontTTC
-               <<"s lead_body_gap="<<clearance(pose(team),pose(lead))
-               <<" target_offset="<<bestTarget<<" speed="<<bestSpeed
-               <<" curve="<<upcomingCurve
-               <<" front_gap="<<frontGap
-               <<" lap_remaining="<<(lap-(team.s-teamStart))
+      std::cout<<"[BATTLE] OVERTAKE ATTEMPT target="<<passTargetName
+               <<" TTC="<<frontTTC<<" speed="<<bestSpeed
+               <<" target_offset="<<bestTarget<<" front_gap="<<frontGap
                <<" score="<<bestScore<<std::endl;
     }
   }
@@ -337,34 +341,14 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // A requested average is measured; it is not a hard speed controller.
   const double teamCruise=BASE_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
-  // A 9m/s lead and 9m/s TEAM11 create an infinite-TTC deadlock.
-  // Do not force unsafe speed through an overlapping lane. Instead allow
-  // short rolling-horizon acceleration only when projected body spacing
-  // remains compliant. Re-evaluate it on every simulation update.
+  // Merely detecting a front car must not force a lower cruise target
+  // if the actual path remains safe at normal speed.
+  if(frontPassRequested && !passingActive && !joinPending &&
+     forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,
+              std::min(BASE_TEAM_SPEED,curvatureSpeedLimit),2.5,true)>=0.)
+    vt=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
+  // Boost is reserved for a collision-checked passing plan.
   double passingSpeedWindow=0.;
-  const bool trackingLead=hasLead&&!passed && frontGap>LEN+STRAIGHT_GAP &&
-                          frontGap<7. && team.v<MAX_TEAM_SPEED;
-  if(trackingLead && overtakeZone && !team.changing && !joinPending){
-    const double currentBody=clearance(pose(team),pose(lead));
-    if(currentBody>STRAIGHT_GAP+.25){
-      // Continue checking at the current passing speed, not just while
-      // team speed is almost identical to the 9m/s lead car.
-      for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.}){
-        if(trial>curvatureSpeedLimit+.01 || trial<=lead.v+.5)continue;
-        if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
-                    STRAIGHT_GAP+.08)>=0.){
-          passingSpeedWindow=trial;
-          if(now-lastPassSpeedLog>3.0){
-            lastPassSpeedLog=now;
-            std::cout<<"[BATTLE] PASS_SPEED_WINDOW trial="<<trial
-                     <<" gap="<<frontGap
-                     <<" body="<<currentBody<<std::endl;
-          }
-          break;
-        }
-      }
-    }
-  }
   // Scripted rear driver anticipates a cornering car's pace well before
   // the physical 0.7m limit. Relative-speed braking at 2-3m was too late
   // on Monaco: 11m/s rear closed into a 9m/s corner-following TEAM11.
@@ -451,25 +435,24 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // Keep lane choice and speed together throughout a committed overtake.
   // Recheck the actual interpolated lane against both traffic vehicles
   // before lifting the normal leading-car following speed cap.
-  if(hasLead&&passingActive&&!passed){
+  if(passingActive && passTargetSeen && overtakeZone){
     const double trial=std::min(plannedPassSpeed,curvatureSpeedLimit);
     const double predicted=forecast(team.changing?team.to:team.lat,
-      elapsed,now,team.changing,trial,1.2,true,
+      elapsed,now,team.changing,trial,2.5,true,
       mildAhead?CORNER_GAP:STRAIGHT_GAP);
-    if(overtakeZone && trial>lead.v+.1 && predicted>=0.){
-      passingSpeedWindow=std::max(passingSpeedWindow,trial);
+    if(trial>passTarget.v+.5 && predicted>=0.){
+      passingSpeedWindow=trial;
       comfortSpeed=std::max(comfortSpeed,trial);
-    }else if(sharpAhead){
+    }else{
+      // Keep safety limits; allow another plan after the current lane change.
       passingActive=false;
-      std::cout<<"[BATTLE] OVERTAKE PAUSE sharp_corner speed_limit="
-               <<curvatureSpeedLimit<<std::endl;
     }
   }
   // The speed ceiling for approaching bends remains mandatory.
   comfortSpeed=std::min(comfortSpeed,curvatureSpeedLimit);
   // Record why a safe passing speed is not being selected, instead of
   // assuming that every no-overtake case is a lane-planner failure.
-  if(hasLead&&!passed&&!team.changing&&now-lastOvertakeDiagnostic>=5.0){
+  if(hasLead&&!team.changing&&now-lastOvertakeDiagnostic>=5.0){
     lastOvertakeDiagnostic=now;
     std::cout<<"[BATTLE] PASS_DIAGNOSTIC time="<<elapsed
              <<" team_v="<<team.v<<" lead_v="<<lead.v
@@ -528,7 +511,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
   }
   vt=std::min(vt,speedCeiling);
-  if(hasLead&&!passed&&now-lastSpeedDecisionLog>=3.0 &&
+  if(hasLead&&now-lastSpeedDecisionLog>=3.0 &&
      frontGap<7. && team.v<lead.v+2.0){
     lastSpeedDecisionLog=now;
     std::cout<<"[BATTLE] SPEED_DECISION t="<<elapsed
@@ -540,35 +523,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
              <<" team_changing="<<team.changing
              <<" front_gap="<<frontGap<<std::endl;
   }
-  // Phase 2 (Monaco only): sustain a safe, straight-line passing window.
-  // Phase 1 did not complete any pass despite 5-6 attempts. After a
-  // committed lane change ends, normal 6m/s cruise can be too slow to
-  // close on the 9m/s S-car. Never override curvature or braking caps.
-  // Use both vehicles in the footprint prediction, including the pursuer.
-  if(hasLead&&raceMode&&trackName=="monaco"&&!passed &&
-     !team.changing && !joinPending &&
-     now-changeFinishedAt>0.5 && overtakeZone &&
-     currentCurve<MILD_CURVE && sharpDistance>20. &&
-     curvatureSpeedLimit>=MAX_TEAM_SPEED &&
-     lead.s>team.s+LEN && lead.s-team.s<25. &&
-     MAX_TEAM_SPEED>lead.v+.5 &&
-     fabs(team.lat-lead.lat)>WID+.25 &&
-     clearance(pose(team),pose(lead))>STRAIGHT_GAP &&
-     forecast(team.lat,elapsed,now,false,MAX_TEAM_SPEED,1.5,true)>=0.){
-    const double prior=vt;
-    vt=std::max(vt,MAX_TEAM_SPEED);
-    if(vt>prior+.01 && now-lastMonacoPassLog>2.){
-      lastMonacoPassLog=now;
-      std::cout<<"[BATTLE] MONACO_PASS_ACCEL target="<<vt
-               <<" lead_gap="<<(lead.s-team.s)
-               <<" lateral_delta="<<fabs(team.lat-lead.lat)
-               <<" lead_v="<<lead.v<<std::endl;
-    }
-  }
-  // Monaco boost must never bypass the existing 1s emergency-braking cap.
-  vt=std::min(vt,speedCeiling);
-  // Normal corner exit returns to BASE_TEAM_SPEED; no independent boost.
-  // Preserve the emergency ceiling after the Monaco passing acceleration.
+  // All circuits use the same passing window; no independent Monaco boost.
   vt=std::min(vt,speedCeiling);
   // Braking for a pursuer behind would make a rear-end collision worse,
   // but only when the forward trajectory also remains clear.
@@ -647,12 +602,6 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                  <<" time="<<elapsed<<" team_speed="<<team.v<<std::endl;
       }else break;
     }
-  }
-  if(hasLead&&team.s>lead.s+LEN+targetGap&&!passed &&
-     fabs(team.lat-lead.lat)>WID+.12){
-    passed=true;passingActive=false;
-    std::cout<<"[BATTLE] OVERTAKE COMPLETED mode="
-             <<(attempted?"LANE_CHANGE":"CLEAR_LANE_ACCELERATION")<<std::endl;
   }
   Pos a=pose(team),b=pose(lead),c=pose(rear);
   // Look-ahead tangent is less sensitive to microscopic position noise
@@ -882,7 +831,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  void refreshOpponents(gz::sim::EntityComponentManager&ecm,double now){
    // Only actual spawned entrants count. The nearest front and rear car
    // are selected dynamically; the original two-car forecast remains intact.
-   hasLead=false;hasRear=false;
+   hasLead=false;hasRear=false;leadSpeedKnown=false;passTargetSeen=false;
    double closestFront=1e9,closestRear=1e9;
    ecm.Each<gz::sim::components::Model,gz::sim::components::Name,
             gz::sim::components::ParentEntity>(
@@ -899,18 +848,32 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
          if(!project(gz::sim::worldPose(e,ecm),ss,lat))return true;
          const double relative=std::remainder(ss-team.s,lap);
          if(std::abs(relative)>25.)return true;
-         double measuredSpeed=0.;
+         // Use a multi-tick sample interval. The 200 Hz controller used
+         // to overwrite the sample every tick, so dt>.01 rarely held.
          auto it=trafficHistory.find(name);
-         if(it!=trafficHistory.end()){
+         if(it==trafficHistory.end()){
+           trafficHistory[name]={ss,now};
+         }else{
            const double dt=now-it->second.second;
-           if(dt>.01&&dt<2.)
-             measuredSpeed=std::clamp(std::abs(std::remainder(
-                ss-it->second.first,lap))/dt,0.,30.);
+           if(dt>=.05 && dt<2.){
+             trafficSpeeds[name]=std::clamp(std::remainder(
+                ss-it->second.first,lap)/dt,0.,30.);
+             it->second={ss,now};
+           }else if(dt>=2. || dt<0.){
+             trafficSpeeds.erase(name);
+             it->second={ss,now};
+           }
          }
-         trafficHistory[name]={ss,now};
+         const auto speedIt=trafficSpeeds.find(name);
+         const bool speedKnown=speedIt!=trafficSpeeds.end();
+         const double measuredSpeed=speedKnown?speedIt->second:0.;
+         if(passingActive && name==passTargetName){
+           passTargetSeen=true;passTarget.name=name;passTarget.entity=e;
+           passTarget.s=team.s+relative;passTarget.lat=lat;passTarget.v=measuredSpeed;
+         }
          Car* target=nullptr;
          if(relative>=0. && relative<closestFront){
-           closestFront=relative;hasLead=true;target=&lead;
+           closestFront=relative;hasLead=true;leadSpeedKnown=speedKnown;target=&lead;
          }else if(relative<0. && -relative<closestRear){
            closestRear=-relative;hasRear=true;target=&rear;
          }
@@ -1156,6 +1119,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  gz::math::Pose3d spawnPose;
  std::vector<std::pair<std::string,std::vector<Pt>>> maps;
  std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
+ std::unordered_map<std::string,double> trafficSpeeds;
+ bool leadSpeedKnown=false,passTargetSeen=false;
+ Car passTarget;
+ std::string passTargetName;
+ double lastPassPlan=-1e6;
+ int completedPassCount=0;
  bool hasLead=false,hasRear=false,worldMismatchReported=false;
  double leadObservedAt=0,rearObservedAt=0;
  double lastTelemetryPublish=-1e9;
