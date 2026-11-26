@@ -34,7 +34,7 @@ constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
 constexpr double SHARP_SPEED=5., MILD_SPEED=5.5;
-constexpr double MAX_TEAM_SPEED=10.;
+constexpr double MAX_TEAM_SPEED=8.5;
 constexpr double BASE_TEAM_SPEED=6.;
 constexpr double NORMAL_LANE_CHANGE_SPEED=BASE_TEAM_SPEED;
 double wrap(double a){return atan2(sin(a),cos(a));}
@@ -191,7 +191,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const bool initialStraightDone=!raceMode || team.s-teamStart>=5.0;
     if(initialStraightDone &&
        forecast(preferredLane,elapsed,now,false,
-                std::min(team.v+1.0,10.0),2.5,true)>=0.){
+                std::min(team.v+1.0,MAX_TEAM_SPEED),2.5,true)>=0.){
       change(preferredLane,now);joinPending=false;
       std::cout<<"[BATTLE] JOIN initial lane="<<initialLane
                <<" distance_from_grid_m="<<(team.s-teamStart)
@@ -240,7 +240,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
     for(double dst:{-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
+      for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
         // A lane change at or below the 9m/s leader is not an overtake.
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
@@ -349,7 +349,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     if(currentBody>STRAIGHT_GAP+.25){
       // Continue checking at the current passing speed, not just while
       // team speed is almost identical to the 9m/s lead car.
-      for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.}){
+      for(double trial:{8.5,8.,7.5,7.,6.5,6.}){
         if(trial>curvatureSpeedLimit+.01 || trial<=lead.v+.5)continue;
         if(forecast(team.lat,elapsed,now,false,trial,1.0,false,
                     STRAIGHT_GAP+.08)>=0.){
@@ -414,7 +414,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
     bool foundComfort=false;
-    for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
+    for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
       if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
@@ -514,7 +514,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     speedCeiling=MAX_TEAM_SPEED;
     if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
-      for(double trial:{10.,9.5,9.,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
+      for(double trial:{8.5,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
         if(trial>vt+.01)continue;
         if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
@@ -1172,7 +1172,7 @@ class Team02Pose_02:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
  double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=9.;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=MAX_TEAM_SPEED;
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
