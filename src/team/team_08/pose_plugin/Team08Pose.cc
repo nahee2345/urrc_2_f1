@@ -38,8 +38,10 @@ constexpr double MAX_TEAM_SPEED=8.;
 constexpr double PASS_TEAM_SPEED=10.;
 constexpr double TEAM_ACCEL=5., TEAM_DECEL=2.;
 constexpr double BASE_TEAM_SPEED=5.5;
-constexpr double DEFENSE_RANGE=25., DEFENSE_HORIZON=2.5, DEFENSE_GAP=1.;
-constexpr double DEFENSE_REACTION=.5, DEFENSE_REPLAN_INTERVAL=.1;
+constexpr double DEFENSE_RANGE=35., DEFENSE_GAP=1.;
+constexpr double DEFENSE_SINGLE_TIME=1.5, DEFENSE_DOUBLE_TIME=2.0, DEFENSE_SETTLE=.4;
+constexpr double DEFENSE_REACTION=.9, DEFENSE_REPLAN_INTERVAL=.05;
+constexpr double DEFENSE_COOLDOWN=.2;
 constexpr double NORMAL_LANE_CHANGE_SPEED=BASE_TEAM_SPEED;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
@@ -120,7 +122,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   double frontTTC=team.v>lead.v+.01?std::max(0.,frontGap-LEN)/(team.v-lead.v):1e6;
   // Count only an actual approaching car still behind us; a car that has
   // passed must not wrap around the lap and appear to have TTC near zero.
-  const bool rearBehind=hasRear && rearGap>LEN && rearGap<25.;
+  const bool rearBehind=hasRear && rearGap>LEN && rearGap<=DEFENSE_RANGE;
   double rearTTC=rearBehind && rear.v>team.v+.01?
     std::max(0.,rearGap-LEN)/(rear.v-team.v):1e6;
   // Search the braking horizon for the FIRST bend, not only the
@@ -176,16 +178,22 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     (!raceMode || team.s-teamStart>=5.0);
   if(passingActive && !overtakeZone)passingActive=false;
    const double defenseSpeed=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
-   const bool defenseZone=!corner && sharpDistance>std::max(team.v,defenseSpeed)*DEFENSE_HORIZON+2.;
+   // Anticipate a lane change while the pursuer is still safely behind.
+   const double rearIntent=rear.lat+std::clamp(rear.lateralVelocity*DEFENSE_REACTION,-.32,.32);
+   const double nominalLane=std::clamp(std::round(rearIntent/std::max(.01,lateralOffset)),-1.,1.)*lateralOffset;
+   const double defenseDuration=std::abs(nominalLane-team.lat)>1.25*lateralOffset
+        ?DEFENSE_DOUBLE_TIME:DEFENSE_SINGLE_TIME;
+   const double remainingDefense=team.changing && defenseChanging
+        ?std::max(.1,team.changeStart+team.changeDuration-now):defenseDuration;
+   const double defenseDistance=std::max(team.v,defenseSpeed)*remainingDefense+2.;
+   const bool defenseZone=!corner && sharpDistance>defenseDistance;
    const bool defenseEligible=postPassDefense && !passingActive && !joinPending &&
        defenseZone && rearBehind && rear.speedKnown && rearGap<=DEFENSE_RANGE &&
        rearGap>=LEN+DEFENSE_GAP && frontTTC>2.;
-   const double defenseRoadLimit=roadOffsetLimitAhead(team.s,std::max(team.v,defenseSpeed)*DEFENSE_HORIZON+2.);
-   const double rearIntent=rear.lat+std::clamp(rear.lateralVelocity*DEFENSE_REACTION,-.20,.20);
-   const double defenseLane=std::clamp(std::clamp(std::round(rearIntent/std::max(.01,lateralOffset)),-1.,1.)*lateralOffset,
-                                      -defenseRoadLimit,defenseRoadLimit);
-   const bool defenseNeedsChange=std::abs(defenseLane-team.lat)>.25*lateralOffset &&
-       std::abs(rearIntent-defenseLane)+.10<std::abs(rearIntent-team.lat);
+   const double defenseRoadLimit=roadOffsetLimitAhead(team.s,defenseDistance);
+   const double defenseLane=std::clamp(nominalLane,-defenseRoadLimit,defenseRoadLimit);
+   const bool defenseNeedsChange=std::abs(defenseLane-team.lat)>.20*lateralOffset &&
+       std::abs(rearIntent-defenseLane)+.06<std::abs(rearIntent-team.lat);
   if(previousCurveMode!=lastLoggedCurveMode){
     lastLoggedCurveMode=previousCurveMode;
     std::cout<<"[BATTLE] CORNER_SPEED mode="
@@ -209,7 +217,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
      if(!defenseZone || !hasRear || rear.name!=defenseTargetName ||
         (now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL &&
          !defensePathSafe(team.to,elapsed,now,true,defenseSpeed,
-                          std::max(.1,team.changeStart+team.changeDuration-now)))){
+                          std::max(.1,team.changeStart+team.changeDuration-now)+DEFENSE_SETTLE,
+                          team.changeDuration))){
        change(team.lat,now);team.changing=false;defenseChanging=false;
        changeFinishedAt=now;defenseOutcome="SAFE_ABORT";
        std::cout<<"[BATTLE] DEFENSE ABORT rear="<<defenseTargetName<<" sharp="<<!defenseZone<<std::endl;
@@ -245,19 +254,19 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                <<" from_offset="<<team.lat
                <<" to_offset="<<preferredLane<<std::endl;
     }
-  }else if(now-changeFinishedAt<.5){
+  }else if(now-changeFinishedAt<(defenseEligible?DEFENSE_COOLDOWN:.5)){
     // Hysteresis prevents immediate re-selection of the opposite lane.
   }else if(defenseEligible && defenseNeedsChange &&
              now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL){
      lastDefenseCheck=now;
-     if(defensePathSafe(defenseLane,elapsed,now,false,defenseSpeed,DEFENSE_HORIZON)){
-       change(defenseLane,now);defenseChanging=true;defenseTargetName=rear.name;
+     if(defensePathSafe(defenseLane,elapsed,now,false,defenseSpeed,defenseDuration+DEFENSE_SETTLE,defenseDuration)){
+       change(defenseLane,now,defenseDuration);defenseChanging=true;defenseTargetName=rear.name;
        if(!defenseOpportunity){defenseOpportunity=true;defenseStart=now;}
        defenseOutcome="HOLDING";
        std::cout<<"[BATTLE] DEFENSE MATCH_LANE rear="<<rear.name
                 <<" rear_lat="<<rear.lat<<" rear_vlat="<<rear.lateralVelocity
                 <<" target="<<defenseLane<<" gap="<<rearGap
-                <<" speed_target="<<defenseSpeed
+                <<" speed_target="<<defenseSpeed<<" duration="<<defenseDuration
                 <<" curve="<<(currentCurve>=MILD_CURVE?"MILD":"STRAIGHT")<<std::endl;
      }else if(now-lastDefenseLog>1.){
        lastDefenseLog=now;defenseOutcome="SAFE_ABORT";
@@ -1058,7 +1067,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  // Nonnegative score means every predicted body-to-body clearance meets
  // its required limit. Never use centre separation as a substitute:
  // safe lateral passes may have short centre distances.
- double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.,double plannedDuration=2.5)const{
   double minimumMargin=1e6;
   Pos lastP=pose(team);
   double lastHeading=lastP.yaw;
@@ -1076,7 +1085,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     candidate.s+=std::max(0.,distance);
     const double from=active?team.from:team.lat;
     const double start=active?team.changeStart:now;
-    const double duration=active?team.changeDuration:2.5;
+    const double duration=active?team.changeDuration:plannedDuration;
     candidate.lat=from+(destination-from)*ease((now+t-start)/duration);
     if(raceMode &&
        fabs(candidate.lat)>roadOffsetLimit(candidate.s)+.01)return -3.;
@@ -1131,8 +1140,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  }
  // Defense forecast covers all nearby entrants and measured lateral motion.
   bool defensePathSafe(double destination,double elapsed,double now,bool active,
-                       double desiredSpeed,double horizon)const{
-   if(forecast(destination,elapsed,now,active,desiredSpeed,horizon,true,DEFENSE_GAP)<0.)return false;
+                       double desiredSpeed,double horizon,double plannedDuration)const{
+   if(forecast(destination,elapsed,now,active,desiredSpeed,horizon,true,DEFENSE_GAP,plannedDuration)<0.)return false;
    const double acc=desiredSpeed<team.v?-TEAM_DECEL:TEAM_ACCEL;
    const double reach=std::abs(desiredSpeed-team.v)/std::abs(acc);
    for(double t=0.;t<=horizon+.001;t+=.1){
@@ -1141,7 +1150,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
      candidate.s+=std::max(0.,team.v*until+.5*acc*until*until+desiredSpeed*std::max(0.,t-until));
      const double from=active?team.from:team.lat;
      const double start=active?team.changeStart:now;
-     const double duration=active?team.changeDuration:DEFENSE_HORIZON;
+     const double duration=active?team.changeDuration:plannedDuration;
      candidate.lat=from+(destination-from)*ease((now+t-start)/duration);
      if(std::abs(curve(candidate.s))>=SHARP_CURVE ||
         std::abs(candidate.lat)>roadOffsetLimit(candidate.s))return false;
@@ -1163,9 +1172,9 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    }
    return true;
   }
-  void change(double dest,double now){
+  void change(double dest,double now,double duration=2.5){
   team.from=team.lat;team.to=dest;team.changeStart=now;
-  team.changeDuration=2.5;team.changing=true;
+  team.changeDuration=duration;team.changing=true;
  }
  void finish(const char*result){
   report.flush();
