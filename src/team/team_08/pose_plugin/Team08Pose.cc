@@ -110,6 +110,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     if(passTargetSeen && team.s-passTarget.s>LEN+STRAIGHT_TARGET){
       passed=true;
        postPassDefense=true;
+       mergePending=true;mergeTargetName=passTargetName;
       ++completedPassCount;
       std::cout<<"[BATTLE] OVERTAKE COMPLETED target="<<passTargetName
                <<" count="<<completedPassCount<<std::endl;
@@ -178,8 +179,19 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     (!raceMode || team.s-teamStart>=5.0);
   if(passingActive && !overtakeZone)passingActive=false;
    const double defenseSpeed=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
-   // Anticipate a lane change while the pursuer is still safely behind.
-   const double rearIntent=rear.lat+std::clamp(rear.lateralVelocity*DEFENSE_REACTION,-.32,.32);
+   // First merge in front of the named overtaken car, then follow nearest rear.
+   const Car* defenseCar=hasRear?&rear:nullptr;
+   if(mergePending){
+     const Car* target=nullptr;
+     for(const auto& observed:observedTraffic)
+       if(observed.name==mergeTargetName){target=&observed;break;}
+     if(target && target->s<team.s && team.s-target->s<=DEFENSE_RANGE)
+       defenseCar=target;
+     else {mergePending=false;mergeTargetName.clear();}
+   }
+   const double mergeGap=defenseCar?team.s-defenseCar->s:1e6;
+   const double rearIntent=defenseCar?defenseCar->lat+
+       std::clamp(defenseCar->lateralVelocity*DEFENSE_REACTION,-.32,.32):team.lat;
    const double nominalLane=std::clamp(std::round(rearIntent/std::max(.01,lateralOffset)),-1.,1.)*lateralOffset;
    const double defenseDuration=std::abs(nominalLane-team.lat)>1.25*lateralOffset
         ?DEFENSE_DOUBLE_TIME:DEFENSE_SINGLE_TIME;
@@ -188,12 +200,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    const double defenseDistance=std::max(team.v,defenseSpeed)*remainingDefense+2.;
    const bool defenseZone=!corner && sharpDistance>defenseDistance;
    const bool defenseEligible=postPassDefense && !passingActive && !joinPending &&
-       defenseZone && rearBehind && rear.speedKnown && rearGap<=DEFENSE_RANGE &&
-       rearGap>=LEN+DEFENSE_GAP && frontTTC>2.;
+       defenseZone && defenseCar && defenseCar->speedKnown &&
+       mergeGap<=DEFENSE_RANGE && mergeGap>=LEN+DEFENSE_GAP && frontTTC>2.;
    const double defenseRoadLimit=roadOffsetLimitAhead(team.s,defenseDistance);
    const double defenseLane=std::clamp(nominalLane,-defenseRoadLimit,defenseRoadLimit);
    const bool defenseNeedsChange=std::abs(defenseLane-team.lat)>.20*lateralOffset &&
-       std::abs(rearIntent-defenseLane)+.06<std::abs(rearIntent-team.lat);
+       (mergePending || std::abs(rearIntent-defenseLane)+.06<std::abs(rearIntent-team.lat));
   if(previousCurveMode!=lastLoggedCurveMode){
     lastLoggedCurveMode=previousCurveMode;
     std::cout<<"[BATTLE] CORNER_SPEED mode="
@@ -214,7 +226,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // footprint collision* is detected. Negative clearance by itself is not
   // a collision and must not create oscillating replan requests.
   if(team.changing && defenseChanging){
-     if(!defenseZone || !hasRear || rear.name!=defenseTargetName ||
+     if(!defenseZone || !defenseCar || defenseCar->name!=defenseTargetName ||
         (now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL &&
          !defensePathSafe(team.to,elapsed,now,true,defenseSpeed,
                           std::max(.1,team.changeStart+team.changeDuration-now)+DEFENSE_SETTLE,
@@ -254,31 +266,35 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                <<" from_offset="<<team.lat
                <<" to_offset="<<preferredLane<<std::endl;
     }
-  }else if(now-changeFinishedAt<(defenseEligible?DEFENSE_COOLDOWN:.5)){
+  }else if(now-changeFinishedAt<(mergePending?0.:(defenseEligible?DEFENSE_COOLDOWN:.5))){
     // Hysteresis prevents immediate re-selection of the opposite lane.
   }else if(defenseEligible && defenseNeedsChange &&
              now-lastDefenseCheck>=DEFENSE_REPLAN_INTERVAL){
      lastDefenseCheck=now;
      if(defensePathSafe(defenseLane,elapsed,now,false,defenseSpeed,defenseDuration+DEFENSE_SETTLE,defenseDuration)){
-       change(defenseLane,now,defenseDuration);defenseChanging=true;defenseTargetName=rear.name;
+       change(defenseLane,now,defenseDuration);defenseChanging=true;defenseTargetName=defenseCar->name;
        if(!defenseOpportunity){defenseOpportunity=true;defenseStart=now;}
        defenseOutcome="HOLDING";
-       std::cout<<"[BATTLE] DEFENSE MATCH_LANE rear="<<rear.name
-                <<" rear_lat="<<rear.lat<<" rear_vlat="<<rear.lateralVelocity
-                <<" target="<<defenseLane<<" gap="<<rearGap
+       std::cout<<"[BATTLE] "<<(mergePending?"PASS_MERGE_START":"DEFENSE MATCH_LANE")<<" rear="<<defenseCar->name
+                <<" rear_lat="<<defenseCar->lat<<" rear_vlat="<<defenseCar->lateralVelocity
+                <<" target="<<defenseLane<<" gap="<<mergeGap
                 <<" speed_target="<<defenseSpeed<<" duration="<<defenseDuration
                 <<" curve="<<(currentCurve>=MILD_CURVE?"MILD":"STRAIGHT")<<std::endl;
      }else if(now-lastDefenseLog>1.){
        lastDefenseLog=now;defenseOutcome="SAFE_ABORT";
-       std::cout<<"[BATTLE] DEFENSE BLOCK_REJECTED rear="<<rear.name<<" gap="<<rearGap<<std::endl;
+       std::cout<<"[BATTLE] DEFENSE BLOCK_REJECTED rear="<<defenseCar->name<<" gap="<<mergeGap<<std::endl;
      }
    }else if(defenseEligible && !defenseNeedsChange && !(hasLead && frontGap<8.)){
+     if(mergePending && defensePathSafe(team.lat,elapsed,now,false,defenseSpeed,DEFENSE_SINGLE_TIME+DEFENSE_SETTLE,DEFENSE_SINGLE_TIME)){
+       mergePending=false;std::cout<<"[BATTLE] PASS_MERGE_COMPLETE target="<<mergeTargetName<<std::endl;
+       mergeTargetName.clear();
+     }
      if(now-lastDefenseLog>2.){
        lastDefenseLog=now;
        std::cout<<"[BATTLE] DEFENSE HOLD_LANE rear="<<rear.name
                 <<" target="<<team.lat<<" speed_target="<<defenseSpeed<<std::endl;
      }
-   }else if(frontPassRequested && !passingActive && now-lastPassPlan>=.2){
+   }else if(frontPassRequested && !passingActive && !mergePending && now-lastPassPlan>=.2){
     lastPassPlan=now;
     const double passingLimit=std::min(PASS_TEAM_SPEED,curvatureSpeedLimit);
     double bestScore=-1e9,bestTarget=team.lat,bestSpeed=0.;
@@ -330,7 +346,15 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   if(team.changing){
    const double t=(now-team.changeStart)/team.changeDuration;
    team.lat=team.from+(team.to-team.from)*ease(t);
-   if(t>=1){team.lat=team.to;team.changing=false;defenseChanging=false;changeFinishedAt=now;}
+   if(t>=1){
+      team.lat=team.to;team.changing=false;changeFinishedAt=now;
+      if(defenseChanging && mergePending && defenseTargetName==mergeTargetName){
+        mergePending=false;
+        std::cout<<"[BATTLE] PASS_MERGE_COMPLETE target="<<mergeTargetName<<std::endl;
+        mergeTargetName.clear();
+      }
+      defenseChanging=false;
+    }
   }
   if(raceMode){
     // Restrict lateral travel using the smallest road width over the
@@ -387,6 +411,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     vt=std::min(BASE_TEAM_SPEED,curvatureSpeedLimit);
   // Boost is reserved for a collision-checked passing plan.
   double passingSpeedWindow=0.;
+   bool mergeClearanceBoost=false;
   // Scripted rear driver anticipates a cornering car's pace well before
   // the physical 0.7m limit. Relative-speed braking at 2-3m was too late
   // on Monaco: 11m/s rear closed into a 9m/s corner-following TEAM11.
@@ -509,6 +534,14 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // through a collision-checked 1s speed window, never unconditionally.
   if(passingSpeedWindow>0. && comfortSpeed>=passingSpeedWindow)
     vt=std::max(vt,passingSpeedWindow);
+   // Build enough return clearance before settling to steady defensive pace.
+   if(mergePending && !defenseChanging && !team.changing && defenseZone && defenseCar &&
+      defenseCar->speedKnown && mergeGap>LEN && mergeGap<DEFENSE_RANGE){
+     const double trial=std::min(PASS_TEAM_SPEED,curvatureSpeedLimit);
+     if(trial>BASE_TEAM_SPEED && forecast(team.lat,elapsed,now,false,trial,2.5,true)>=0.){
+       vt=std::max(vt,trial);mergeClearanceBoost=true;
+     }
+   }
   vt=std::min(vt,curvatureSpeedLimit);
   // Ordinary lane joins are capped at the base speed. A committed pass
   // may use its planned speed only after validating the actual changing
@@ -572,7 +605,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     vt=std::max(vt,std::min(curvatureSpeedLimit,team.v+0.5));
   vt=std::min(vt,curvatureSpeedLimit);
    // Maintain base pace after passing; collision protection can reduce it.
-   if(postPassDefense && !passingActive)vt=std::min(vt,BASE_TEAM_SPEED);
+   if(postPassDefense && !passingActive && !mergeClearanceBoost)vt=std::min(vt,BASE_TEAM_SPEED);
    if(raceMode && now-lastRaceHazardCheck>=.1){
     lastRaceHazardCheck=now;
     // The old emergency check only looked one second ahead and could
@@ -614,8 +647,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   }
   if(raceMode)vt=std::min(vt,raceSafeTarget);
    // Only a currently collision-checked pass may request the higher ceiling.
-   const double activeCap=(passingActive && passTargetSeen && overtakeZone &&
-                           passingSpeedWindow>0. && (!team.changing || vt>NORMAL_LANE_CHANGE_SPEED))
+   const double activeCap=(mergeClearanceBoost || (passingActive && passTargetSeen && overtakeZone &&
+                           passingSpeedWindow>0. && (!team.changing || vt>NORMAL_LANE_CHANGE_SPEED)))
                           ?PASS_TEAM_SPEED:MAX_TEAM_SPEED;
    vt=std::min(vt,std::min(activeCap,speedCeiling));
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
@@ -1209,7 +1242,8 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  std::unordered_map<std::string,std::pair<double,double>> trafficHistory;
  std::unordered_map<std::string,double> trafficSpeeds,trafficLastLat,trafficLateralSpeeds;
   std::vector<Car> observedTraffic;
-  bool postPassDefense=false,defenseChanging=false;
+  bool postPassDefense=false,defenseChanging=false,mergePending=false;
+  std::string mergeTargetName;
   std::string defenseTargetName;
   double lastDefenseCheck=-1e6;
  bool leadSpeedKnown=false,passTargetSeen=false;
