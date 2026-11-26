@@ -34,8 +34,10 @@ constexpr double EARLY_HORIZON=2.5;
 constexpr double CLEARANCE_EPS=1e-4;
 constexpr double MILD_CURVE=.08, SHARP_CURVE=.18;
 constexpr double SHARP_SPEED=5., MILD_SPEED=5.5;
-constexpr double MAX_TEAM_SPEED=8.5;
-constexpr double BASE_TEAM_SPEED=6.;
+constexpr double MAX_TEAM_SPEED=8.;
+constexpr double PASS_TEAM_SPEED=10.;
+constexpr double TEAM_ACCEL=5., TEAM_DECEL=2.;
+constexpr double BASE_TEAM_SPEED=5.5;
 constexpr double NORMAL_LANE_CHANGE_SPEED=BASE_TEAM_SPEED;
 double wrap(double a){return atan2(sin(a),cos(a));}
 double ease(double t){t=std::clamp(t,0.,1.);return t*t*t*(10+t*(-15+6*t));}
@@ -119,11 +121,11 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     std::max(0.,rearGap-LEN)/(rear.v-team.v):1e6;
   // Search the braking horizon for the FIRST bend, not only the
   // largest curve. A distant hairpin must not force 7m/s immediately.
-  // With maximum replay deceleration of 5m/s^2, v^2 <= v_bend^2+2*a*d.
-  const double stoppingLookahead=std::max(16.0,team.v*team.v/10.0+8.0);
+  // With maximum TEAM08 deceleration of 2m/s^2, v^2 <= v_bend^2+2*a*d.
+  const double stoppingLookahead=std::max(16.0,std::max(team.v, PASS_TEAM_SPEED)*std::max(team.v, PASS_TEAM_SPEED)/(2.*TEAM_DECEL)+8.0);
   const double currentCurve=fabs(curve(team.s));
   double upcomingCurve=currentCurve;
-  double curveSpeedRaw=MAX_TEAM_SPEED;
+  double curveSpeedRaw=PASS_TEAM_SPEED;
   const double sharpTarget=SHARP_SPEED;
   const double mildTarget=MILD_SPEED;
   double sharpDistance=1e6,mildDistance=1e6;
@@ -134,12 +136,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
       sharpDistance=std::min(sharpDistance,d);
       const double available=std::max(0.,d-1.5);
       curveSpeedRaw=std::min(curveSpeedRaw,
-        std::sqrt(sharpTarget*sharpTarget+10.*available));
+        std::sqrt(sharpTarget*sharpTarget+2.*TEAM_DECEL*available));
     }else if(k>=MILD_CURVE){
       mildDistance=std::min(mildDistance,d);
       const double available=std::max(0.,d-1.);
       curveSpeedRaw=std::min(curveSpeedRaw,
-        std::sqrt(mildTarget*mildTarget+10.*available));
+        std::sqrt(mildTarget*mildTarget+2.*TEAM_DECEL*available));
     }
   }
   // Hold classification for a short period at the transition to prevent
@@ -158,7 +160,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   const bool corner=currentCurve>=SHARP_CURVE;
   if(raceMode && trackName=="monaco" && corner)
     lastMonacoSharpAt=now;
-  const double curvatureSpeedLimit=std::clamp(curveSpeedRaw,3.,MAX_TEAM_SPEED);
+  const double curvatureSpeedLimit=std::clamp(curveSpeedRaw,3.,PASS_TEAM_SPEED);
   // Starting a 2.5s overtake is unsafe if a sharp bend is within its
   // projected travel range, even if the current speed cap is still high.
   const bool overtakeZone=!sharpAhead &&
@@ -242,7 +244,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
   }else if(frontPassRequested && !passingActive && now-lastPassPlan>=.2){
     lastPassPlan=now;
-    const double passingLimit=std::min(MAX_TEAM_SPEED,curvatureSpeedLimit);
+    const double passingLimit=std::min(PASS_TEAM_SPEED,curvatureSpeedLimit);
     double bestScore=-1e9,bestTarget=team.lat,bestSpeed=0.;
     bool found=false;
     // Existing clear corridor is also a valid passing path; otherwise
@@ -250,7 +252,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     for(double dst:{team.lat,-lateralOffset,0.,lateralOffset}){
       if(fabs(dst-lead.lat)<WID+.15)continue;
       if(dst!=team.lat && fabs(dst-team.lat)<.2*lateralOffset)continue;
-      for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
+      for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.}){
         if(trial<=lead.v+.5 || trial>passingLimit+.01)continue;
         const double score=forecast(dst,elapsed,now,false,trial,3.0,true,
                                     mildAhead?CORNER_GAP:STRAIGHT_GAP);
@@ -337,7 +339,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     }
     return std::clamp(desired,0.,limit);
   };
-  // Three-lap race: normal pace 6m/s, safe passing may reach 8.5m/s.
+  // Three-lap race: normal pace 5.5m/s, normal cap 8m/s, safe passing may reach 10m/s.
   // A requested average is measured; it is not a hard speed controller.
   const double teamCruise=BASE_TEAM_SPEED;
   double vt=cruise(team,teamCruise),vl=cruise(lead,9),vr=cruise(rear,rearCruise);
@@ -398,7 +400,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     lastComfortForecast=now;
     comfortSpeed=teamCruise;
     bool foundComfort=false;
-    for(double trial:{8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
+    for(double trial:{10.,9.5,9.,8.5,8.,7.5,7.,6.5,6.,5.5,5.,4.,3.}){
       if(trial>curvatureSpeedLimit+.01 || trial>vt+.25)continue;
       const double safe=forecast(team.changing?team.to:team.lat,
         elapsed,now,team.changing,trial,EARLY_HORIZON,false,
@@ -472,7 +474,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   if(passingSpeedWindow>0. && comfortSpeed>=passingSpeedWindow)
     vt=std::max(vt,passingSpeedWindow);
   vt=std::min(vt,curvatureSpeedLimit);
-  // Ordinary lane joins are capped at 6m/s. A committed pass
+  // Ordinary lane joins are capped at the base speed. A committed pass
   // may use its planned speed only after validating the actual changing
   // path against BOTH predicted opponent trajectories.
   if(team.changing){
@@ -492,12 +494,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   // Restrict strong braking to hazards predicted inside one second.
   if(now-lastSpeedForecast>=.1){
     lastSpeedForecast=now;
-    // The emergency ceiling is not the normal 6m/s cruise target:
-    // collision-checked passes must still be able to reach 8.5m/s.
-    speedCeiling=MAX_TEAM_SPEED;
+    // The emergency ceiling is not the normal cruise target:
+    // collision-checked passes must still be able to reach 10m/s.
+    speedCeiling=PASS_TEAM_SPEED;
     if((hasLead||hasRear)&&forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,team.v,1.,false)<0.){
       speedCeiling=0.;
-      for(double trial:{8.5,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
+      for(double trial:{10.,9.5,9.,8.5,8.,7.,6.,5.5,5.,4.,3.,1.,0.}){
         if(trial>vt+.01)continue;
         if(forecast(team.changing?team.to:team.lat,elapsed,now,team.changing,trial,1.,false)>=0.){
           speedCeiling=trial;break;
@@ -538,14 +540,14 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     // The old emergency check only looked one second ahead and could
     // return speed=0 when the lead car was already beside TEAM11.
     // Check a longer window while braking is still physically possible.
-    const double horizon=2.5;
+    const double horizon=std::max(2.5,std::max(team.v,vt)/TEAM_DECEL+.5);
     const double dst=team.changing?team.to:team.lat;
     // Forward collision speed planning must not include an overtaken car.
     // Rear and side vehicles remain checked in lane-change forecasts.
     const double risk=forecast(dst,elapsed,now,team.changing,vt,horizon,false);
     if((hasLead||hasRear)&&risk<0.){
       bool found=false;
-      for(double candidate:{8.5,8.,7.,6.,5.5,5.,4.,3.,2.,1.,0.}){
+      for(double candidate:{10.,9.5,9.,8.5,8.,7.,6.,5.5,5.,4.,3.,2.,1.,0.}){
         if(candidate>vt+.01)continue;
         if(forecast(dst,elapsed,now,team.changing,candidate,horizon,false)>=0.){
           raceSafeTarget=candidate;
@@ -557,7 +559,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
         const bool actualFrontCar=hasLead&&lead.s>=team.s-LEN*.5;
         // A zero-speed target is reserved for a genuine forward hazard.
         // If an S-car has already been passed, do not create a rear impact.
-        raceSafeTarget=actualFrontCar?0.:MAX_TEAM_SPEED;
+        raceSafeTarget=actualFrontCar?0.:PASS_TEAM_SPEED;
       }
       if(now-lastRaceHazardLog>2.){
         lastRaceHazardLog=now;
@@ -569,10 +571,15 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
                  <<std::endl;
       }
     }else{
-      raceSafeTarget=MAX_TEAM_SPEED;
+      raceSafeTarget=PASS_TEAM_SPEED;
     }
   }
   if(raceMode)vt=std::min(vt,raceSafeTarget);
+   // Only a currently collision-checked pass may request the higher ceiling.
+   const double activeCap=(passingActive && passTargetSeen && overtakeZone &&
+                           passingSpeedWindow>0. && (!team.changing || vt>NORMAL_LANE_CHANGE_SPEED))
+                          ?PASS_TEAM_SPEED:MAX_TEAM_SPEED;
+   vt=std::min(vt,std::min(activeCap,speedCeiling));
   if(!team.changing && frontTTC>1. && !joinPending)emergencyBraking=false;
   if((vl<8.9||vr<rearCruise-.1)&&elapsed-lastBrake>1.5){
     lastBrake=elapsed;braked=true;
@@ -581,10 +588,10 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
   auto update=[dt](Car &a,double desired){
     // Smoothed speed transitions: integrate trapezoidally over real dt.
     const double before=a.v;
-    a.v+=std::clamp(desired-a.v,-5.0*dt,3.0*dt);
+    a.v+=std::clamp(desired-a.v,-TEAM_DECEL*dt,TEAM_ACCEL*dt);
     a.s+=(before+a.v)*.5*dt;
   };
-  update(team,std::clamp(vt,0.,MAX_TEAM_SPEED));
+  update(team,std::clamp(vt,0.,activeCap));
   if(raceMode){
     // Reapply envelope after longitudinal motion, using next-lap geometry.
     team.lat=std::clamp(team.lat,-roadOffsetLimit(team.s),roadOffsetLimit(team.s));
@@ -1021,9 +1028,9 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
     const double t=i*.1;
     Car candidate=team;
     const double vmax=desiredSpeed<0?std::max(0.,team.v):desiredSpeed;
-    // Match the real replay controller: +3 / -5m/s^2. An
+    // Match the real TEAM08 controller: +5 / -2m/s^2. An
     // unrealistically fast predicted brake gives false safety clearance.
-    const double acc=vmax<team.v?-5.:3.;
+    const double acc=vmax<team.v?-TEAM_DECEL:TEAM_ACCEL;
     const double reach=fabs(vmax-team.v)/fabs(acc);
     const double until=std::min(t,reach);
     const double distance=team.v*until+.5*acc*until*until+
@@ -1136,12 +1143,12 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  bool raceMode=false;
  double peakTeam=0.,peakLead=0.,peakRear=0.,minWallMargin=1e9,lastElapsed=0.;
  double lastCloseWarningLog=-1e6,lastWallCorrectionLog=-1e6,lastWallWarningLog=-1e6;
- double lastRaceHazardCheck=-1e6,lastRaceHazardLog=-1e6,raceSafeTarget=MAX_TEAM_SPEED;
+ double lastRaceHazardCheck=-1e6,lastRaceHazardLog=-1e6,raceSafeTarget=PASS_TEAM_SPEED;
  long long closeWarningCount=0,wallWarningCount=0;
  double previousRearTTC=1e6,minRearTTC=1e6,minimumCenter=1e9,minimumClearance=1e9,preferredLane=0.;
  double lastReplan=-1e6,changeFinishedAt=-1e6,defenseStart=-1e6;
- double lastComfortForecast=-1e6,comfortSpeed=MAX_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
- double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=MAX_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=MAX_TEAM_SPEED;
+ double lastComfortForecast=-1e6,comfortSpeed=PASS_TEAM_SPEED,lastPracticeYield=-1e6,lastOvertakeDiagnostic=-1e6,lastPassSpeedLog=-1e6,lastSpeedDecisionLog=-1e6,lastPassMotionLog=-1e6;
+ double lastSpeedForecast=-1e6,lastSpeedLog=-1e6,lastDefenseLog=-1e6,speedCeiling=PASS_TEAM_SPEED,rearCruise=11.,plannedPassSpeed=PASS_TEAM_SPEED;
  int attemptCount=0,replanCount=0,previousCurveMode=-1,lastLoggedCurveMode=-1;
  double curveModeChangedAt=-1e6;
  std::string defenseOutcome="NOT_TRIGGERED";
