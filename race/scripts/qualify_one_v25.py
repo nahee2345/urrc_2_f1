@@ -11,6 +11,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -62,22 +63,62 @@ def snapshot(root: Path) -> dict:
                 config_sha256=hashlib.sha256((root / 'race/event_config.json').read_bytes()).hexdigest())
 
 
+def finished_time(row: dict) -> float | None:
+    """Only a valid two-lap finish with a positive finite time can improve."""
+    value = row.get('time_seconds')
+    if (row.get('status') != 'finished' or row.get('laps') != 2 or
+            isinstance(value, bool) or not isinstance(value, (int, float)) or
+            not math.isfinite(value) or value <= 0):
+        return None
+    return float(value)
+
+
+def improves(previous: dict | None, candidate: dict) -> bool:
+    if previous is None:
+        return True  # Keep an initial official DNF as a completed attempt.
+    new_time = finished_time(candidate)
+    old_time = finished_time(previous)
+    return new_time is not None and (old_time is None or new_time < old_time)
+
+
+def validate_individual(payload: dict, team: str, track: str) -> dict:
+    rows = payload.get('results')
+    if (payload.get('valid') is not True or payload.get('state') != 'complete' or
+            payload.get('track') != track or payload.get('laps') != 2 or
+            not isinstance(rows, list) or len(rows) != 1 or
+            not isinstance(rows[0], dict) or rows[0].get('entry_id') != team):
+        raise ValueError(f'{team}: 동일 맵 공식 2랩 개별 예선 검증 실패')
+    row = rows[0]
+    if not isinstance(row.get('laps'), int) or not 0 <= row['laps'] <= 2:
+        raise ValueError(f'{team}: 완료 랩 수 오류')
+    if row.get('status') == 'finished':
+        if finished_time(row) is None:
+            raise ValueError(f'{team}: 완주 시간 또는 랩 수 오류')
+        bracket = row.get('elapsed_bracket_seconds')
+        if (not isinstance(bracket, list) or len(bracket) != 2 or
+                any(isinstance(x, bool) or not isinstance(x, (int, float)) or
+                    not math.isfinite(x) for x in bracket) or
+                not bracket[0] <= row['time_seconds'] <= bracket[1]):
+            raise ValueError(f'{team}: 완주 계측 구간 오류')
+    return row
+
+
 def accumulate(root: Path, session: dict) -> tuple[dict, bool]:
     resultdir = root / 'race/results'
     base = resultdir / 'qualifying_individual'
     completed = []
     last = None
+    accepted_fingerprints = dict(session['fingerprints'])
     for team in session['teams']:
         file = base / f'{team}.json'
         if not file.is_file():
             continue
         payload = json.loads(file.read_text(encoding='utf-8'))
-        if payload.get('valid') is not True or payload.get('state') != 'complete':
-            raise ValueError(f'{team}: 확정된 개별 예선 결과가 아닙니다')
-        rows = payload.get('results')
-        if not isinstance(rows, list) or len(rows) != 1 or rows[0].get('entry_id') != team:
-            raise ValueError(f'{team}: 개별 예선 기록의 팀 ID가 일치하지 않습니다.')
-        completed.append(dict(rows[0]))
+        row = validate_individual(payload, team, session['track'])
+        completed.append(dict(row))
+        fingerprint = payload.get('entry_fingerprints', {}).get(team)
+        if fingerprint:
+            accepted_fingerprints[team] = fingerprint
         last = payload
 
     # Same ranking algorithm as the official race manager. Missing teams do not
@@ -94,7 +135,7 @@ def accumulate(root: Path, session: dict) -> tuple[dict, bool]:
                    track=session['track'], laps=2, v2_stage='qualifying',
                    valid=all_done, state='complete' if all_done else 'collecting',
                    provisional=provisional, results=completed,
-                   entry_fingerprints=session['fingerprints'])
+                   entry_fingerprints=accepted_fingerprints)
     aggregate_dir = base / 'aggregate'
     aggregate_dir.mkdir(parents=True, exist_ok=True)
     save_results(resultdir, aggregate_dir, 'qualifying', overall)
@@ -115,7 +156,7 @@ def accumulate(root: Path, session: dict) -> tuple[dict, bool]:
     return overall, all_done
 
 
-def execute(root: Path, team: str) -> int:
+def execute(root: Path, team: str, requested_track: str | None = None) -> int:
     if not TEAM_RE.fullmatch(team):
         raise ValueError('팀 이름은 team_01~team_12 형식이어야 합니다.')
     results = root / 'race/results'
@@ -126,12 +167,20 @@ def execute(root: Path, team: str) -> int:
     with (base / '.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         now = snapshot(root)
+        if requested_track is not None and requested_track != now['track']:
+            raise ValueError(f'예선 맵은 {now["track"]}입니다. 다른 맵 기록은 합칠 수 없습니다.')
+        # A new qualifying rank could change the semifinal groups. Never
+        # silently modify their inputs once the next round has started.
+        if any((results / name).exists() for name in
+               ('semi_a.json', 'semi_b.json', 'final.json', 'finalists_v27.json')):
+            raise ValueError('본선 또는 결승 기록이 있어 예선 재측정을 할 수 없습니다.')
         if team not in now['teams']:
             raise ValueError(f'{team}은 공식 접수된 팀이 아닙니다. check/sync/prepare를 확인하십시오.')
         manifest_file = base / 'manifest.json'
         if manifest_file.is_file():
             session = json.loads(manifest_file.read_text(encoding='utf-8'))
-            for key in ('track', 'teams', 'fingerprints', 'maps_sha256', 'config_sha256'):
+            # Entrant revisions are allowed; accepted runs retain their own fingerprint.
+            for key in ('track', 'teams', 'maps_sha256', 'config_sha256'):
                 if session.get(key) != now[key]:
                     raise ValueError(f'예선 시작 후 등록팀·설정·맵이 변경되었습니다: {key}. 기존 기록에 합칠 수 없습니다.')
         else:
@@ -139,59 +188,78 @@ def execute(root: Path, team: str) -> int:
                 raise ValueError('기존 예선 기록이 있습니다. 새 예선 세션에 자동 병합하지 않습니다.')
             session = {**now, 'event_id': uuid.uuid4().hex[:12]}
             atomic_json(manifest_file, session)
-        if (base / f'{team}.json').exists():
-            raise ValueError(f'{team}은 이미 공식 예선 기록이 있습니다. 중복 출전할 수 없습니다.')
+        # Check all saved records before the stage writes its temporary result.
+        for accepted in base.glob('team_*.json'):
+            if accepted.stem not in session['teams']:
+                raise ValueError(f'등록되지 않은 개별 예선 기록: {accepted.name}')
+            validate_individual(json.loads(accepted.read_text(encoding='utf-8')),
+                                accepted.stem, session['track'])
+        accepted_file = base / f'{team}.json'
+        previous = (json.loads(accepted_file.read_text(encoding='utf-8'))
+                    if accepted_file.is_file() else None)
+        if previous is not None:
+            print(f'[예선 재측정] {team}: 기존 최선 기록 보존 / 동일 맵 {session["track"]}', flush=True)
         print(f'[예선 단독] {team} | {session["track"]} | 2랩 | 전체 {len(session["teams"])}팀', flush=True)
         env = os.environ.copy()
         env['URRC_QUALIFYING_ONLY'] = team
         # Preserve the official stage launcher and its validation/signal/timing.
         cmd = ['bash', str(root / 'race_v23.sh'), 'qualifying', '--track', session['track']]
-        # Optional spectator: isolated from the official qualifier and timing.
+        # Stage runner writes qualifying.json as a transient single-team
+        # result. Always rebuild the aggregate from accepted records on
+        # normal exit, DNF, invalid result, launcher failure or Ctrl-C.
         spectator = None
         watcher = root / 'race/scripts/spectator_autostart.py'
-        if watcher.is_file() and (root / 'race/spectator_3d/run_official.sh').is_file():
-            try:
-                spectator = subprocess.Popen(
-                    [sys.executable, str(watcher), '--root', str(root),
-                     '--parent-pid', str(os.getpid()), '--team', team],
-                    cwd=root, env=env, stdin=subprocess.DEVNULL)
-            except OSError as exc:
-                print('[관전] 실행 실패 (예선은 계속 진행):', exc, flush=True)
         try:
-            run = subprocess.run(cmd, cwd=root, env=env, check=False)
-        finally:
-            if spectator is not None and spectator.poll() is None:
-                spectator.terminate()
+            if watcher.is_file() and (root / 'race/spectator_3d/run_official.sh').is_file():
                 try:
-                    spectator.wait(timeout=6)
-                except subprocess.TimeoutExpired:
-                    spectator.kill()
-                    spectator.wait()
-        if run.returncode != 0:
-            print(f'[예선 단독] {team} 실행 실패 (종료 코드 {run.returncode}). 공식 집계에 포함하지 않습니다.', file=sys.stderr)
-            # If previous teams have qualified, restore their cumulative summary.
-            if any(base.glob('team_*.json')):
-                accumulate(root, session)
-                subprocess.run([sys.executable, str(root / 'race/scripts/summary_txt_v18.py'),
-                                '--root', str(root)], check=False)
-            return run.returncode
-        file = results / 'qualifying.json'
-        if not file.is_file():
-            raise ValueError('개별 예선 결과 파일이 생성되지 않았습니다.')
-        payload = json.loads(file.read_text(encoding='utf-8'))
-        rows = payload.get('results')
-        if (payload.get('valid') is not True or payload.get('state') != 'complete' or
-            payload.get('track') != session['track'] or not isinstance(rows, list) or
-            len(rows) != 1 or rows[0].get('entry_id') != team):
-            raise ValueError('개별 예선 검증 실패. 임의로 공식 집계하지 않습니다.')
-        if payload.get('laps')!=2 or rows[0].get('laps',0)>2:
-            raise ValueError('2랩 예선 공식 기록이 아닙니다.')
-        if rows[0].get('status')=='finished' and rows[0].get('laps')!=2:
-            raise ValueError('예선 2랩 완주 검증 실패')
-        atomic_json(base / f'{team}.json', payload)
-        overall, all_done = accumulate(root, session)
-        subprocess.run([sys.executable, str(root / 'race/scripts/summary_txt_v18.py'),
-                        '--root', str(root)], check=False)
+                    spectator = subprocess.Popen(
+                        [sys.executable, str(watcher), '--root', str(root),
+                         '--parent-pid', str(os.getpid()), '--team', team],
+                        cwd=root, env=env, stdin=subprocess.DEVNULL)
+                except OSError as exc:
+                    print('[관전] 실행 실패 (예선은 계속 진행):', exc, flush=True)
+            run = subprocess.run(cmd, cwd=root, env=env, check=False)
+            if run.returncode != 0:
+                print(f'[예선 단독] {team} 실행 실패 ({run.returncode}). 기존 기록 유지.', file=sys.stderr)
+                return run.returncode
+            file = results / 'qualifying.json'
+            if not file.is_file():
+                raise ValueError('개별 예선 결과 파일이 생성되지 않았습니다.')
+            payload = json.loads(file.read_text(encoding='utf-8'))
+            row = validate_individual(payload, team, session['track'])
+            # Verify that the run was produced by the submitted revision.
+            after = snapshot(root)
+            if after != now:
+                raise ValueError('예선 실행 중 참가물 또는 설정 변경 감지. 기존 기록 유지.')
+            if payload.get('entry_fingerprints', {}).get(team) != now['fingerprints'][team]:
+                raise ValueError('실제 주행 참가물 지문 불일치. 기존 기록 유지.')
+            old_row = previous['results'][0] if previous is not None else None
+            accepted = improves(old_row, row)
+            history = base / 'attempts' / team
+            history.mkdir(parents=True, exist_ok=True)
+            atomic_json(history / (uuid.uuid4().hex + '.json'),
+                        {'accepted': accepted, 'previous': previous, 'candidate': payload})
+            if accepted:
+                atomic_json(accepted_file, payload)
+                print(f'[예선 기록 갱신] {team}: {finished_time(old_row) if old_row is not None else None} -> {finished_time(row)} 초', flush=True)
+            else:
+                print(f'[예선 기존 기록 유지] {team}: 개선 없음', flush=True)
+        finally:
+            try:
+                if spectator is not None and spectator.poll() is None:
+                    spectator.terminate()
+                    try:
+                        spectator.wait(timeout=6)
+                    except subprocess.TimeoutExpired:
+                        spectator.kill()
+                        spectator.wait()
+            finally:
+                if any(base.glob('team_*.json')):
+                    overall, all_done = accumulate(root, session)
+                    subprocess.run([sys.executable, str(root / 'race/scripts/summary_txt_v18.py'),
+                                    '--root', str(root)], check=False)
+        if not accepted_file.is_file():
+            raise ValueError('확정된 개별 예선 기록이 없습니다.')
         print(f'[예선 누적] {len(overall["results"])}/{len(session["teams"])}팀 완료', flush=True)
         if all_done:
             print('예선 종료: 전체 팀 공식 순위가 확정 가능한 상태입니다. standings qualifying 로 확인하십시오.', flush=True)
@@ -204,10 +272,11 @@ def execute(root: Path, team: str) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='공식 예선 1팀씩 선택 실행, 결과 안전 누적')
     parser.add_argument('--team', required=True)
+    parser.add_argument('--track', help='공식 배정 예선 맵과 동일해야 합니다.')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args(argv)
     try:
-        return execute(args.root.expanduser().resolve(), args.team)
+        return execute(args.root.expanduser().resolve(), args.team, args.track)
     except (ValueError, OSError, KeyError, json.JSONDecodeError, BlockingIOError) as exc:
         print('[예선 단독] 오류:', exc, file=sys.stderr)
         return 2
