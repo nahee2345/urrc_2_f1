@@ -38,7 +38,8 @@ constexpr double MAX_TEAM_SPEED=8.;
 constexpr double PASS_TEAM_SPEED=10.;
 constexpr double TEAM_ACCEL=5., TEAM_DECEL=2.;
 constexpr double BASE_TEAM_SPEED=5.5;
-constexpr double DEFENSE_RANGE=35., DEFENSE_GAP=1.;
+constexpr double DEFENSE_RANGE=35., DEFENSE_COLLISION_HORIZON=.5;
+constexpr double DEFENSE_COLLISION_STEP=.05;
 constexpr double DEFENSE_SINGLE_TIME=1.5, DEFENSE_DOUBLE_TIME=2.0, DEFENSE_SETTLE=.4;
 constexpr double DEFENSE_REACTION=.9, DEFENSE_REPLAN_INTERVAL=.05;
 constexpr double DEFENSE_COOLDOWN=.2;
@@ -201,7 +202,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
    const bool defenseZone=!corner && sharpDistance>defenseDistance;
    const bool defenseEligible=postPassDefense && !passingActive && !joinPending &&
        defenseZone && defenseCar && defenseCar->speedKnown &&
-       mergeGap<=DEFENSE_RANGE && mergeGap>=LEN+DEFENSE_GAP && frontTTC>2.;
+       mergeGap<=DEFENSE_RANGE && mergeGap>=LEN;
    const double defenseRoadLimit=roadOffsetLimitAhead(team.s,defenseDistance);
    const double defenseLane=std::clamp(nominalLane,-defenseRoadLimit,defenseRoadLimit);
    const bool defenseNeedsChange=std::abs(defenseLane-team.lat)>.20*lateralOffset &&
@@ -275,7 +276,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
        change(defenseLane,now,defenseDuration);defenseChanging=true;defenseTargetName=defenseCar->name;
        if(!defenseOpportunity){defenseOpportunity=true;defenseStart=now;}
        defenseOutcome="HOLDING";
-       std::cout<<"[BATTLE] "<<(mergePending?"PASS_MERGE_START":"DEFENSE MATCH_LANE")<<" rear="<<defenseCar->name
+       std::cout<<"[BATTLE] "<<(mergePending?"PASS_MERGE_START":"DEFENSE MATCH_LANE")<<" rear="<<defenseCar->name<<" collision_horizon="<<DEFENSE_COLLISION_HORIZON
                 <<" rear_lat="<<defenseCar->lat<<" rear_vlat="<<defenseCar->lateralVelocity
                 <<" target="<<defenseLane<<" gap="<<mergeGap
                 <<" speed_target="<<defenseSpeed<<" duration="<<defenseDuration
@@ -1100,7 +1101,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  // Nonnegative score means every predicted body-to-body clearance meets
  // its required limit. Never use centre separation as a substitute:
  // safe lateral passes may have short centre distances.
- double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.,double plannedDuration=2.5)const{
+ double forecast(double destination,double elapsed,double now,bool active,double desiredSpeed=-1.,double horizon=5.,bool includeRear=true,double requiredGap=-1.,double plannedDuration=2.5,bool geometryOnly=false)const{
   double minimumMargin=1e6;
   Pos lastP=pose(team);
   double lastHeading=lastP.yaw;
@@ -1132,6 +1133,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
       }
       lastHeading=p.yaw;
     }
+    if(geometryOnly){lastP=p;continue;}
     for(const Car*o:{&lead,&rear}){
      if((o==&lead&&!hasLead)||(o==&rear&&!hasRear))continue;
      // The lane-change predictor checks both front and rear vehicles.
@@ -1174,10 +1176,11 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
  // Defense forecast covers all nearby entrants and measured lateral motion.
   bool defensePathSafe(double destination,double elapsed,double now,bool active,
                        double desiredSpeed,double horizon,double plannedDuration)const{
-   if(forecast(destination,elapsed,now,active,desiredSpeed,horizon,true,DEFENSE_GAP,plannedDuration)<0.)return false;
+   // Keep full-maneuver steering/road validation, without a long traffic veto.
+   if(forecast(destination,elapsed,now,active,desiredSpeed,horizon,true,-1.,plannedDuration,true)<0.)return false;
    const double acc=desiredSpeed<team.v?-TEAM_DECEL:TEAM_ACCEL;
    const double reach=std::abs(desiredSpeed-team.v)/std::abs(acc);
-   for(double t=0.;t<=horizon+.001;t+=.1){
+   for(double t=0.;t<=horizon+.001;t+=DEFENSE_COLLISION_STEP){
      Car candidate=team;
      const double until=std::min(t,reach);
      candidate.s+=std::max(0.,team.v*until+.5*acc*until*until+desiredSpeed*std::max(0.,t-until));
@@ -1188,7 +1191,9 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
      if(std::abs(curve(candidate.s))>=SHARP_CURVE ||
         std::abs(candidate.lat)>roadOffsetLimit(candidate.s))return false;
      for(const auto&o:observedTraffic){
-       if(!o.speedKnown && std::abs(o.s-team.s)<DEFENSE_RANGE)return false;
+       // Only near-term collision risk can veto the traffic portion of defense.
+       if(t>DEFENSE_COLLISION_HORIZON+1e-8)continue;
+       if(!o.speedKnown && std::abs(o.s-team.s)<(30.+std::max(team.v,desiredSpeed))*DEFENSE_COLLISION_HORIZON+LEN)return false;
        if(!o.speedKnown)continue;
        for(int lateral=0;lateral<2;++lateral){
          for(int braking=0;braking<(o.s>=team.s?2:1);++braking){
@@ -1198,7 +1203,7 @@ class Team08Pose_08:public gz::sim::System,public gz::sim::ISystemConfigure,publ
            if(lateral)sample.lat+=o.lateralVelocity*t;
            const double limit=roadOffsetLimit(sample.s);
            sample.lat=std::clamp(sample.lat,-limit,limit);
-           if(clearance(pose(candidate),pose(sample))<DEFENSE_GAP)return false;
+           if(clearance(pose(candidate),pose(sample))<=CLEARANCE_EPS)return false;
          }
        }
      }
